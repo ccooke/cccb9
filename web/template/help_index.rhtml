@@ -1,0 +1,22 @@
+<html>
+  <head>
+    <title><%= title %></title>
+  </head>
+  <body>
+    <h1><%= title %></h1>
+    <span name="content">
+      <table>
+        <tr>
+          <th>Topic</th>
+          <th>Summary</th>
+        </tr>
+        <% topics.each do |topic,content| %>
+        <tr>
+          <td><a href="/help/<%=topic%>"><%=topic%></a></td>
+          <td><%=content[:summary]%></td>
+        </tr>
+        <% end %>
+      </table>
+    </span>
+  </body>
+</html>

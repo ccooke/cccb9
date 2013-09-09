@@ -1,0 +1,13 @@
+<html>
+  <head>
+    <title><%= title %></title>
+  </head>
+  <body>
+    <h1><%= title %></h1>
+    <% blocks.each do |(block,content)| %>
+    <div name="<%= block %>">
+      <%= content %>
+    </div>
+    <% end %>
+  </body>
+</html>

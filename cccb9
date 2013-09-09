@@ -1,0 +1,10 @@
+#!/bin/bash
+
+[[ $basedir != /* ]] && basedir="$PWD/$basedir"
+basedir="${basedir%/*}"
+cd "$basedir"
+
+profile="${1:-default}"
+RUBY_BIN="${RUBY:-ruby2.0}"
+
+$RUBY_BIN -I "$basedir/lib" "$basedir/lib/cccb/init.rb" "$basedir" "$profile"

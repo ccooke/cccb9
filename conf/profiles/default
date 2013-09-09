@@ -1,0 +1,9 @@
+---
+:nick: cccbtest
+:servers:
+  freenode:
+    :host: irc.freenode.net
+    :channels:
+    - ! '#cccbtest'
+:superuser_password: Seventeen and a half microsecond equalization
+
