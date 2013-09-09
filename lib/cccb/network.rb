@@ -298,6 +298,15 @@ end
 class CCCB::Network
   include CCCB::Config
 
+  BACKOFF = {
+    0 => 10,
+    10 => 30,
+    30 => 60,
+    60 => 180,
+    180 => 300,
+    300 => 300
+  }
+
   attr_reader :queue
 
   def configure(conf)
@@ -306,6 +315,10 @@ class CCCB::Network
     @actors = {}
     @pending = ""
     @channels = {}
+    @throttle_connections = {
+      delay: 0,
+      time: Time.now.to_f
+    }
 
     {
       name: conf[:name],
@@ -345,6 +358,11 @@ class CCCB::Network
     case state
     when :disconnected
       @queue.clear
+      @throttle_connections[:time] = Time.now.to_f
+      if @throttle_connections[:delay] > 0
+        warning "#{self} Throttling connections to #{self.host}:#{self.port}: for #{@throttle_connections[:delay]}s: Reconnecting too fast"
+        sleep @throttle_connections[:delay]
+      end
       verbose "#{self} Connecting to #{self.host}:#{self.port}"
       self.sock = TCPSocket.open( self.host, self.port )
       self.state = :pre_login
@@ -358,9 +376,14 @@ class CCCB::Network
     when :connected
       loop do
         if line = self.sock.gets
-          schedule_hook :message, CCCB::Message.new(self, line )
+          schedule_hook :server_message, CCCB::Message.new(self, line )
         else
           verbose "Disconnected from server #{host}:#{port}"
+          if @throttle_connections[:time] - Time.now.to_f < 60
+            @throttle_connections[:delay] = BACKOFF[@throttle_connections[:delay]] || 30
+          else
+            @throttle_connections[:delay] = 0
+          end
           self.sock = nil
           self.state = :disconnected
           schedule_hook :disconnected, self

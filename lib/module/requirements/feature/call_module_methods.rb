@@ -2,7 +2,6 @@
 module Module::Requirements::Feature::CallModuleMethods
   extend Module::Requirements
 
-  needs :hooks
 
   def call_submodules(method,*args)
     puts "Subcall #{method}(#{args.join(", ")})" if $DEBUG

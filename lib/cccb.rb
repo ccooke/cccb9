@@ -46,19 +46,9 @@ class CCCB
       basedir: args[:basedir],
       statedir: args[:statedir] || args[:basedir] + '/conf/state/',
       codedir: args[:codedir] || args[:basedir] + '/lib/cccb/usercode',
-      logfile: args[:logfile] || args[:basedir] + '/logs/cccb8.log',
+      logfile: args[:logfile] || args[:basedir] + '/logs/cccb.log',
       botpattern: args[:botpattern] || /^cccb/,
     }
   end
 
-  def start
-    startup
-    loop do 
-      verbose "Starting bot #{config :nick} #{VERSION}"
-      call_submodules :start
-      verbose "Startup complete"
-      sleep 1 until @reload
-      reload
-    end
-  end
 end

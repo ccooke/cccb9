@@ -1,6 +1,10 @@
 ---
 :nick: cccbtest
 :servers:
+  lspace:
+    :host: irc.lspace.org
+    :channels:
+    - ! '#afptest'
   freenode:
     :host: irc.freenode.net
     :channels:

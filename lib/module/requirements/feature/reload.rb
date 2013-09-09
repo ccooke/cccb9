@@ -4,8 +4,8 @@ module Module::Requirements::Feature::Reload
   needs :hooks
 
   def shutdown
-    ManagedThread.all_threads.map &:halt
     run_hooks :reload_pre
+    call_submodules :module_unload
 
     #save
 
@@ -30,23 +30,35 @@ module Module::Requirements::Feature::Reload
         $".delete( code_file )
         Kernel.load( code_file )
       end
+
       $-v = saved
       self.class.class_exec do
-        include CCCB::Client::Core
+        include CCCB::Core
       end
     end
   end
 
   def startup
+    Signal.trap("HUP") do
+      @reload = true
+    end
+
     call_submodules :module_load
-    run_hooks :init
+
+    call_submodules :module_start
+
+    self.start if self.respond_to? :start
 
     #load_hooks config(:codedir)
     
-    run_hooks :reload_post
-    ::ManagedThread.all_threads.map &:restart
+    run_hooks :ready
+  end
 
-    Signal.trap("HUP") do
+  def reload_loop    
+    startup
+    loop do 
+      sleep 1 until @reload
+      @reload = false
       reload
     end
   end

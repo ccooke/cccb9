@@ -14,4 +14,4 @@ end
 
 bot = CCCB.new( profile )
 
-bot.start 
+bot.reload_loop

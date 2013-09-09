@@ -26,7 +26,7 @@ module CCCB::Core::IRC
       end
     end
 
-    add_hook :message do |message|
+    add_hook :server_message do |message|
       if @irc_commands.include? message.command
         @irc_commands[message.command].( message )
       end
@@ -87,6 +87,10 @@ module CCCB::Core::IRC
       else
         info "#{message.network} -!- MODE #{message.arguments.join(" ")} #{message.text}"
       end
+    end
+
+    add_irc_command :"433" do |message|
+      
     end
 
     add_irc_command :"353" do |message|

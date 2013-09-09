@@ -61,6 +61,7 @@ class ManagedThread
   def initialize(name, args = {}, &block)
     @block = block
     @name = name
+    @thread_lock = Mutex.new
 
     @restart = args[:restart].nil? ? self.class.default_restart : args[:restart]
     @interval = args[:interval].nil? ? self.class.default_interval : args[:interval]
@@ -75,9 +76,10 @@ class ManagedThread
   end
 
   def begin
+    @thread_lock.lock
     @thread = Thread.new { self.reliable_thread }
     if @state == :started
-      @thread.run
+      @thread_lock.unlock
     end
   end
 
@@ -101,7 +103,8 @@ class ManagedThread
   end
 
   def start()
-    @thread.run
+    puts "Start #{@thread}"
+    @thread_lock.unlock
   end
 
   def raise(e)
@@ -109,25 +112,25 @@ class ManagedThread
   end
 
   def reliable_thread
-    Thread.stop
     begin
-      puts "Execute #{self.class}:#{self.name}" if $DEBUG
+      @thread_lock.lock
+      puts "Execute #{self.class}:#{self.name}" 
       loop do
         block.call
         sleep @interval
         self.halt unless @restart
       end
     rescue Stop => e
-      self.halt
       retry
     rescue Start => e
-      @state = :started
+      @thread_lock.unlock
       retry
     rescue Exception => e
-      puts "Caught exception from reliable thread #{self.name}/#{name}: #{e} #{e.backtrace}" if $DEBUG
+      puts "Caught exception from reliable thread #{self.name}/#{name}: #{e} #{e.backtrace}" 
       if @restart
-        puts "Restarting reliable thread #{self.class}/#{@name} after exception in #{@interval} seconds" if $DEBUG
+        puts "Restarting reliable thread #{self.class}/#{@name} after exception in #{@interval} seconds" 
         sleep @interval
+        @thread_lock.unlock
       else
         self.halt
       end
@@ -147,8 +150,8 @@ class ManagedThread
   end
 
   def restart
-    @thread.kill if @thread.alive?
-    self.begin
+    puts "RESTART #{self} #{@thread}"
+    self.stop
     self.start
   end
 

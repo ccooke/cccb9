@@ -113,7 +113,16 @@ module Module::Requirements
   end
 
   def self.requirements(obj)
-    @needs[obj].map { |r| @provides.keys.find { |m| @provides[m].include? r } }
+    @needs[obj].map do |r| 
+      dep = @provides.keys.find do |m| 
+        @provides[m].include? r
+      end
+      if dep.nil? 
+        raise Module::Requirements::RequirementMissing.new(r)
+      else
+        dep
+      end
+    end
   end
 
   def self.extended(into)
