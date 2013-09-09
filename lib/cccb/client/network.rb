@@ -296,35 +296,35 @@ class CCCB::Client::Channel
 end
 
 class CCCB::Client::Network
-	include CCCB::Util::Config
+  include CCCB::Util::Config
 
-	attr_reader :queue
+  attr_reader :queue
 
-	def configure(conf)
-		@queue = Queue.new
-		@client = CCCB::Client.instance
+  def configure(conf)
+    @queue = Queue.new
+    @client = CCCB::Client.instance
     @actors = {}
-		@pending = ""
+    @pending = ""
     @channels = {}
 
-		{
-			name: conf[:name],
-			state: :disconnected,
-			sock: nil,
-			nick: conf[:nick] || @client.nick,
-			user: conf[:user] || @client.user,
-			host: conf[:host] || 'irc',
-			port: conf[:port] || 6667,
-			pass: conf[:pass] || nil,
+    {
+      name: conf[:name],
+      state: :disconnected,
+      sock: nil,
+      nick: conf[:nick] || @client.nick,
+      user: conf[:user] || @client.user,
+      host: conf[:host] || 'irc',
+      port: conf[:port] || 6667,
+      pass: conf[:pass] || nil,
       channels: conf[:channels] || [],
-			throttle: {
-				line_buffer_max: 9,
-				line_rate: 0.6,
-				byte_buffer_max: 1024,
-				byte_rate: 128
-			}
-		}
-	end
+      throttle: {
+        line_buffer_max: 9,
+        line_rate: 0.6,
+        byte_buffer_max: 1024,
+        byte_rate: 128
+      }
+    }
+  end
 
   def channel(name)
     @channels[name]
@@ -340,102 +340,102 @@ class CCCB::Client::Network
     @channels[name]
   end
 
-	def receiver
-		debug "Receiver starting for #{self} in state #{self.state}"
-		case state
-		when :disconnected
-			@queue.clear
+  def receiver
+    debug "Receiver starting for #{self} in state #{self.state}"
+    case state
+    when :disconnected
+      @queue.clear
       verbose "#{self} Connecting to #{self.host}:#{self.port}"
-			self.sock = TCPSocket.open( self.host, self.port )
-			self.state = :pre_login
+      self.sock = TCPSocket.open( self.host, self.port )
+      self.state = :pre_login
       schedule_hook :connecting, self
-		when :pre_login
-			write "USER #{self.user} 0 * :#{@client.userstring}\n"
-			write "PASS #{self.pass}\n" unless self.pass.nil?
-			write "NICK #{self.nick}\n"
-			self.state = :connected
+    when :pre_login
+      write "USER #{self.user} 0 * :#{@client.userstring}\n"
+      write "PASS #{self.pass}\n" unless self.pass.nil?
+      write "NICK #{self.nick}\n"
+      self.state = :connected
       schedule_hook :connected, self
-		when :connected
-			loop do
-				if line = self.sock.gets
-					schedule_hook :message, CCCB::Client::Message.new(self, line )
-				else
-					verbose "Disconnected from server #{host}:#{port}"
-					self.sock = nil
-					self.state = :disconnected
+    when :connected
+      loop do
+        if line = self.sock.gets
+          schedule_hook :message, CCCB::Client::Message.new(self, line )
+        else
+          verbose "Disconnected from server #{host}:#{port}"
+          self.sock = nil
+          self.state = :disconnected
           schedule_hook :disconnected, self
-					return
-				end
-			end
-		end
-	rescue Exception => e
-		puts "Exception #{e}"
-		debug "Exception in receiver: #{e}"
-		self.state = :disconnected
-		raise e
-	end
+          return
+        end
+      end
+    end
+  rescue Exception => e
+    puts "Exception #{e}"
+    debug "Exception in receiver: #{e}"
+    self.state = :disconnected
+    raise e
+  end
 
-	def write(data)
-		@queue << data
-	end
+  def write(data)
+    @queue << data
+  end
 
   def puts(data)
     write data.gsub(/\n/,"") + "\n"
   end
 
-	def to_s
-		"#{self.name}"
-	end
+  def to_s
+    "#{self.name}"
+  end
 
-	def sender
-		verbose "Sender thread #{self} #{self.sock.inspect} #{self.host}:#{self.port} waiting for connection"
-		sleep 1 while self.state == :disconnected
-		verbose "Sender thread #{self} #{self.sock.inspect} #{self.host}:#{self.port} processing queue"
+  def sender
+    verbose "Sender thread #{self} #{self.sock.inspect} #{self.host}:#{self.port} waiting for connection"
+    sleep 1 while self.state == :disconnected
+    verbose "Sender thread #{self} #{self.sock.inspect} #{self.host}:#{self.port} processing queue"
 
-		@byte_buffer ||= self.throttle[:byte_buffer_max]
-		@line_buffer ||= self.throttle[:line_buffer_max]
-		@checkpoint = Time.now.to_f
-		@pending
+    @byte_buffer ||= self.throttle[:byte_buffer_max]
+    @line_buffer ||= self.throttle[:line_buffer_max]
+    @checkpoint = Time.now.to_f
+    @pending
 
-		while lines = @queue.pop
-			@pending += lines
-			until (end_of_line = @pending.index("\n")).nil?
-				line = @pending[0, end_of_line+1]
-				@pending[0,end_of_line+1] = ""
+    while lines = @queue.pop
+      @pending += lines
+      until (end_of_line = @pending.index("\n")).nil?
+        line = @pending[0, end_of_line+1]
+        @pending[0,end_of_line+1] = ""
 
-				while line.length > 0
-					if self.state == :disconnected
-						debug "Sender thread terminating: #{self} is disconnected"
-						return
-					end
-					update = Time.now.to_f
-					@byte_buffer += self.throttle[:byte_rate] * ( update - @checkpoint )
-					@byte_buffer = self.throttle[:byte_buffer_max] if @byte_buffer > self.throttle[:byte_buffer_max]
-					@line_buffer += self.throttle[:line_rate] * ( update - @checkpoint )
-					@line_buffer = self.throttle[:line_buffer_max] if @line_buffer > self.throttle[:line_buffer_max]
-					@checkpoint = update
-					if @line_buffer < 1 or @byte_buffer < 1
-						spam "Blocking sender thread waiting for buffer replenishment. Line: #{sprintf("%.2f",@line_buffer)}, Byte: #{sprintf("%.2f", @byte_buffer)}"
-						sleep 0.2
-						redo
-					end
+        while line.length > 0
+          if self.state == :disconnected
+            debug "Sender thread terminating: #{self} is disconnected"
+            return
+          end
+          update = Time.now.to_f
+          @byte_buffer += self.throttle[:byte_rate] * ( update - @checkpoint )
+          @byte_buffer = self.throttle[:byte_buffer_max] if @byte_buffer > self.throttle[:byte_buffer_max]
+          @line_buffer += self.throttle[:line_rate] * ( update - @checkpoint )
+          @line_buffer = self.throttle[:line_buffer_max] if @line_buffer > self.throttle[:line_buffer_max]
+          @checkpoint = update
+          if @line_buffer < 1 or @byte_buffer < 1
+            spam "Blocking sender thread waiting for buffer replenishment. Line: #{sprintf("%.2f",@line_buffer)}, Byte: #{sprintf("%.2f", @byte_buffer)}"
+            sleep 0.2
+            redo
+          end
 
-					chunk = line[0,@byte_buffer]
-					line[0,@byte_buffer] = ""
-				
-					spam "#{self.name} SEND #{chunk}"
-					self.sock.write( chunk )
-					@line_buffer -= 1
-					@byte_buffer -= chunk.length
+          chunk = line[0,@byte_buffer]
+          line[0,@byte_buffer] = ""
+        
+          spam "#{self.name} SEND #{chunk}"
+          self.sock.write( chunk )
+          @line_buffer -= 1
+          @byte_buffer -= chunk.length
 
-				end
-			end
-		end
+        end
+      end
+    end
 
-	rescue Exception => e
-		@config[:state] = :disconnected
-		raise e
-	end
+  rescue Exception => e
+    @config[:state] = :disconnected
+    raise e
+  end
 
   def user(from)
   end

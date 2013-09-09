@@ -66,7 +66,7 @@ class ManagedThread
     @interval = args[:interval].nil? ? self.class.default_interval : args[:interval]
     @state = args[:state].nil? ? self.class.default_state : args[:state]
 
-		puts "Defined #{self.class}:#{self.name}" if $DEBUG
+    puts "Defined #{self.class}:#{self.name}" if $DEBUG
     self.begin
   end
 
@@ -112,7 +112,7 @@ class ManagedThread
     Thread.stop
     begin
       puts "Execute #{self.class}:#{self.name}" if $DEBUG
-			loop do
+      loop do
         block.call
         sleep @interval
         self.halt unless @restart
