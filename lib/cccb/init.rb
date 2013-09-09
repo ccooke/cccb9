@@ -1,6 +1,6 @@
 require 'yaml'
 require 'fileutils'
-require 'cccb/client'
+require 'cccb'
 
 profile = {
   basedir: ARGV[0],
@@ -12,6 +12,6 @@ config.each do |k,v|
   profile[k] = v
 end
 
-bot = CCCB::Client.new( profile )
+bot = CCCB.new( profile )
 
 bot.start 

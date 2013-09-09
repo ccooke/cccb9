@@ -1,24 +1,14 @@
 
-module CCCB
-  class Client
-    module Core
-      class MissingFeature < Exception; end
+class CCCB
+  module Core
+    extend Module::Requirements::Loader
 
-      @@features = {}
-
-      def self.included(into)
-        puts "Included into #{into} #{self.constants}" if $DEBUG
-        self.submodules_in_order.each do |m|
-          unless ancestors.include? m
-            puts "Including module #{m}" if $DEBUG
-            into.class_exec do
-              include m
-            end
-          end
-        end
-      end
-
-    end
+    add_feature Module::Requirements::Feature::Hooks
+    add_feature Module::Requirements::Feature::Reload
+    add_feature Module::Requirements::Feature::Logging
+    add_feature Module::Requirements::Feature::ManagedThreading
+    add_feature Module::Requirements::Feature::StaticMethods
+    add_feature Module::Requirements::Feature::CallModuleMethods
   end
 end
 

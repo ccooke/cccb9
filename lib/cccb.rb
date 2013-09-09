@@ -1,22 +1,21 @@
-require 'cccb/util/managedthreads'
-require 'cccb/util/module_requirements'
-require 'cccb/util/config'
-require 'cccb/client/core'
-require 'cccb/client/core/hooks'
-require 'cccb/client/core/call_submodules'
-require 'cccb/client/core/threading'
-require 'cccb/client/core/reload'
-require 'cccb/client/core/debug'
-require 'cccb/client/core/usercode'
-require 'cccb/client/core/staticmethods'
-require 'cccb/client/core/irc'
-require 'cccb/client/network'
-require 'pp'
-require 'irb'
+require 'managedthreads'
+require 'module/requirements'
+require 'module/requirements/feature/reload'
+require 'module/requirements/feature/managed_threading'
+require 'module/requirements/feature/hooks'
+require 'module/requirements/feature/logging'
+require 'module/requirements/feature/call_module_methods'
+require 'module/requirements/feature/staticmethods'
+require 'cccb/config'
+require 'cccb/core'
+require 'cccb/core/usercode'
+require 'cccb/core/irc'
+require 'cccb/network'
 
 require 'socket'
 
-module CCCB::Client::Core::Networking
+module CCCB::Core::Networking
+  extend Module::Requirements
   provides :networking
   needs :hooks
 
@@ -41,7 +40,7 @@ module CCCB::Client::Core::Networking
 
     self.servers.each do |name,conf|
       conf[:name] = name.dup
-      @network[name] = CCCB::Client::Network.new(conf)
+      @network[name] = CCCB::Network.new(conf)
 
       ManagedThread.new :"networking_recv_#{name}" do
         net_thread :receiver, name
@@ -53,54 +52,52 @@ module CCCB::Client::Core::Networking
   end
 end
 
-module CCCB
+class CCCB
 
   VERSION = "9.0-pre1"
   
-  class Client
-    include CCCB::Client::Core
-    include CCCB::Util::Config
+  include CCCB::Core
+  include CCCB::Config
 
-    @@instance = nil
+  @@instance = nil
 
-    def self.new(*args)
-      return @@instance unless @@instance.nil?
-      obj = super
-      @@instance = obj
-    end
+  def self.new(*args)
+    return @@instance unless @@instance.nil?
+    obj = super
+    @@instance = obj
+  end
 
-    def self.instance
-      @@instance
-    end
+  def self.instance
+    @@instance
+  end
 
-    def configure(args)
-      @reload = false
-      {
-        log_to_file: args[:log_to_file] || true,
-        log_to_stdout: args[:log_to_stdout] || true,
-        user: args[:user] || ENV['USER'],
-        nick: args[:nick] || ENV['USER'],
-        servers: args[:servers],
-        userstring: args[:userstring] || "An extendable ruby bot",
-        debug_privmsg: args[:debug_privmsg] || "#cccb-debug}",
-        superuser_password: args[:superuser_password] || nil,
-        basedir: args[:basedir],
-        statedir: args[:statedir] || args[:basedir] + '/conf/state/',
-        codedir: args[:codedir] || args[:basedir] + '/lib/cccb/usercode',
-        logfile: args[:logfile] || args[:basedir] + '/logs/cccb8.log',
-        botpattern: args[:botpattern] || /^cccb/,
-      }
-    end
+  def configure(args)
+    @reload = false
+    {
+      log_to_file: args[:log_to_file] || true,
+      log_to_stdout: args[:log_to_stdout] || true,
+      user: args[:user] || ENV['USER'],
+      nick: args[:nick] || ENV['USER'],
+      servers: args[:servers],
+      userstring: args[:userstring] || "An extendable ruby bot",
+      debug_privmsg: args[:debug_privmsg] || "#cccb-debug}",
+      superuser_password: args[:superuser_password] || nil,
+      basedir: args[:basedir],
+      statedir: args[:statedir] || args[:basedir] + '/conf/state/',
+      codedir: args[:codedir] || args[:basedir] + '/lib/cccb/usercode',
+      logfile: args[:logfile] || args[:basedir] + '/logs/cccb8.log',
+      botpattern: args[:botpattern] || /^cccb/,
+    }
+  end
 
-    def start
-      startup
-      loop do 
-        verbose "Starting bot #{config :nick} #{VERSION}"
-        call_submodules :start
-        verbose "Startup complete"
-        sleep 1 until @reload
-        reload
-      end
+  def start
+    startup
+    loop do 
+      verbose "Starting bot #{config :nick} #{VERSION}"
+      call_submodules :start
+      verbose "Startup complete"
+      sleep 1 until @reload
+      reload
     end
   end
 end

@@ -1,11 +1,9 @@
-require 'cccb/util/managedthreads'
+require 'managedthreads'
 
-module CCCB::Client::Core::Threading
-
+module Module::Requirements::Feature::ManagedThreading
+  extend Module::Requirements
 
   def module_load
-    CCCB::Client.extend(ThreadCompartment) 
-
     ManagedThread.default_state = :stopped
     ManagedThread.default_restart = false
   end

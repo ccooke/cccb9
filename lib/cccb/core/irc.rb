@@ -1,6 +1,6 @@
-module CCCB::Client::Core::IRC
-  provides :irc
-  needs :hooks
+module CCCB::Core::IRC
+  extend Module::Requirements
+  needs :hooks, :reload, :call_module_methods
 
   def add_irc_command(command, &block)
     debug "Declared irc command #{command}"

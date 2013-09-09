@@ -1,12 +1,6 @@
 
-class Object
-  def metaclass
-    class << self; self; end
-  end
-end
-
-module CCCB::Client::Core::StaticMethods
-  provides :static_methods
+module Module::Requirements::Feature::StaticMethods
+  extend Module::Requirements
 
   def static_methods(obj_from, obj_to, *methods)
     methods.each do |method|

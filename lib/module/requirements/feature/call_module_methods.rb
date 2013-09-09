@@ -1,11 +1,12 @@
 
-module CCCB::Client::Core::CallSubmodules
-  provides :call_submodules
+module Module::Requirements::Feature::CallModuleMethods
+  extend Module::Requirements
+
   needs :hooks
 
   def call_submodules(method,*args)
     puts "Subcall #{method}(#{args.join(", ")})" if $DEBUG
-    self.class.submodules_in_order.select { |a| 
+    self.class.module_requirements_loader.submodules.select { |a| 
       next if a == self
       a.instance_methods.include? method 
     }.each do |a|

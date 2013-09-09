@@ -1,6 +1,6 @@
 require 'thread'
 
-class CCCB::Client::Message
+class CCCB::Message
   class InvalidMEssage < Exception; end
   
   module ChannelCommands
@@ -105,7 +105,7 @@ class CCCB::Client::Message
     @arguments = match[:arguments].split /\s+/
     @text = match[:message]
 
-    @user = CCCB::Client::User.new( self )
+    @user = CCCB::User.new( self )
 
     const = :"CMD_#{@command}"
     if self.class.constants.include? const
@@ -124,7 +124,7 @@ class CCCB::Client::Message
 
 end
 
-class CCCB::Client::User
+class CCCB::User
   class InvalidUser < Exception; end
 
   FROM_REGEX = %r{
@@ -176,7 +176,7 @@ class CCCB::Client::User
 
 end
 
-class CCCB::Client::ChannelUser
+class CCCB::ChannelUser
 
   attr_accessor :op, :voice, :time
 
@@ -246,7 +246,7 @@ class CCCB::Client::ChannelUser
 
 end
 
-class CCCB::Client::Channel
+class CCCB::Channel
 
   attr_accessor :name
   
@@ -272,7 +272,7 @@ class CCCB::Client::Channel
     end
     unless @users.include? id
       spam "#{self} Link #{user}"
-      @users[id] = CCCB::Client::ChannelUser.new(user,self)
+      @users[id] = CCCB::ChannelUser.new(user,self)
     end
     if user.respond_to? :host and not @users[id].respond_to? :host
       spam "#{self} Update #{id} to link to real user #{user}"
@@ -295,14 +295,14 @@ class CCCB::Client::Channel
   end
 end
 
-class CCCB::Client::Network
-  include CCCB::Util::Config
+class CCCB::Network
+  include CCCB::Config
 
   attr_reader :queue
 
   def configure(conf)
     @queue = Queue.new
-    @client = CCCB::Client.instance
+    @client = CCCB.instance
     @actors = {}
     @pending = ""
     @channels = {}
@@ -333,7 +333,7 @@ class CCCB::Client::Network
   def update_channel( message )
     name = message.replyto.downcase
     unless @channels.include? name
-      @channels[name] = CCCB::Client::Channel.new( message.replyto, message.user )
+      @channels[name] = CCCB::Channel.new( message.replyto, message.user )
     else
       @channels[name].add_user( message.user )
     end
@@ -358,7 +358,7 @@ class CCCB::Client::Network
     when :connected
       loop do
         if line = self.sock.gets
-          schedule_hook :message, CCCB::Client::Message.new(self, line )
+          schedule_hook :message, CCCB::Message.new(self, line )
         else
           verbose "Disconnected from server #{host}:#{port}"
           self.sock = nil

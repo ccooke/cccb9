@@ -1,7 +1,7 @@
 require 'thread'
 
-module CCCB::Client::Core::Hooks
-  provides :hooks
+module Module::Requirements::Feature::Hooks
+  extend Module::Requirements
   needs :logging
   
   def add_hook hook, filter = {}, &block
@@ -50,7 +50,6 @@ module CCCB::Client::Core::Hooks
         item[:code].call( *args )
       end
     rescue Exception => e
-      # "(eval):9:in `block (2 levels) in load_hooks'"
       begin
         @hooks[:exception].each do |saviour|
           saviour[:code].call( e, hook, item )

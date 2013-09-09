@@ -1,7 +1,9 @@
+require 'managedthreads'
 
-module CCCB::Client::Core::Debug
-  provides :logging
-  needs :static_methods
+module Module::Requirements::Feature::Logging
+  extend Module::Requirements
+
+  needs :static_methods, :managed_threading
 
   SPAM = 5
   DEBUG = 4

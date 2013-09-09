@@ -1,5 +1,6 @@
 
-module CCCB::Client::Core::Reload
+module Module::Requirements::Feature::Reload
+  extend Module::Requirements
   needs :hooks
 
   def shutdown

@@ -1,5 +1,6 @@
 
-module CCCB::Client::Core::UserCode
+module CCCB::Core::UserCode
+  extend Module::Requirements
   needs :hooks
 
   def load_user_code(codedir)
@@ -35,9 +36,6 @@ module CCCB::Client::Core::UserCode
         end
       end
     end
-  end
-  def module_init
-    
   end
 end
 
