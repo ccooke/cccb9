@@ -1,4 +1,5 @@
 require 'managedthreads'
+require 'string_format'
 require 'module/requirements'
 require 'module/requirements/feature/reload'
 require 'module/requirements/feature/managed_threading'
@@ -9,9 +10,14 @@ require 'module/requirements/feature/staticmethods'
 require 'cccb/config'
 require 'cccb/core'
 require 'cccb/core/usercode'
-require 'cccb/core/irc'
+require 'cccb/core/bot'
 require 'cccb/core/networking'
 require 'cccb/network'
+require 'cccb/irc'
+
+class String
+  include String::Keyreplace
+end
 
 class CCCB
 
