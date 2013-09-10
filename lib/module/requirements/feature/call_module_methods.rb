@@ -2,7 +2,6 @@
 module Module::Requirements::Feature::CallModuleMethods
   extend Module::Requirements
 
-
   def call_submodules(method,*args)
     puts "Subcall #{method}(#{args.join(", ")})" if $DEBUG
     self.class.module_requirements_loader.submodules.select { |a| 

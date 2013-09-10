@@ -1,4 +1,5 @@
 require 'tsort'
+require 'ostruct'
 require 'pp'
 
 class String
@@ -7,7 +8,7 @@ class String
   end
 
   def snake_case
-    self.scan(/[[:upper:]]+[[:lower:]]+/).map(&:downcase).join('_')
+    self.scan(/[[:upper:]]+[[:lower:]]*/).map(&:downcase).join('_')
   end
 end
 
@@ -15,8 +16,7 @@ class Module::TSort
   include TSort
 
   def initialize(list)
-    puts "Init tsort with list #{list}"
-    pp list.each_with_object({}) { |m,h| h[m] = tsort_each_child(m).to_a }
+    puts "Init tsort with list #{list}" if $DEBUG
     @list = list
   end
 
@@ -26,7 +26,7 @@ class Module::TSort
 
   def tsort_each_child(mod,&block)
     mod.extend(Module::Requirements) unless mod.singleton_class < Module::Requirements
-    puts "TSort: encounter #{mod}: #{mod.requirements}"
+    puts "TSort: encounter #{mod}: #{mod.requirements}" if $DEBUG
     mod.requirements.each &block
   end
 end
@@ -37,6 +37,8 @@ module Module::Requirements
 
   module Loader    
 
+    CLEAR_SUBMODULE_CACHE = true
+
     def submodule_list
       self.constants.map { |c|
         const_get(c)
@@ -46,35 +48,60 @@ module Module::Requirements
     end
 
     def submodules(ignore_cache = false)
-      unless @sort_cache.nil? and not ignore_cache
+      if not ignore_cache and not @sort_cache.nil?
         puts "Using cached sort order #{@sort_cache.join(", ")}" if $DEBUG
         @sort_cache
       else
-        @sort_cache = Module::TSort.new( submodule_list ).tsort
+        direct_modules = submodule_list
+        @sort_cache = Module::TSort.new( direct_modules ).tsort.map { |m|
+          unless direct_modules.include? m
+            name = ( "AutoDependency" + m.name.gsub( /Module::Requirements::Feature::/, '' ) ).to_sym
+            if self.constants.include? name
+              self.const_get name
+            else
+              puts "Dependency #{m} is not direct. Including it into #{self}" if $DEBUG
+              self.const_set name, m.dup 
+            end
+          else
+            m
+          end
+        }
       end
     end
 
     def included(into)
-      puts "Included into #{into} #{self.constants}" if $DEBUG
+      # cull!
+      puts "Included into #{into} #{self.constants} #{caller_locations.inspect}" if $DEBUG
       into.class_exec(self) do |loader|
         @module_requirements_loader = loader
+        @storage ||= Hash.new { OpenStruct.new }
         def self.module_requirements_loader
           @module_requirements_loader
         end
-      end
-      direct_modules = submodule_list
-      self.submodules.each do |m|
-
-        unless direct_modules.include? m
-          puts "Dependency #{m} is not direct. Including it into #{self}" if $DEBUG
-          name = ( "AutoDependency" + m.name.gsub( /Module::Requirements::Feature::/, '' ) ).to_sym
-          m = self.const_set name, m.dup 
+        def have_feature?(feature)
+          puts "Is feature #{feature} present in #{self}: #{
+            self.class.module_requirements_loader.submodules.each_with_object({}) { |m,h|
+              h[m] = m.provides
+            }
+          }" if $DEBUG
+          self.class.module_requirements_loader.submodules.any? { |m| m.provides? feature }
         end
+      end
+      self.submodules(CLEAR_SUBMODULE_CACHE).each do |m|
 
         unless ancestors.include? m
           puts "Including module #{m} into #{into}" if $DEBUG
+          provide_name = m.provide_name
           into.class_exec do
             include m
+
+            puts "Creating method #{self}.#{provide_name} accessing #{m.name}" if $DEBUG
+            
+            data = m.name
+            define_method :"#{provide_name}" do
+              Module::Requirements.storage(data)  
+            end
+
           end
         end
       end
@@ -92,9 +119,10 @@ module Module::Requirements
   class RequirementMissing < Exception; end
   class CircularDependency < Exception; end
 
-  @provides = Hash.new { [] }
-  @needs = Hash.new { [] }
+  @provides ||= Hash.new { [] }
+  @needs ||= Hash.new { [] }
   @sort_cache = Hash.new { [] }
+  @storage ||= Hash.new
 
   def self.provides(obj, *features)
     if features.empty?
@@ -105,7 +133,7 @@ module Module::Requirements
   end
 
   def self.provides? obj, feature
-    @@provides[obj].include? feature
+    @provides[obj].include? feature
   end
 
   def self.needs(obj, *features)
@@ -125,6 +153,10 @@ module Module::Requirements
     end
   end
 
+  def self.storage(obj)
+    @storage[obj] ||= OpenStruct.new
+  end
+
   def self.extended(into)
     puts "EXTEND #{self} INTO #{into} #{caller_locations(1,1)}" if $DEBUG
     #into.extend(Module::Requirements) unless into.ancestors.include? Module::Requirements
@@ -142,23 +174,28 @@ module Module::Requirements
         Module::Requirements.extended(into)
       end
 
+      @requirement_class = into
       provides auto_provide
     end
   end
   def provides? feature
-    @@provides[self].include? feature
-    Module::Requirements.provides? self, feature
+    Module::Requirements.provides? @requirement_class, feature
   end
   def provides(*features)
-    Module::Requirements.provides(self, *features)
+    Module::Requirements.provides(@requirement_class, *features)
   end
   def needs(*features)
-    Module::Requirements.needs(self, *features)
+    Module::Requirements.needs(@requirement_class, *features)
   end
   def requirements
-    Module::Requirements.requirements(self)
+    Module::Requirements.requirements(@requirement_class)
+  end
+  
+  define_method :provide_name do
+    @requirement_class.name.split( '::' ).last.snake_case.to_sym
   end
 
+  @requirement_class = self
 end
 
 

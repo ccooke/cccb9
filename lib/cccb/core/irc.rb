@@ -1,24 +1,24 @@
 module CCCB::Core::IRC
   extend Module::Requirements
-  needs :hooks, :reload, :call_module_methods
+  needs :hooks, :reload, :call_module_methods, :managed_threading
 
   def add_irc_command(command, &block)
-    debug "Declared irc command #{command}"
-    @irc_commands[command] = block
+    spam "Declared irc command #{command}"
+    irc.commands[command] = block
   end
 
   def hide_irc_commands(*commands)
-    @hide_irc_command_proc ||= Proc.new do |message|
+    irc.hide_command_proc ||= Proc.new do |message|
       message.hide = true
     end
     commands.each do |command|
-      debug "Hiding irc command #{command}"
-      @irc_commands[command] = @hide_irc_command_proc
+      spam "Hiding irc command #{command}"
+      irc.commands[command] = irc.hide_command_proc
     end
   end
 
   def module_load
-    @irc_commands = {}
+    irc.commands = {}
 
     add_hook :connected do |network|
       network.channels.each do |channel|
@@ -27,8 +27,8 @@ module CCCB::Core::IRC
     end
 
     add_hook :server_message do |message|
-      if @irc_commands.include? message.command
-        @irc_commands[message.command].( message )
+      if irc.commands.include? message.command
+        irc.commands[message.command].( message )
       end
       schedule_hook message.command, message
       info "#{message.network} #{message}" unless message.hide?

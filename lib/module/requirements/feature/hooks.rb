@@ -2,12 +2,13 @@ require 'thread'
 
 module Module::Requirements::Feature::Hooks
   extend Module::Requirements
-  needs :logging
+  needs :logging, :managed_threading
   
   def add_hook hook, filter = {}, &block
-    @hooks[ hook ] ||= []
+    spam "ADD hook #{hook}" 
+    hooks.db[ hook ] ||= []
     call = caller_locations(1,1).first
-    @hooks[ hook ].push(
+    hooks.db[ hook ].push(
       :filter => filter,
       :source_file => call.absolute_path,
       :container => call.base_label,
@@ -16,20 +17,20 @@ module Module::Requirements::Feature::Hooks
   end
 
   def remove_hooks source, key = :source_file
-    @hooks.each do |content|
+    hooks.db.each do |content|
       content.delete_if { |item| item[key] == source }
     end
   end
 
   def schedule_hook hook, *args
-    @hook_queue << [ hook, args ]
+    hooks.queue << [ hook, args ]
   end
 
   def run_hooks hook, *args
-    unless @hooks.include? hook
-      @hooks[ hook ] = []
+    unless hooks.db.include? hook
+      hooks.db[ hook ] = []
     end
-    hooks = @hooks[ hook ].select do |i|
+    hook_list = hooks.db[ hook ].select do |i|
       if i.include? :filter and i[:filter].respond_to? :all?
         begin 
           i[:filter].all? do |k,v|
@@ -44,14 +45,14 @@ module Module::Requirements::Feature::Hooks
     end
     spam "hooks: #{hook}->(#{args.join(", ")})"
     begin
-      while hooks.count > 0
-        item = hooks.shift
+      while hook_list.count > 0
+        item = hook_list.shift
         spam "RUN: #{ item[:container] }:#{ hook }"
         item[:code].call( *args )
       end
     rescue Exception => e
       begin
-        @hooks[:exception].each do |saviour|
+        hooks.db[:exception].each do |saviour|
           saviour[:code].call( e, hook, item )
         end
       end
@@ -61,10 +62,11 @@ module Module::Requirements::Feature::Hooks
   end
 
   def module_load
-    @hooks = {}
-    @hook_queue ||= Queue.new
-    @hook_runners = 0
-    @hook_lock = Mutex.new
+
+    hooks.db = {}
+    hooks.queue ||= Queue.new
+    hooks.runners = 0
+    hooks.lock ||= Mutex.new
 
     add_hook :exception do |exception|
       begin 
@@ -82,19 +84,19 @@ module Module::Requirements::Feature::Hooks
   end
 
   def add_hook_runner
-    @hook_lock.synchronize do
-      @hook_runners += 1
-      ManagedThread.new :"hook_runner_#{@hook_runners}" do
+    hooks.lock.synchronize do
+      hooks.runners += 1
+      ManagedThread.new :"hook_runner_#{hooks.runners}" do
         loop do
           begin
-            (hook_to_run, args) = @hook_queue.pop
+            (hook_to_run, args) = hooks.queue.pop
             run_hooks hook_to_run, *args
           rescue Exception => e
             run_hooks :exception, e
           end
         end
       end
-      verbose "Initialized hook runner #{@hook_runners}"
+      spam "Initialized hook runner #{hooks.runners}"
     end
   end
 

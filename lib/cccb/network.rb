@@ -5,6 +5,10 @@ class CCCB::Message
   
   module ChannelCommands
     def process
+      if self.arguments.empty?
+        self.arguments = self.text.split /\s+/
+      end
+
       if self.to_channel?
         @channel = self.network.update_channel( self )
         @user = @channel[@user]
@@ -159,7 +163,6 @@ class CCCB::User
         @host = match[:host]
         @id = @nick.downcase
       end
-      @channels = []
     else
       @id = :system
       @nick = :system
@@ -167,6 +170,7 @@ class CCCB::User
       @flag = :""
       @host = :""
     end
+    @channels = []
     @timestamp = Time.now
   end
 
@@ -354,7 +358,7 @@ class CCCB::Network
   end
 
   def receiver
-    debug "Receiver starting for #{self} in state #{self.state}"
+    spam "Receiver starting for #{self} in state #{self.state}"
     case state
     when :disconnected
       @queue.clear
@@ -376,7 +380,11 @@ class CCCB::Network
     when :connected
       loop do
         if line = self.sock.gets
-          schedule_hook :server_message, CCCB::Message.new(self, line )
+          begin
+            schedule_hook :server_message, CCCB::Message.new(self, line )
+          rescue Exception => e
+            error "Unable to parse line: #{line}\nException: #{e}\n#{e.backtrace.inspect}"
+          end
         else
           verbose "Disconnected from server #{host}:#{port}"
           if @throttle_connections[:time] - Time.now.to_f < 60
@@ -392,7 +400,7 @@ class CCCB::Network
       end
     end
   rescue Exception => e
-    puts "Exception #{e}"
+    STDOUT.puts "Exception #{e}"
     debug "Exception in receiver: #{e}"
     self.state = :disconnected
     raise e
@@ -411,9 +419,9 @@ class CCCB::Network
   end
 
   def sender
-    verbose "Sender thread #{self} #{self.sock.inspect} #{self.host}:#{self.port} waiting for connection"
+    spam "Sender thread #{self} #{self.sock.inspect} #{self.host}:#{self.port} waiting for connection"
     sleep 1 while self.state == :disconnected
-    verbose "Sender thread #{self} #{self.sock.inspect} #{self.host}:#{self.port} processing queue"
+    debug "Sender thread #{self} #{self.sock.inspect} #{self.host}:#{self.port} processing queue"
 
     @byte_buffer ||= self.throttle[:byte_buffer_max]
     @line_buffer ||= self.throttle[:line_buffer_max]

@@ -28,15 +28,17 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 class ManagedThread
-  class Stop < Exception; end
-  class Start < Exception; end
   class Error < Exception; end
 
   @defaults = {
     :restart => true,
-    :state => :started,
-    :interval => 5
+    :start => true,
+    :repeat => 5
   }
+
+  attr_accessor :block, :restart, :repeat, :start
+  private :block
+  attr_reader :thread, :name
 
   @subclasses = []
   @registry = {}
@@ -44,7 +46,7 @@ class ManagedThread
   class << self
     attr_accessor :registry
 
-    [:restart, :state, :interval].each do |sym|
+    [:restart, :start, :repeat].each do |sym|
       define_method "default_#{sym}".to_sym do 
         @defaults.include? sym ? @defaults[sym] :self.superclass.send( "default_#{sym}".to_sym )
       end
@@ -54,33 +56,8 @@ class ManagedThread
     end
   end
 
-  attr_accessor :block, :restart, :interval, :state
-  private :block
-  attr_reader :thread, :name
-
-  def initialize(name, args = {}, &block)
-    @block = block
-    @name = name
-    @thread_lock = Mutex.new
-
-    @restart = args[:restart].nil? ? self.class.default_restart : args[:restart]
-    @interval = args[:interval].nil? ? self.class.default_interval : args[:interval]
-    @state = args[:state].nil? ? self.class.default_state : args[:state]
-
-    puts "Defined #{self.class}:#{self.name}" if $DEBUG
-    self.begin
-  end
-
-  def to_s
-    "Thread:#{@name}"
-  end
-
-  def begin
-    @thread_lock.lock
-    @thread = Thread.new { self.reliable_thread }
-    if @state == :started
-      @thread_lock.unlock
-    end
+  def self.[](name)
+    self.registry[name]
   end
 
   def self.new(name,args={},&block)
@@ -88,23 +65,58 @@ class ManagedThread
       thread = self.registry[name]
       if block
         thread.block = block
-        thread.raise Start.new
+        puts "Replacing block in #{thread}" if $DEBUG
+        thread.start if thread.start?
       end
     else
       raise Error.new("No such reliable thread exists") unless block.is_a? Proc
       thread = super(name,args,&block)
       self.registry[name] = thread
+      thread.start if thread.start?
     end
     thread
   end
 
-  def stop()
-    @thread.raise Stop.new
+  def initialize(name, args = {}, &block)
+    @block = block
+    @name = name
+    @lock = Mutex.new
+
+    @restart = args[:restart].nil? ? self.class.default_restart : args[:restart]
+    @repeat = args[:repeat].nil? ? self.class.default_repeat : args[:repeat]
+    @start = args[:start].nil? ? self.class.default_start : args[:start]
+
+    puts "Defined #{self.class}:#{self.name}" if $DEBUG
+  end
+
+  def start?
+    @start
+  end
+
+  def to_s
+    "ManagedThread:#{@name}"
+  end
+
+  def inspect
+    "<#{self}:#{@thread.status}>"
   end
 
   def start()
-    puts "Start #{@thread}"
-    @thread_lock.unlock
+    return @thread if @lock.locked?
+    puts "START #{self}" if $DEBUG
+    @thread = Thread.new { self.reliable_thread }
+  end
+
+  def stop()  
+    return @thread if not @lock.locked?
+    puts "STOP #{self}" if $DEBUG
+    @thread.kill
+    @thread
+  end
+
+  def restart()
+    stop
+    start
   end
 
   def raise(e)
@@ -112,47 +124,28 @@ class ManagedThread
   end
 
   def reliable_thread
-    begin
-      @thread_lock.lock
-      puts "Execute #{self.class}:#{self.name}" 
-      loop do
-        block.call
-        sleep @interval
-        self.halt unless @restart
+    @lock.synchronize do
+      begin
+        puts "Execute #{self.class}:#{self.name}" if $DEBUG
+        loop do
+          block.call
+          if @repeat
+            sleep @repeat
+          else
+            break
+          end
+        end
+      rescue Exception => e
+        puts "Caught exception from reliable thread #{self.name}/#{name}: #{e} #{e.backtrace}" if $DEBUG
+        if @restart
+          puts "Restarting reliable thread #{self.class}/#{@name} after exception in #{@repeat || 0} seconds"  if $DEBUG
+          sleep @repeat || 0
+        else
+          self.halt
+        end
+        retry
       end
-    rescue Stop => e
-      retry
-    rescue Start => e
-      @thread_lock.unlock
-      retry
-    rescue Exception => e
-      puts "Caught exception from reliable thread #{self.name}/#{name}: #{e} #{e.backtrace}" 
-      if @restart
-        puts "Restarting reliable thread #{self.class}/#{@name} after exception in #{@interval} seconds" 
-        sleep @interval
-        @thread_lock.unlock
-      else
-        self.halt
-      end
-      retry
     end
-  end
-
-  def halt
-    @state = :stopped
-    Thread.stop
-    @state = :started
-  end
-
-  def kill
-    @state = :dead
-    @thread.kill
-  end
-
-  def restart
-    puts "RESTART #{self} #{@thread}"
-    self.stop
-    self.start
   end
 
   def self.all_threads

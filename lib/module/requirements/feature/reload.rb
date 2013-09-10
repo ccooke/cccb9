@@ -1,7 +1,7 @@
 
 module Module::Requirements::Feature::Reload
   extend Module::Requirements
-  needs :hooks
+  needs :hooks, :call_module_methods
 
   def shutdown
     run_hooks :reload_pre
@@ -16,25 +16,41 @@ module Module::Requirements::Feature::Reload
     Thread.exclusive do
       saved = $-v
       $-v = nil
+      
+      self.class.module_requirements_loader.submodules.map { |m| 
+        m.name.split('::').last
+      }.select { |m|
+        m.start_with? 'AutoDependency'
+      }.map(&:to_sym).select { |m| 
+        self.class.module_requirements_loader.constants.include? m
+      }.each do |m|
+        debug "Destroying #{m} before reload"
+        self.class.module_requirements_loader.class_exec do
+          remove_const m
+        end
+      end
 
       Gem.clear_paths
 
-      files = $".select { |f| 
+      $".select { |f| 
         f.start_with? config(:basedir) 
       }.map { |f| 
         f.split('/') 
       }.sort { |a,b|
         b.count <=> a.count
       }.map { |f| f.join('/') }.each do |code_file|
-        critical "Reloading #{code_file}"
+        verbose "Reloading #{code_file}"
         $".delete( code_file )
-        Kernel.load( code_file )
+        begin 
+          require code_file
+        rescue Exception => e
+          puts "RELOAD EXCEPTION"
+          puts e
+          pp e.backtrace
+        end
       end
 
       $-v = saved
-      self.class.class_exec do
-        include CCCB::Core
-      end
     end
   end
 
@@ -54,16 +70,22 @@ module Module::Requirements::Feature::Reload
     run_hooks :ready
   end
 
-  def reload_loop    
-    startup
+  def reload_body
     loop do 
-      sleep 1 until @reload
+      until @reload
+        sleep 1
+      end
       @reload = false
-      reload
+      clean_reload
     end
   end
 
-  def reload
+  def reload_loop    
+    startup
+    reload_body
+  end
+
+  def clean_reload
     Thread.pass
     @reload_lock.synchronize do
       critical "Reloading client"

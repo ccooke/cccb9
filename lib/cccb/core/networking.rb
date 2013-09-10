@@ -3,18 +3,17 @@ require 'socket'
 
 module CCCB::Core::Networking
   extend Module::Requirements
-  provides :networking
   needs :hooks
 
   def connected?(network)
-    @network[name][:state] == :connected
+    networking.networks[name][:state] == :connected
   end
 
   def net_thread(method, name)
-    debug "Starting net_thread #{method} for #{name}"
+    spam "Starting net_thread #{method} for #{name}"
     loop do
       begin
-        @network[name].send(method)
+        networking.networks[name].send(method)
       rescue Exception => e
         schedule_hook :exception, e
       end
@@ -22,12 +21,12 @@ module CCCB::Core::Networking
   end
 
   def module_load
-    @network = {}
-    @queues = {}
+    networking.networks ||= {}
+    networking.queues ||= {}
 
     self.servers.each do |name,conf|
       conf[:name] = name.dup
-      @network[name] = CCCB::Network.new(conf)
+      networking.networks[name] ||= CCCB::Network.new(conf)
 
       ManagedThread.new :"networking_recv_#{name}" do
         net_thread :receiver, name

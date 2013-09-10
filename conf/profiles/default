@@ -5,6 +5,7 @@
     :host: irc.lspace.org
     :channels:
     - ! '#afptest'
+    - ! '#afp'
   freenode:
     :host: irc.freenode.net
     :channels:
