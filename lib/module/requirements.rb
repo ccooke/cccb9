@@ -37,6 +37,8 @@ module Module::Requirements
 
   module Loader    
 
+    class MaskedFeatureStorage < Exception; end
+
     CLEAR_SUBMODULE_CACHE = true
 
     def submodule_list
@@ -91,15 +93,25 @@ module Module::Requirements
 
         unless ancestors.include? m
           puts "Including module #{m} into #{into}" if $DEBUG
-          provide_name = m.provide_name
+          provide_name = m.provide_name.to_sym
           into.class_exec do
             include m
 
             puts "Creating method #{self}.#{provide_name} accessing #{m.name}" if $DEBUG
             
             data = m.name
-            define_method :"#{provide_name}" do
+            define_method provide_name do
               Module::Requirements.storage(data)  
+            end
+            
+            @provide_name = provide_name
+            def self.method_added(name)
+              if name == @provide_name
+                raise Module::Requirements::Loader::MaskedFeatureStorage.new( 
+                  "The method #{name} will mask #{self}'s Module::Requirements feature storage"
+                )
+              end
+              super
             end
 
           end
@@ -116,8 +128,13 @@ module Module::Requirements
 
   end
 
-  class RequirementMissing < Exception; end
-  class CircularDependency < Exception; end
+  class RequirementMissing < Exception 
+    attr_reader :requirement
+    def initialize(s,r)
+      @requirement = r
+      super( "#{s}: Missing feature '#{r}'" )
+    end
+  end
 
   @provides ||= Hash.new { [] }
   @needs ||= Hash.new { [] }
@@ -146,7 +163,7 @@ module Module::Requirements
         @provides[m].include? r
       end
       if dep.nil? 
-        raise Module::Requirements::RequirementMissing.new(r)
+        raise Module::Requirements::RequirementMissing.new(obj, r)
       else
         dep
       end
@@ -178,19 +195,23 @@ module Module::Requirements
       provides auto_provide
     end
   end
+  
   def provides? feature
     Module::Requirements.provides? @requirement_class, feature
   end
+  
   def provides(*features)
     Module::Requirements.provides(@requirement_class, *features)
   end
+  
   def needs(*features)
     Module::Requirements.needs(@requirement_class, *features)
   end
+
   def requirements
     Module::Requirements.requirements(@requirement_class)
   end
-  
+
   define_method :provide_name do
     @requirement_class.name.split( '::' ).last.snake_case.to_sym
   end

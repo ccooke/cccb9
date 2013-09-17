@@ -141,7 +141,7 @@ class ManagedThread
           puts "Restarting reliable thread #{self.class}/#{@name} after exception in #{@repeat || 0} seconds"  if $DEBUG
           sleep @repeat || 0
         else
-          self.halt
+          self.stop
         end
         retry
       end

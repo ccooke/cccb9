@@ -4,8 +4,8 @@ module Module::Requirements::Feature::Logging
   extend Module::Requirements
 
   class ThreadLessLog
-    define_method :<< do |(level,message)|
-      debug_print level, message
+    define_method :<< do |(level,*message)|
+      debug_print level, *message
     end
   end
 
@@ -20,27 +20,29 @@ module Module::Requirements::Feature::Logging
   CRITICAL = 0
 
   %w( SPAM DEBUG VERBOSE INFO WARNING ERROR CRITICAL ).each do |word|
-    define_method word.downcase.to_sym do |message|
+    define_method word.downcase.to_sym do |*message|
       level = self.class.const_get( word.to_sym )
-      logging.log_queue << [level,message]
+      logging.log_queue << [level,*message]
     end
   end
   
-  def log( string )
+  def log( *strings )
     begin
-      message = sprintf( "[%s] %s",
-        Time.now.strftime("%Y-%m-%d %H:%M:%S"),
-        string
-      )
-      logging.logfile.puts message # if self.log_to_file
-      logging.logfile.flush
+      strings.each do |string|
+        message = sprintf( "[%s] %s",
+          Time.now.strftime("%Y-%m-%d %H:%M:%S"),
+          string
+        )
+        logging.logfile.puts message # if self.log_to_file
+        logging.logfile.flush
+      end
     rescue Exception => e
       puts "DEBUG FAILURE: #{e} #{e.backtrace.inspect}"
     end
   end
 
-  def debug_print level, msg
-    log msg if (logging.loglevel||DEBUG) >= level
+  def debug_print level, *msg
+    log *msg if (logging.loglevel||DEBUG) >= level
   end
 
   def module_load
@@ -74,7 +76,14 @@ module Module::Requirements::Feature::Logging
   def module_unload
     if have_feature? :managed_threading
       logging.saved_queue = logging.log_queue
+      old_queue = logging.log_queue
+      ManagedThread[:logger].stop
       logging.log_queue = ThreadLessLog.new
+      time = Time.now
+      until old_queue.empty?
+        logging.log_queue << old_queue.pop
+      end
+
       debug "Transitioned to unthreaded logging"
     end
   end

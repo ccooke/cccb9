@@ -39,10 +39,14 @@ module Module::Requirements::Feature::Reload
       }.sort { |a,b|
         b.count <=> a.count
       }.map { |f| f.join('/') }.each do |code_file|
-        verbose "Reloading #{code_file}"
-        $".delete( code_file )
         begin 
-          require code_file
+          if (errors = %x{#{ENV['RUBY'] || "ruby2.0" } -c #{code_file} 2>&1 }) =~ /Syntax OK/
+            debug "Reloading #{code_file}"
+            $".delete( code_file )
+            require code_file
+          else
+            critical "Syntax errors in #{code_file} prevent reloading it: #{errors}"
+          end
         rescue Exception => e
           puts "RELOAD EXCEPTION"
           puts e
@@ -88,11 +92,11 @@ module Module::Requirements::Feature::Reload
   def clean_reload
     Thread.pass
     @reload_lock.synchronize do
-      critical "Reloading client"
+      debug "Reloading client"
       shutdown
       redefine
       startup
-      critical "Reload complete"
+      critical "Client reloaded"
     end
   end
 

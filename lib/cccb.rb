@@ -7,26 +7,28 @@ require 'module/requirements/feature/hooks'
 require 'module/requirements/feature/logging'
 require 'module/requirements/feature/call_module_methods'
 require 'module/requirements/feature/staticmethods'
+require 'module/requirements/feature/events'
+require 'module/requirements/feature/persist'
 require 'cccb/config'
 require 'cccb/core'
+require 'cccb/irc'
 require 'cccb/core/usercode'
 require 'cccb/core/bot'
 require 'cccb/core/networking'
-require 'cccb/network'
-require 'cccb/irc'
+require 'cccb/core/settings'
 
 class String
   include String::Keyreplace
 end
 
-class CCCB
+class CCCB 
 
   VERSION = "9.0-pre1"
   
   include CCCB::Core
   include CCCB::Config
 
-  @@instance = nil
+  @@instance ||= nil
 
   def self.new(*args)
     return @@instance unless @@instance.nil?
@@ -40,6 +42,9 @@ class CCCB
 
   def configure(args)
     @reload = false
+    statedir = args[:statedir] || args[:basedir] + '/conf/state/'
+    persist.store = Module::Requirements::Feature::Persist::FileStore.new( statedir ) 
+
     {
       log_to_file: args[:log_to_file] || true,
       log_to_stdout: args[:log_to_stdout] || true,
@@ -50,7 +55,7 @@ class CCCB
       debug_privmsg: args[:debug_privmsg] || "#cccb-debug}",
       superuser_password: args[:superuser_password] || nil,
       basedir: args[:basedir],
-      statedir: args[:statedir] || args[:basedir] + '/conf/state/',
+      statedir: statedir,
       codedir: args[:codedir] || args[:basedir] + '/lib/cccb/usercode',
       logfile: args[:logfile] || args[:basedir] + '/logs/cccb.log',
       botpattern: args[:botpattern] || /^cccb/,
