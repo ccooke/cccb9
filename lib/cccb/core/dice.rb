@@ -429,7 +429,7 @@ class CCCB::DieRoller
                   else
                     1
                   end
-                  puts "Reroll #{rerolls}" 
+                  spam "Reroll #{rerolls}" 
                   if rerolls > 1000
                     rolls = best
                     rolls.unshift type: :note, text: "Returning the closest result after #{rerolls} attempts. Giving up."
@@ -527,6 +527,7 @@ module CCCB::Core::Dice
       # m, s, mode, nick, expression, modifier|
       #p [ m, s, mode, nick, expression, modifier ]
 
+      mode = match[:command]
       mode = 'qroll' if mode == 'toss'
 
       default_die = message.user.get_setting("options", "default_die")

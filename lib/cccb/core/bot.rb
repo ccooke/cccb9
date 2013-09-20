@@ -149,7 +149,6 @@ module CCCB::Core::Bot
       message.channels_removed.each do |channel|
         info message.format("%(network) [#{channel}] <<< %(nick) [%(from)] has left IRC (%(text))")
       end
-      info "Persist-after #{persist.store.dump}"
     end
 
     add_hook :join do |message|
