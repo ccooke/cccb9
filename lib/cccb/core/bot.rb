@@ -1,3 +1,5 @@
+require 'json'
+
 module CCCB::Core::Bot
   extend Module::Requirements
   needs :hooks, :reload, :call_module_methods, :managed_threading, :events, :persist
@@ -5,8 +7,9 @@ module CCCB::Core::Bot
   LOG_CONVERSATION    = "%(network) [%(replyto)]"
   LOG_GENERIC         = "%(network) %(raw)"
   LOG_SERVER          = "%(network) ***%(command)*** %(text)"
-  LOG_MODE_CHANNEL = "#{LOG_CONVERSATION} MODE %(args)"
-  LOG_MODE_USER = "%(network) -!- MODE %(arguments) %(text)"
+  LOG_MODE_CHANNEL    = "#{LOG_CONVERSATION} MODE %(args)"
+  LOG_MODE_USER       = "%(network) -!- MODE %(arguments) %(text)"
+  LOG_CTCP            = "%(network) %(replyto) sent a CTCP %(ctcp) (%(ctcp_params))"
 
   LOG_FORMATS = {
     PRIVMSG:  "#{LOG_CONVERSATION} %(user) %(text)",
@@ -56,6 +59,19 @@ module CCCB::Core::Bot
     end
   end
 
+  def add_ctcp command, &block
+    add_hook :ctcp do |message|
+      spam "IN CTCP #{ command }"
+      if message.ctcp == command
+        debug "Accepted CTCP command #{command}"
+        reply = block.call( message )
+        unless reply.nil?
+          message.network.notice message.replyto, "\001#{command} #{reply}\001"
+        end
+      end
+    end
+  end
+
   def module_load
 
     bot.command_lock ||= Mutex.new.lock
@@ -83,6 +99,14 @@ module CCCB::Core::Bot
       end
       schedule_hook message.command_downcase, message
       message.log unless message.hide?
+    end
+
+    add_hook :client_privmsg do |network, target, string|
+      info "#{network} [#{target}] < #{network.nick}> #{string}"
+    end
+
+    add_hook :client_notice do |network, target, string|
+      info "#{network} [#{target}] -#{network.nick}- NOTICE #{string}"
     end
 
     add_irc_command :PRIVMSG do |message|
@@ -135,8 +159,12 @@ module CCCB::Core::Bot
     end
 
     add_hook :message do |message|
-      if message.text =~ /^\s*#{message.network.nick}:\s*(?<request>.*?)\s*$/
-        schedule_hook :request, $~[:request], message
+      if message.to_channel?
+        if message.text =~ /^\s*#{message.network.nick}:\s*(?<request>.*?)\s*$/
+          schedule_hook :request, $~[:request], message
+        end
+      else
+        schedule_hook :request, message.text, message
       end
     end
     
@@ -144,14 +172,108 @@ module CCCB::Core::Bot
       "Test ok: #{match[1]}"
     end
 
-    add_request /^\s*setting\s*(?<type>core|channel|network|user|channeluser)::(?<setting>\w+)\s*$/ do |match, message|
-      if message.user.superuser?
-        "Setting #{match[:type]}::#{match[:setting]} is currently set to #{SETTING_TARGET[match[:type].to_sym].setting(match[:setting])}"
+    add_request /^
+      \s* setting \s*
+      (?:
+        (?<type>core|channel|network|user|channeluser|[^:]+?)
+        ::
+      |
+        ::
+      )?
+      (?<setting> \w+)
+      (?:
+        ::
+        (?<key> \w+)
+      )?
+      (?:
+        \s+
+        =
+        \s*
+        (?<value>.*?)
+      )?
+      \s*$
+    /x do |match, message|
+      name = match[:setting]
+      type = if match[:type]
+        match[:type]
+      elsif message.to_channel?
+        :channel
+      else
+        :user
+      end
+      type_name = 'core'
+        
+      object = case type.to_sym
+      when :core 
+        CCCB.instance
+      when :channel 
+        message.channel 
+      when :network 
+        message.network
+      when :user 
+        message.user
+      when :channeluser 
+        message.channeluser
+      else
+        message.network.channels[type.downcase] || message.network.users[type.downcase]
+      end
+
+      key = match[:key]
+
+      setting_name = [ object, name, key ].compact.join('::')
+
+      if object.nil?
+        "Unable to find #{setting_name} in #{match[:type]}::#{match[:setting]}"
+      elsif object.auth_setting( message, name )
+        if match[:value]
+          begin
+            value = case match[:value]
+            when "nil", ""
+              nil
+            when "true"
+              true
+            when "false"
+              false
+            else
+              JSON.parse( "[ #{match[:value].inspect} ]", create_additions: false ).first
+            end
+
+            object.set_setting(name, value, key)
+            "Setting #{setting_name} is now set to #{object.get_setting(name,key)}"
+          rescue Exception => e
+            info "EXCEPTION: #{e} #{e.backtrace}"
+            "Sorry, I couldn't parse #{match[:value]} (#{e})"
+          end
+        else
+          "Setting #{setting_name} is currently set to #{object.get_setting(name,key).to_json}"
+        end
       else
         "Denied"
       end
     end
 
+    add_request /^\s*reload\s*$/i do |match, message|
+      if message.user.superuser?
+        reload_then(message) do |message|
+          if reload.errors.count == 0
+            message.network.msg message.replyto, "Ok"
+          else
+            message.network.msg message.replyto, reload.errors
+          end
+        end
+        nil
+      else
+        "Denied"
+      end
+    end
+
+    add_ctcp :PING do |message|
+      message.ctcp_params.join(" ")
+    end
+
+    add_ctcp :VERSION do |message|
+      "CCCB v#{CCCB::VERSION}"
+    end
   end
 
   def module_start

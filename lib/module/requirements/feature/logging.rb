@@ -3,6 +3,12 @@ require 'managedthreads'
 module Module::Requirements::Feature::Logging
   extend Module::Requirements
 
+  class Logger
+    def self.<<(message)
+      info message
+    end
+  end
+
   class ThreadLessLog
     define_method :<< do |(level,*message)|
       debug_print level, *message

@@ -1,32 +1,77 @@
 module CCCB::Settings
 
-  def setting(name)
-    unless CCCB.instance.settings.db[self.class] and CCCB.instance.settings.db[self.class].include? name
-      raise "No such setting: #{name}" 
-    end
+  class SettingError < Exception; end
+
+  def get_setting(name,key=nil)
     storage[:settings] ||= {}
-    if storage[:settings].include? name
-      storage[:settings][name]
+    db = CCCB.instance.settings.db
+
+    parent = if CCCB::SETTING_CASCADE.include? self.class
+      CCCB::SETTING_CASCADE[self.class].call(self) 
+    end
+
+    cursor = if storage[:settings].include? name
+      storage[:settings]
+    elsif db[self.class].include? name
+      storage[:settings][name] = db[self.class][name][:default].dup
     else
-      storage[:settings][name] = CCCB.instance.settings.db[self.class][name][:default]
+      raise SettingError.new("No such setting #{name}")
+    end
+
+    result = if cursor.nil?
+      nil
+    elsif cursor[name].nil?
+      nil
+    elsif key
+      cursor[name][key]
+    else
+      cursor[name]
+    end
+
+    if result.nil? 
+      if parent
+        parent.get_setting(name, key)
+      end
+    else
+      result
     end
   end
 
-  def setting=(name,value)
-    storage[:settings][name] = value
+  def setting?(name,key=nil)
+    data = get_setting(name)
+    if key
+      !!get_setting(name)[key]
+    else
+      !!get_setting(name) 
+    end
+  end
+
+  def set_setting(name, value, key=nil)
+    current = get_setting(name, key)
+    cursor = storage[:settings]
+    if key
+      cursor = cursor[name]
+      if value.nil?
+        return cursor.delete(key)
+      end
+      name = key
+    end
+    cursor[name] = value
+    schedule_hook :setting_set, self, name, current, value
   end
 
   def auth_setting(message,name)
     db = CCCB.instance.settings.db
-    case db[self][name][:auth]
-    when :superusers
-      CCCB.instance.setting("superusers").include? message.from
+    return true if message.user.superuser?
+    case db[self.class][name][:auth]
     when :network
-      message.network == @network and @network.setting("trusted").include? message.from
+      message.network == @network and @network.get_setting("trusted").include? message.from
     when :channel
-      message.channel == self and 
+      message.channel == self and
         message.channeluser.channel == self and
         message.channeluser.is_op?
+    when :user
+      message.user.nick == self.nick
     else
       super
     end
@@ -47,38 +92,39 @@ module CCCB::Core::Settings
     :channeluser => CCCB::ChannelUser
   }
 
+  SETTING_CASCADE = {
+    CCCB::Channel => Proc.new { |obj| obj.network },
+    CCCB::Network => Proc.new { CCCB.instance }
+  }
+
   def add_setting(type,name,auth,default = false)
     klass = SETTING_TARGET[type]
     settings.db[klass] ||= {}
-    if settings.all.include? name and not settings.db[klass].include? name
-      raise "A setting with that name already exists"
-    end
     settings.db[klass][name] = {
       auth: auth,
       default: default
     }
-    settings.all[name] = settings.db[klass][name]
   end
 
-  def add_setting_test(type,name,&block)
+  def add_setting_method(type,name,&block)
     klass = SETTING_TARGET[type]
-    if klass.instance_methods.include? name and not klass.setting_test? name
+    if klass.instance_methods.include? name and not klass.setting_method? name
       raise "A method named #{name} already exists on #{klass}" 
     end
     klass.instance_exec do
-      @setting_tests ||= []
-      def self.setting_test?(method)
-        @setting_tests.include?(method)
+      @setting_methods ||= []
+      def self.setting_method?(method)
+        @setting_methods.include?(method)
       end
 
       define_method name, block
-      @setting_tests << name
+      @setting_methods << name
     end
   end
 
   def module_load
     settings.db ||= {}
-    settings.all ||= {}
+    settings.default ||= Hash.new { {} }
     
     SETTING_TARGET.values.each do |klass|
       klass.instance_exec do
@@ -87,18 +133,41 @@ module CCCB::Core::Settings
     end
 
     add_setting :core, "superusers", :superusers, []
-    add_setting_test :user, :superuser? do 
-      puts "Does #{CCCB.instance.setting("superusers")} include #{self.from.downcase}"
-      puts "#{CCCB.instance.setting("superusers").include?(self.from.downcase.to_s).inspect}"
-      puts "#{(CCCB.instance.setting("superusers").first == self.from.downcase.to_s).inspect}"
-      puts "SF: #{(CCCB.instance.setting("superusers").first.inspect)}"
-      puts " F: #{(self.from.downcase).to_s.inspect}"
+    add_setting :user, "options", :user, {}
+    add_setting :channel, "options", :channel, {}
+    add_setting :network, "options", :superusers, {}
+    add_setting :core, "options", :superusers, {}
 
-      CCCB.instance.setting("superusers").include? self.from.downcase.to_s
+    add_setting_method :user, :superuser? do
+      CCCB.instance.get_setting("superusers").include? self.from.to_s.downcase
     end
-    setting("superusers") << "ccooke!~ccooke@spirit.gkhs.net".to_sym
-    setting("superusers").uniq!
-  end
+    
+    add_request /^\s*superuser\s+override\s*(?<password>.*?)\s*$/ do |match, message|
+      password_valid = (match[:password] == CCCB.instance.superuser_password)
+      if message.to_channel?
+        if password_valid
+          CCCB.instance.superuser_password = (1..32).map { (rand(64) + 32).chr }.join
+        end
+        "Denied. And don't try to use that password again."
+      else
+        p [ match[:password], CCCB.instance.superuser_password ]
+        if password_valid
+          get_setting("superusers") << message.from.downcase.to_s
+          "Okay, you are now a superuser"
+        else
+          "Denied"
+        end
+      end
+    end
 
+    add_request /^\s*superuser\s+resign\s*$/ do |match, message|
+      if message.user.superuser?
+        get_setting("superusers").delete message.from.downcase.to_s
+        "Removed you from the superuser list."
+      else
+        "You weren't a superuser in the first place."
+      end
+    end
+  end
 end
 

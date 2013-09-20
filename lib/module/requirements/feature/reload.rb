@@ -14,6 +14,7 @@ module Module::Requirements::Feature::Reload
 
   def redefine
     Thread.exclusive do
+      reload.errors = []
       saved = $-v
       $-v = nil
       
@@ -45,7 +46,9 @@ module Module::Requirements::Feature::Reload
             $".delete( code_file )
             require code_file
           else
-            critical "Syntax errors in #{code_file} prevent reloading it: #{errors}"
+            err = "Syntax errors in #{code_file} prevent reloading it: #{errors}"
+            critical err
+            reload.errors << err
           end
         rescue Exception => e
           puts "RELOAD EXCEPTION"
@@ -60,7 +63,7 @@ module Module::Requirements::Feature::Reload
 
   def startup
     Signal.trap("HUP") do
-      @reload = true
+      reload.now = true
     end
 
     call_submodules :module_load
@@ -74,24 +77,36 @@ module Module::Requirements::Feature::Reload
     run_hooks :ready
   end
 
+  def reload_then(*args, &block)
+    Thread.new do
+      info "Begin reload"
+      reload.now = true
+      info "WAit for reload"
+      sleep 1 until reload.now == false
+      info "Reload done"
+      block.call(*args)
+    end
+  end
+
   def reload_body
     loop do 
-      until @reload
+      until reload.now
         sleep 1
       end
-      @reload = false
+      reload.now = false
       clean_reload
     end
   end
 
   def reload_loop    
     startup
+    reload.now = false
     reload_body
   end
 
   def clean_reload
     Thread.pass
-    @reload_lock.synchronize do
+    reload.lock.synchronize do
       debug "Reloading client"
       shutdown
       redefine
@@ -101,7 +116,7 @@ module Module::Requirements::Feature::Reload
   end
 
   def module_load
-    @reload_lock = Mutex.new
+    reload.lock = Mutex.new
   end
 end
 

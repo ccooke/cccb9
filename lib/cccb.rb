@@ -16,6 +16,10 @@ require 'cccb/core/usercode'
 require 'cccb/core/bot'
 require 'cccb/core/networking'
 require 'cccb/core/settings'
+require 'cccb/core/httpserver'
+require 'cccb/core/help'
+require 'cccb/core/choice'
+require 'cccb/core/dice'
 
 class String
   include String::Keyreplace
@@ -62,4 +66,7 @@ class CCCB
     }
   end
 
+  def to_s
+    "CCCB"
+  end
 end

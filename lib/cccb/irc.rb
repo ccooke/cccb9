@@ -42,8 +42,10 @@ class CCCB::Message
       ^ \s* 
       \001
       (?<command>\w+)
-      \s+
-      (?<params>.*?)
+      (?:
+        \s+
+        (?<params>.*?)
+      )?
       \001
       \s*
     $}x
@@ -53,7 +55,7 @@ class CCCB::Message
     def process
       if ctcp = CTCP_REGEX.match( @text )
         @ctcp = ctcp[:command].upcase.to_sym
-        @ctcp_params = ctcp[:params].split(/\s+/)
+        @ctcp_params = (ctcp[:params]||"").split(/\s+/)
         @type = :CTCP
       else
         @ctcp = false
@@ -214,7 +216,8 @@ class CCCB::Message
   }x
 
   attr_accessor :network, :raw, :from, :command, :arguments, 
-                :text, :hide, :user, :log_format, :command_downcase
+                :text, :hide, :user, :log_format, :command_downcase, 
+                :time
 
   def initialize(network, string, restore_from_archive = false)
     @restore_from_archive = restore_from_archive
@@ -222,6 +225,7 @@ class CCCB::Message
     @log_format = "%(network) %(raw)"
     @raw = string
     @hide = false
+    @time = Time.now
     
     match = set_user_data(string)
 
@@ -291,11 +295,21 @@ class CCCB::Message
 
   def encode_with(coder)
     coder.tag = "tag:cccb9:message"
-    coder.scalar = "#{network.name}: #{raw}"
+    coder.scalar = "#{network.name}: t#{@time.utc.to_f} #{raw}"
   end
 
   YAML.add_domain_type "cccb9", "message" do |tag, data|
-    if data =~ /^(.*?): (.*)$/
+    if data =~ /^(.*?): (\d+\.\d+) (\w+) (.*)$/
+      network_name = $1
+      time = $2
+      tz = $3
+      string = $4
+      if network = CCCB.instance.networking.networks[network_name]
+        CCCB::Message.new( network, string, true )
+      else
+        OpenStruct.new()
+      end
+    elsif data =~ /^(.*?): (.*)$/
       network_name = $1
       string = $2
       if network = CCCB.instance.networking.networks[network_name]
@@ -583,7 +597,7 @@ class CCCB::Network
       auto_join_channels: conf[:channels] || [],
       throttle: {
         line_buffer_max: 9,
-        line_rate: 0.6,
+        line_rate: 0.9,
         byte_buffer_max: 1024,
         byte_rate: 128
       }
@@ -657,9 +671,17 @@ class CCCB::Network
     write data.gsub(/\n/,"") + "\n"
   end
 
+  def notice(target, lines)
+    Array(lines).each do |string|
+      puts "NOTICE #{target} :#{string}"
+      schedule_hook :client_notice, self, target, string
+    end
+  end
+
   def msg(target, lines)
     Array(lines).each do |string|
       puts "PRIVMSG #{target} :#{string}"
+      schedule_hook :client_privmsg, self, target, string
     end
   end
 
