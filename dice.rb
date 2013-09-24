@@ -154,7 +154,7 @@ module Dice
               number += this_roll
               puts "Rolled a #{this_roll}. Total is now #{number}" if $DEBUG
 
-              if number == @size
+              if this_roll == @size
                 if @penetrating
                   puts "Reroll(penetrate)" if $DEBUG
                   number -= 1
