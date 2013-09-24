@@ -132,6 +132,10 @@ module Dice
           @string = options[:string]
           @value = nil
           @rolls = Hash.new(0)
+          @reroll_modifiers = @modifiers.select { |m| m.is_a? Modifier::Reroll }
+          if (1..@size).all? { |r| @reroll_modifiers.any? { |m| m.reroll_with? r } }
+            raise Dice::Parser::Error.new( "Invalid reroll rules: No die roll is possible" )
+          end
         end
 
         def probabilities
