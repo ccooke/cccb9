@@ -367,6 +367,6 @@ end
 
 t = Dice::Parser.new ARGV[0].dup
 
-t.roll
-t.value
-t.output
+puts "Roll: #{t.roll.inspect}"
+puts "Value: #{t.value}"
+puts "Output: #{t.output}"
