@@ -3,9 +3,15 @@
 require_relative 'dice'
 
 result=(Dice::Parser.new ARGV[0].dup).terms.inject(Density.new) { |i,term| i+=term.density }
-pp result>=-200
+if (result>=-200)==1
+  print "Densities sum up to 1 (OK)!\n"
+else
+  print "Error: ", Rational(1-(result>=-200)).to_f, "\n"
+end
+print "Density: "
 pp result
-pp result<=5
+print "Probability that X<=5: "
+print result<=5, "\n"
 
 #diedensity = ([DieDensity.new(3,[2])]*5).inject(:+)
 #puts "Probability to have <=10 for 5d3r2:"
