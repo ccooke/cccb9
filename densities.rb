@@ -1,6 +1,3 @@
-#!/usr/bin/ruby
-
-load './dice.rb'
 require 'facets/array/combination'
 require 'forwardable'
  
@@ -207,27 +204,3 @@ class StandardModifier < Modifier
     lis.inject(:+)
   end
 end
-
-
-
-
-
-
-
-
-
-
-# TESTS
-# =====
-#
-
-t = Dice::Parser.new ARGV[0].dup
-t.terms.each do |term|
-  pp term.density
-end
-
-diedensity = ([DieDensity.new(3,[2])]*5).inject(:+)
-pp (diedensity<=10)
-moddensity = ModifiedDieDensity.new(diedensity,3,StandardModifier.new)
-pp moddensity<=40 
-  

@@ -1,3 +1,4 @@
+require './densities.rb'
 require 'securerandom'
 require 'strscan'
 require 'pp'
@@ -19,6 +20,7 @@ module Dice
       end
 
       def density
+        # TODO: make the argument a signed number according to math_symbol
         @density||=Density.new(@number)
       end
       
@@ -62,7 +64,7 @@ module Dice
           def reroll_with?(number)
             number.send( @condition_test, @condition_num )
           end
-
+          
           def output(callbacks)
           end
         end
@@ -147,19 +149,25 @@ module Dice
       def density
         if (@density.is_a?Density)
           return @density
-        elsif(@compounding)
-          # TODO getCompoundDie(@size,list of reroll values)
-          # TODO apply getModifierDie with the above density + count + modifier function
+        end
+        rerolls=(1..@size).to_a.select { |r| @reroll_modifiers.any? { |m| mod.reroll_with? r } }
+        if(@compounding)
+          temp=CompoundDieDensity.new(@size,rerolls)
+          # TODO, sign of count and modifier functions
+          @density=ModifiedDieDensity.new(temp,@count)
         elsif(@penetrating)
-          # TODO getPenetratingDie(@size, list of reroll values)
-          # TODO apply getModifierDie with the above density + count + modifier function
+          temp=PenetratingDieDensity.new(@size,rerolls)
+          # TODO, sign of count and modifier functions
+          @density=ModifiedDieDensity.new(temp,@count)
         elsif(@exploding)
-          # reroll of max or not? also this case is special...
-          # TODO getExplodingDie(@size, list of reroll values)
-          # SPECIAL
+          temp=ExplodingDieDensity.new(@size,rerolls)
+          # TODO, sign of count and modifier functions
+          @density=ModifiedDieDensity.new(temp,@count)
+          # TODO: EVERYTHING, at the moment a trivial result is returned
         else
-          # TODO getDie(@size, list of reroll value)
-          # TODO apply getModifierDie with the above density + count + modifier function
+          temp=DieDensity.new(@size,rerolls)
+          # TODO, sign of count and modifier functions
+          @density=ModifiedDieDensity.new(temp,@count)
         end
         return @density
       end
