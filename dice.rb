@@ -7,228 +7,233 @@ module Dice
     class Error < Exception; end
     class NoModifier < Exception; end
 
-    module Term
+    class Term
+      attr_accessor :density, :value
+      def initialize
+        @density=nil
+        @value=nil
+      end
+    end
 
-      class Number
-        attr_accessor :number, :value, :math_symbol
-        def initialize( number, sign = :+ )
-          @number = number.to_i
-          @math_symbol = sign.to_sym
+    class Number < Term
+      attr_accessor :number, :math_symbol
+      def initialize( number, sign = :+ )
+        @number = number.to_i
+        @math_symbol = sign.to_sym
+      end
+
+      def roll
+        @value = @number
+      end
+
+      def sum(other)
+        @value.send(@math_symbol, other )
+      end
+
+      def output(callbacks)
+        "#{@math_symbol} #{callbacks[:number].(self,number)}"
+      end
+    end
+
+    class Die < Term
+      class Modifier
+        def self.new(match)
+          if match[:reroll]
+            Reroll.new(match)
+          elsif match[:keep]
+            Keep.new(match)
+          elsif match[:drop]
+            Drop.new(match)
+          else
+            raise Dice::Parser::NoModifier.new( "No such modifier: #{match[0]}" )
+          end
         end
 
-        def roll
-          @value = @number
+        class Reroll
+          def initialize(match)
+            if match[:conditional] != ""
+              @condition_test = match[:conditional] == "=" ? :== : match[:conditional].to_sym
+            else
+              @condition_test = :==
+            end
+            @condition_num  = match[:condition_number].to_i
+          end
+
+          def reroll_with?(number)
+            number.send( @condition_test, @condition_num )
+          end
+
+          def output(callbacks)
+          end
         end
 
-        def sum(other)
-          @value.send(@math_symbol, other )
+        class Keep
+          attr_reader :dropped
+
+          def initialize(match)
+            @keep_number = match[:keep_num].nil? ? 1 : match[:keep_num].to_i
+            @keep_method = match[:keep_lowest] ? :max : :min
+            @dropped = []
+          end
+
+          def process(numbers)
+            @dropped = []
+            until numbers.count <= @keep_number
+              remove = numbers.send(@keep_method)
+              puts "Keep dropping #{remove}" if $DEBUG
+              @dropped << remove
+              numbers.delete_at( numbers.index( remove ) ) 
+            end
+            numbers
+          end
+          
+          def output(callbacks)
+            output = @dropped.map do |die|
+              callbacks[:die].(self, die)
+            end
+            "(unkept: #{output.join(", ")})"
+          end
         end
 
-        def output(callbacks)
-          "#{@math_symbol} #{callbacks[:number].(self,number)}"
+        class Drop
+          attr_reader :dropped
+
+          def initialize(match)
+            @drop_number = match[:drop_num].nil? ? 1 : match[:drop_num].to_i
+            @drop_method = match[:drop_lowest] ? :min : :max
+            @dropped = []
+          end
+
+          def process(numbers)
+            @dropped = []
+            dropped = 0
+            until dropped == @drop_number or numbers.count == 0
+              remove = numbers.send(@drop_method)
+              puts "Dropping #{remove}" if $DEBUG
+              @dropped << remove
+              dropped += 1
+              numbers.delete_at( numbers.index( remove ) )
+            end
+            numbers
+          end
+
+          def output(callbacks)
+            output = @dropped.map do |die|
+              callbacks[:die].(self,die)
+            end
+            "(dropped #{output.join(", ")})"
+          end
         end
       end
 
-      class Die
-        class Modifier
-          def self.new(match)
-            if match[:reroll]
-              Reroll.new(match)
-            elsif match[:keep]
-              Keep.new(match)
-            elsif match[:drop]
-              Drop.new(match)
-            else
-              raise Dice::Parser::NoModifier.new( "No such modifier: #{match[0]}" )
-            end
-          end
+      attr_accessor :count, :size, :math_symbol
+      def initialize( options = {} )
+        @math_symbol = options[:math_symbol].to_sym
+        @modifiers = options[:modifiers]
+        @size = options[:size]
+        @exploding = options[:exploding]
+        @compounding = options[:compounding]
+        @penetrating = options[:penetrating]
+        @count = options[:count]
+        @string = options[:string]
+        @value = nil
+        @rolls = Hash.new(0)
+        @reroll_modifiers = @modifiers.select { |m| m.is_a? Modifier::Reroll }
+        if (1..@size).all? { |r| @reroll_modifiers.any? { |m| m.reroll_with? r } }
+          raise Dice::Parser::Error.new( "Invalid reroll rules: No die roll is possible" )
+        end
+      end
 
-          class Reroll
-            def initialize(match)
-              if match[:conditional] != ""
-                @condition_test = match[:conditional] == "=" ? :== : match[:conditional].to_sym
-              else
-                @condition_test = :==
+      def probabilities
+      end
+
+      def roll_die
+        SecureRandom.random_number( @size ) + 1
+      end
+
+      def roll
+        temp = []
+        count = @count
+        rolls = 0
+        number = 0
+        while rolls < count
+          catch(:reroll) do
+            @rolls[rolls] += 1
+            puts "Roll #{rolls} of #{count}" if $DEBUG
+            this_roll = roll_die
+            number += this_roll
+            puts "Rolled a #{this_roll}. Total is now #{number}" if $DEBUG
+
+            if this_roll == @size
+              if @penetrating
+                puts "Reroll(penetrate)" if $DEBUG
+                number -= 1
+                throw :reroll
+              elsif @compounding
+                puts "Reroll(compound)" if $DEBUG
+                throw :reroll          
+              elsif @exploding 
+                puts "Reroll(explode)" if $DEBUG
+                count += 1
               end
-              @condition_num  = match[:condition_number].to_i
-            end
-
-            def reroll_with?(number)
-              number.send( @condition_test, @condition_num )
-            end
-
-            def output(callbacks)
-            end
-          end
-
-          class Keep
-            attr_reader :dropped
-
-            def initialize(match)
-              @keep_number = match[:keep_num].nil? ? 1 : match[:keep_num].to_i
-              @keep_method = match[:keep_lowest] ? :max : :min
-              @dropped = []
-            end
-
-            def process(numbers)
-              @dropped = []
-              until numbers.count <= @keep_number
-                remove = numbers.send(@keep_method)
-                puts "Keep dropping #{remove}" if $DEBUG
-                @dropped << remove
-                numbers.delete_at( numbers.index( remove ) ) 
-              end
-              numbers
             end
             
-            def output(callbacks)
-              output = @dropped.map do |die|
-                callbacks[:die].(self, die)
-              end
-              "(unkept: #{output.join(", ")})"
-            end
-          end
-
-          class Drop
-            attr_reader :dropped
-
-            def initialize(match)
-              @drop_number = match[:drop_num].nil? ? 1 : match[:drop_num].to_i
-              @drop_method = match[:drop_lowest] ? :min : :max
-              @dropped = []
-            end
-
-            def process(numbers)
-              @dropped = []
-              dropped = 0
-              until dropped == @drop_number or numbers.count == 0
-                remove = numbers.send(@drop_method)
-                puts "Dropping #{remove}" if $DEBUG
-                @dropped << remove
-                dropped += 1
-                numbers.delete_at( numbers.index( remove ) )
-              end
-              numbers
-            end
-
-            def output(callbacks)
-              output = @dropped.map do |die|
-                callbacks[:die].(self,die)
-              end
-              "(dropped #{output.join(", ")})"
-            end
-          end
-        end
-
-        attr_accessor :count, :size, :math_symbol, :value
-        def initialize( options = {} )
-          @math_symbol = options[:math_symbol].to_sym
-          @modifiers = options[:modifiers]
-          @size = options[:size]
-          @exploding = options[:exploding]
-          @compounding = options[:compounding]
-          @penetrating = options[:penetrating]
-          @count = options[:count]
-          @string = options[:string]
-          @value = nil
-          @rolls = Hash.new(0)
-          @reroll_modifiers = @modifiers.select { |m| m.is_a? Modifier::Reroll }
-          if (1..@size).all? { |r| @reroll_modifiers.any? { |m| m.reroll_with? r } }
-            raise Dice::Parser::Error.new( "Invalid reroll rules: No die roll is possible" )
-          end
-        end
-
-        def probabilities
-        end
-
-        def roll_die
-          SecureRandom.random_number( @size ) + 1
-        end
-
-        def roll
-          temp = []
-          count = @count
-          rolls = 0
-          number = 0
-          while rolls < count
-            catch(:reroll) do
-              @rolls[rolls] += 1
-              puts "Roll #{rolls} of #{count}" if $DEBUG
-              this_roll = roll_die
-              number += this_roll
-              puts "Rolled a #{this_roll}. Total is now #{number}" if $DEBUG
-
-              if this_roll == @size
-                if @penetrating
-                  puts "Reroll(penetrate)" if $DEBUG
-                  number -= 1
-                  throw :reroll
-                elsif @compounding
-                  puts "Reroll(compound)" if $DEBUG
-                  throw :reroll          
-                elsif @exploding 
-                  puts "Reroll(explode)" if $DEBUG
-                  count += 1
-                end
-              end
-              
-              if @modifiers.select { |m| m.is_a? Modifier::Reroll }.any? { |m| m.reroll_with? number }
-                puts "Reroll #{number}" if $DEBUG
-                number = 0
-                throw :reroll
-              end
-
-              temp << number
-              rolls += 1
+            if @modifiers.select { |m| m.is_a? Modifier::Reroll }.any? { |m| m.reroll_with? number }
+              puts "Reroll #{number}" if $DEBUG
               number = 0
+              throw :reroll
             end
-          end
-          @value = process_modifiers( temp )
-        end
 
-        def process_modifiers(numbers)
-          @modifiers.each do |m|
-            next unless m.respond_to? :process
-            numbers = m.process(numbers)
+            temp << number
+            rolls += 1
+            number = 0
           end
-          numbers
         end
-  
-        def value
-          @value.inject(:+)
-        end
-
-        def output( callbacks )
-          output = [ @math_symbol ]
-          if @value
-            output << "["
-            @value.each_with_index do |v,i|
-              callbacks[:die].( v, @size, @rolls[i] )
-              if callbacks.include? :die
-                output << callbacks[:die].( self, v )
-              else
-                output << v
-              end
-            end
-            output << "]"
-            if @modifiers.any? { |m| m.respond_to? :process }
-              output << @modifiers.map { |m| m.output( callbacks ) }
-            end
-          end
-          output
-        end
+        @value = process_modifiers( temp )
       end
 
-      class FudgeDie < Die
-        def initialize(match)
-          super
-          @modifiers = []
-          @size = 6
+      def process_modifiers(numbers)
+        @modifiers.each do |m|
+          next unless m.respond_to? :process
+          numbers = m.process(numbers)
         end
-        
-        def roll_die
-          [ -1, -1, 0, 0, +1, +1 ][ SecureRandom.random_number(@size) ]
+        numbers
+      end
+
+      def value
+        @value.inject(:+)
+      end
+
+      def output( callbacks )
+        output = [ @math_symbol ]
+        if @value
+          output << "["
+          @value.each_with_index do |v,i|
+            callbacks[:die].( v, @size, @rolls[i] )
+            if callbacks.include? :die
+              output << callbacks[:die].( self, v )
+            else
+              output << v
+            end
+          end
+          output << "]"
+          if @modifiers.any? { |m| m.respond_to? :process }
+            output << @modifiers.map { |m| m.output( callbacks ) }
+          end
         end
+        output
+      end
+    end
+
+    class FudgeDie < Die
+      def initialize(match)
+        super
+        @modifiers = []
+        @size = 6
+      end
+      
+      def roll_die
+        [ -1, -1, 0, 0, +1, +1 ][ SecureRandom.random_number(@size) ]
       end
     end
 
@@ -324,7 +329,7 @@ module Dice
     def parse
       tokenize_dice_expression.map do |term|
         if term[:constant_number]
-          Term::Number.new term[:constant_number].to_i, term[:mathlink]
+          Number.new term[:constant_number].to_i, term[:mathlink]
         elsif term[:die]
           options = {
             penetrating: !!term[:penetrating],
@@ -336,11 +341,11 @@ module Dice
             count: term[:count].to_i,
           }
           if term[:fudge]
-            Term::FudgeDie.new options
+            FudgeDie.new options
           else
             options[:size] = term[:die_size].to_i
-            options[:modifiers] = tokenize( MODIFIER_TERMS, term[:die_modifiers] ).map { |m| Term::Die::Modifier.new( m ) }
-            Term::Die.new options
+            options[:modifiers] = tokenize( MODIFIER_TERMS, term[:die_modifiers] ).map { |m| Die::Modifier.new( m ) }
+            Die.new options
           end
         end
       end
