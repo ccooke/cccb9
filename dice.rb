@@ -1,4 +1,4 @@
-require './densities.rb'
+require_relative 'densities'
 require 'securerandom'
 require 'strscan'
 require 'pp'

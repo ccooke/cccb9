@@ -1,9 +1,11 @@
 #!/usr/bin/ruby
 
-load './dice.rb'
+require_relative 'dice'
 
-pp (Dice::Parser.new ARGV[0].dup).terms.inject(Density.new) { |i,term| i+=term.density }
-  
+result=(Dice::Parser.new ARGV[0].dup).terms.inject(Density.new) { |i,term| i+=term.density }
+pp result
+pp result<=5
+
 #diedensity = ([DieDensity.new(3,[2])]*5).inject(:+)
 #puts "Probability to have <=10 for 5d3r2:"
 #pp (diedensity<=10)
