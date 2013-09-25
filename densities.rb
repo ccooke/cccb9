@@ -14,24 +14,25 @@ class Density
   extend Forwardable
 
   def_delegators :@d, :each, :[], :[]=, :inspect
+  
  
   def initialize(num=0)
-    @density=Hash.new(Rational(0))
-    @density[num]=Rational(1)
+    @d=Hash.new(Rational(0))
+    @d[num]=Rational(1)
   end
   
   # addition of INDEPENDENT densities
   def +(y)
-    z=Density()
+    z=Density.new
     z[0]=Rational(0)
     if (y.is_a?Density)
-      @density.each do |xkey,xvalue|
+      @d.each do |xkey,xvalue|
         y.each do |ykey,yvalue|
           z[xkey+ykey]+=xvalue*yvalue
         end
       end
     elsif (y.is_a?Numeric)
-      @density.each do |xkey,xvalue|
+      @d.each do |xkey,xvalue|
         z[xkey+y]+=xvalue
       end    
     else
@@ -42,17 +43,17 @@ class Density
 
   # multiplication of INDEPENDENT densities
   def *(y)
-    z=Density()
+    z=Density.new
     z[0]=Rational(0)
-    max=(@density.keys + y.keys).collect(:abs).max
+    max=(@d.keys + y.keys).collect(:abs).max
     if (y.is_a?Density)
       for n in (-max..max) do 
         ((-n..n).collect { |d| [d,n/d] if ((n/d) * d) == n}.compact).each do |d,e|
-          z[n]+=Rational(@density[d]*y[e],abs(d))
+          z[n]+=Rational(@d[d]*y[e],abs(d))
         end
       end
     elsif (y.is_a?Numeric)
-      @density.each do |k,v|
+      @d.each do |k,v|
         z[k*y]=v
       end
     else
@@ -90,72 +91,6 @@ end
 
 
 
-# OLD, NON-CLASS IMPLEMENTATION
-# =============================
-#
-
-# returns the divisors of n
-def divisors_of(n)
-  (-n..n).collect { |d| [d,n/d] if ((n/d) * d) == n}.compact
-end
-# returns the densitfy of (x*y)
-def multiply(x,y)
-  z=Hash.new(Rational(0));
-  max=(hash_one.keys + hash_two.keys).collect(:abs).max
-  for n in (-max..max) do 
-    divisors_of(n).each do |d,e|
-      z[n]+=Rational(x[d]*y[e],abs(d))
-    end
-  end
-end
-
-# returns the density of (x+y)
-def convolve(x,y)
-  z=Hash.new(Rational(0))
-  x.each do |xkey,xvalue|
-    y.each do |ykey,yvalue|
-      z[xkey+ykey]+=xvalue*yvalue
-    end
-  end
-  return z
-end
-
-# returns the density of the sum of the list elements
-def convList(list)
-  z=Hash.new(Rational(0))
-  z[0]=Rational(1)
-  list.each do |l|
-    z=convolve(z,l)
-  end
-  return z
-end
-
-# returns the density of a number n
-def getNum(n)
-  z=Hash.new(Rational(0))
-  z[n]=Rational(1)
-  return z
-end
-
-# returns the density of (x+n)
-def convNum(x,n)
-  return convolve(x,getNum(n))
-end
-
-# returns the probability that x<=n
-def getProb(density,n)
-  prob=0;
-  density.each { |k,v| prob+=v if k<=n }
-  return prob
-end
-
-
-
-
-
-
-
-
 
 
 
@@ -165,7 +100,8 @@ end
 
 # returns the density of a die with rerolls
 def getDie(max,rerolls=[])
-  z=Hash.new(Rational(0))
+  z=Density.new
+  z[0]=0
   n=max-rerolls.size
   for k in (1..max).reject{ |n| rerolls.include?n } do
     z[k]=Rational(1,n)
@@ -176,7 +112,8 @@ end
   # HELPER FUNCTION: returns the density of a die with rerolls
 # but with a removed max value, so this DOESN'T give a density
 def getBasePart(max,rerolls=[])
-  z=Hash.new(Rational(0))
+  z=Density.new
+  z[0]=0
   n=max - rerolls.reject{ |n| n==max }.size
   for k in (1..(max-1)).reject{ |n| rerolls.include?n } do
     z[k]=Rational(1,n)
@@ -186,7 +123,7 @@ end
 
 # returns the density of a die roll with compound decorator and rerolls
 def getCompoundDie(max,rerolls=[],maxcompound=100)
-  z=Hash.new(Rational(0))
+  z=Density.new
   d=getBasePart(max,rerolls)
   n=max - rerolls.reject{ |n| n==max }.size         
   i=0
@@ -201,7 +138,7 @@ end
 
 # returns the density of a die roll with penetrating decorator and rerolls
 def getPenetratingDie(max,rerolls=[],maxpenetrate=100)
-  z=Hash.new(Rational(0))
+  z=Density.new
   d=getBasePart(max,rerolls)
   n=max - rerolls.reject{ |n| n==max }.size         
 
@@ -236,7 +173,7 @@ def getPenetratingDie(max,rerolls=[],maxpenetrate=100)
 end
 
 def getModifierDensity(modifier,density,number)
-  z=Hash.new(Rational(0))
+  z=Density.new
   combination=(density.to_a).repeated_combination(number)
   combination.each do |comb|
     values=comb.map {|a,b| b }
@@ -269,11 +206,14 @@ end
 
 t = Dice::Parser.new ARGV[0].dup
 t.terms.each do |term|
-  puts term.class
+  pp term.density
 end
 
-hash = convList(Array.new(5,getDie(3,[2])))
-puts getModifierDensity(StandardModifier.new,hash,3)
+d=Density.new(3)
+
+density = Array.new(5,getDie(3,[2])).inject(:+)
+pp density
+getModifierDensity(StandardModifier.new,density,3)
                                  
 
 
