@@ -10,8 +10,7 @@ class Density
   include Enumerable
   extend Forwardable
 
-  def_delegators :@d, :each, :[], :[]=, :inspect, :delete
-  
+  def_delegators :@d, :each, :[], :[]=, :inspect, :delete, :keys
  
   def initialize(num=0)
     @d=Hash.new(Rational(0))
@@ -42,8 +41,8 @@ class Density
   def *(y)
     z=Density.new
     z.delete(0)
-    max=(@d.keys + y.keys).collect(:abs).max
     if (y.is_a?Density)
+      max=(@d.keys + y.keys).collect(:abs).max
       for n in (-max..max) do 
         ((-n..n).collect { |d| [d,n/d] if ((n/d) * d) == n}.compact).each do |d,e|
           z[n]+=Rational(@d[d]*y[e],abs(d))
@@ -61,6 +60,9 @@ class Density
 
   def -()
     return self*(-1)
+  end
+  def -(y)
+    return self+(y*(-1))
   end
 
   # returns the probability that X<n, X>n, X<=n, X>=n
@@ -94,7 +96,7 @@ end
   
 # density of a die roll with compound decorator and rerolls
 class CompoundDieDensity < Density
-  def initialize(max,rerolls=[],maxcompound=1)
+  def initialize(max,rerolls=[],maxcompound=10)
     super(0)
     @d.delete(0)
     basepart=getBasePart(max,rerolls)
@@ -125,7 +127,7 @@ end
 
 # density of a die roll with penetrating decorator and rerolls
 class PenetratingDieDensity < Density
-  def initialize(max,rerolls=[],maxpenetrate=1)
+  def initialize(max,rerolls=[],maxpenetrate=10)
     super(0)
     @d.delete(0)
     basepart=getBasePart(max,rerolls)

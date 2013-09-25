@@ -20,7 +20,6 @@ module Dice
       end
 
       def density
-        # TODO: make the argument a signed number according to math_symbol
         @density||=Density.new(@number)
       end
       
@@ -153,20 +152,20 @@ module Dice
         rerolls=(1..@size).to_a.select { |r| @reroll_modifiers.any? { |m| mod.reroll_with? r } }
         if(@compounding)
           temp=CompoundDieDensity.new(@size,rerolls)
-          # TODO, sign of count and modifier functions
+          # TODO: modifier functions
           @density=ModifiedDieDensity.new(temp,@count)
         elsif(@penetrating)
           temp=PenetratingDieDensity.new(@size,rerolls)
-          # TODO, sign of count and modifier functions
+          # TODO: modifier functions
           @density=ModifiedDieDensity.new(temp,@count)
         elsif(@exploding)
           temp=ExplodingDieDensity.new(@size,rerolls)
-          # TODO, sign of count and modifier functions
+          # TODO: modifier functions
           @density=ModifiedDieDensity.new(temp,@count)
           # TODO: EVERYTHING, at the moment a trivial result is returned
         else
           temp=DieDensity.new(@size,rerolls)
-          # TODO, sign of count and modifier functions
+          # TODO: modifier functions
           @density=ModifiedDieDensity.new(temp,@count)
         end
         return @density
@@ -384,6 +383,10 @@ module Dice
       @terms.inject(0) do |i,t|
         i.send(t.math_symbol, t.value)
       end
+    end
+
+    def density
+      @terms.inject(Density.new) { |i,t| i.send(t.math_symbol,t.density) }      
     end
 
     def output( callbacks = {}, default_proc = Proc.new { |o,v| v } )
