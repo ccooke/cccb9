@@ -368,9 +368,3 @@ module Dice
     end
   end
 end
-
-t = Dice::Parser.new ARGV[0].dup
-
-puts "Roll: #{t.roll.inspect}"
-puts "Value: #{t.value}"
-puts "Output: #{t.output}"
