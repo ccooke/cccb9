@@ -68,128 +68,145 @@ class Density
 
   # returns the probability that X<n, X>n, X<=n, X>=n
   def <(n)
-    (n.is_a?Numeric) ? hash.select { |k,v| k<n }.values.inject(:+) : nil
+    (n.is_a?Numeric) ? @d.select { |k,v| k<n }.values.inject(:+) : nil
   end
   def >(n)
-    (n.is_a?Numeric) ? hash.select { |k,v| k>n }.values.inject(:+) : nil
+    (n.is_a?Numeric) ? @d.select { |k,v| k>n }.values.inject(:+) : nil
   end
   def <=(n)
-    (n.is_a?Numeric) ? hash.select { |k,v| k<=n }.values.inject(:+) : nil
+    (n.is_a?Numeric) ? @d.select { |k,v| k<=n }.values.inject(:+) : nil
   end
   def >=(n)
-    (n.is_a?Numeric) ? hash.select { |k,v| k>=n }.values.inject(:+) : nil
+    (n.is_a?Numeric) ? @d.select { |k,v| k>=n }.values.inject(:+) : nil
   end
 end
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-# EVERYTHING RELATED TO DICE DENSITIES
-# ====================================
-#
-
-# returns the density of a die with rerolls
-def getDie(max,rerolls=[])
-  z=Density.new
-  z[0]=0
-  n=max-rerolls.size
-  for k in (1..max).reject{ |n| rerolls.include?n } do
-    z[k]=Rational(1,n)
+# density of a die roll with rerolls
+class DieDensity < Density
+  def initialize(max,rerolls=[])
+    super(0)
+    @d[0]=0
+    n=max-rerolls.size
+    for k in (1..max).reject{ |n| rerolls.include?n } do
+      @d[k]=Rational(1,n)
+    end
   end
-  return z
 end
   
-  # HELPER FUNCTION: returns the density of a die with rerolls
-# but with a removed max value, so this DOESN'T give a density
-def getBasePart(max,rerolls=[])
-  z=Density.new
-  z[0]=0
-  n=max - rerolls.reject{ |n| n==max }.size
-  for k in (1..(max-1)).reject{ |n| rerolls.include?n } do
-    z[k]=Rational(1,n)
-  end
-  return z
-end
-
-# returns the density of a die roll with compound decorator and rerolls
-def getCompoundDie(max,rerolls=[],maxcompound=100)
-  z=Density.new
-  d=getBasePart(max,rerolls)
-  n=max - rerolls.reject{ |n| n==max }.size         
-  i=0
-  while (i<maxcompound) do
-    d.each do |k,v|
-      z[k+max*i]=Rational(v,n**(i+1))
-    end
-    i+=1
-  end
-  return z
-end
-
-# returns the density of a die roll with penetrating decorator and rerolls
-def getPenetratingDie(max,rerolls=[],maxpenetrate=100)
-  z=Density.new
-  d=getBasePart(max,rerolls)
-  n=max - rerolls.reject{ |n| n==max }.size         
-
-  # a (very) special case (if reroll contains max)
-  if (rerolls.include?max)
-    d.each do |k,v|
-      z[k]=Rational(v,n)
-    end
-    d.each do |k,v|
-      if (k+max-1 != max)
-        z[k+(max-1)]=Rational(v,(n-1)*n)
-      end
-    end
-    i=2
-    while (i<maxpenetrate) do
-      d.each do |k,v|
-        z[k+(max-1)*i]=Rational(v,(n-1)*n**i)
-      end
-      i+=1
-    end
-  #normale case
-  else 
+# density of a die roll with compound decorator and rerolls
+class CompoundDieDensity < Density
+  def initialize(max,rerolls=[],maxcompound=100)
+    super(0)
+    @d[0]=0
+    basepart=getBasePart(max,rerolls)
+    n=max - rerolls.reject{ |n| n==max }.size         
     i=0
-    while (i<maxpenetrate) do
-      d.each do |k,v|
-        z[k+(max-1)*i]=Rational(v,n**(i+1))
+    while (i<maxcompound) do
+      basepart.each do |k,v|
+        @d[k+max*i]=Rational(v,n**(i+1))
       end
       i+=1
     end
   end
-  return z
-end
-
-def getModifierDensity(modifier,density,number)
-  z=Density.new
-  combination=(density.to_a).repeated_combination(number)
-  combination.each do |comb|
-    values=comb.map {|a,b| b }
-    keys=comb.map {|a,b| a }
-    z[modifier.apply(keys)]+=values.inject(:*)
+  
+  # HELPER FUNCTION: returns the density of a die with rerolls
+  # but with a removed max value, so this DOESN'T give a density
+  def getBasePart(max,rerolls=[])
+    z=Density.new
+    z[0]=0
+    n=max - rerolls.reject{ |n| n==max }.size
+    for k in (1..(max-1)).reject{ |n| rerolls.include?n } do
+      z[k]=Rational(1,n)
+    end
   end
-  return z
 end
 
-class StandardModifier
+# density of a die roll with penetrating decorator and rerolls
+class PenetratingDieDensity < Density
+  def initialize(max,rerolls=[],maxpenetrate=100)
+    super(0)
+    @d[0]=0
+    basepart=getBasePart(max,rerolls)
+    n=max - rerolls.reject{ |n| n==max }.size         
+  
+    # a (very) special case (namely if reroll contains max)
+    if (rerolls.include?max)
+      basepart.each do |k,v|
+        @d[k]=Rational(v,n)
+      end
+      basepart.each do |k,v|
+        if (k+max-1 != max)
+          @d[k+(max-1)]=Rational(v,(n-1)*n)
+        end
+      end
+      i=2
+      while (i<maxpenetrate) do
+        basepart.each do |k,v|
+          @d[k+(max-1)*i]=Rational(v,(n-1)*n**i)
+        end
+        i+=1
+      end
+    #normal case
+    else 
+      i=0
+      while (i<maxpenetrate) do
+        basepart.each do |k,v|
+          @d[k+(max-1)*i]=Rational(v,n**(i+1))
+        end
+        i+=1
+      end
+    end
+  end
+
+  # HELPER FUNCTION: returns the density of a die with rerolls
+  # but with a removed max value, so this DOESN'T give a density
+  def getBasePart(max,rerolls=[])
+    z=Density.new
+    z[0]=0
+    n=max - rerolls.reject{ |n| n==max }.size
+    for k in (1..(max-1)).reject{ |n| rerolls.include?n } do
+      z[k]=Rational(1,n)
+    end
+  end
+end
+
+class ExplodingDieDensity < Density
+  # TODO
+end
+
+# density of a modified die roll:
+# n identical dices are rolled and then modified according to some function (modifier)
+# if no modifier is present then the dice results are simply summed
+class ModifiedDieDensity < Density
+  def initialize(density,number,modifier=nil)
+    if (number.zero?)
+      super()
+    elsif (modifier.is_a?Modifier)
+      super()
+      @d[0]=0
+      combination=(density.to_a).repeated_combination(number.abs)
+      combination.each do |comb|
+        values=comb.map {|a,b| b }
+        keys=comb.map {|a,b| a }
+        @d[modifier.apply(keys)]+=values.inject(:*)
+      end
+      (number<0) ? @d*=-1 : nil
+    else
+      @d=([density]*number.abs).inject(:+)
+      (number<0) ? @d*=-1 : nil
+    end
+  end
+end
+
+class Modifier
+end
+class StandardModifier < Modifier
   def apply(lis)
     lis.inject(:+)
   end
 end
-
-
 
 
 
@@ -209,14 +226,8 @@ t.terms.each do |term|
   pp term.density
 end
 
-d=Density.new(3)
-
-density = Array.new(5,getDie(3,[2])).inject(:+)
-pp density
-getModifierDensity(StandardModifier.new,density,3)
-                                 
-
-
-#puts convList(Array.new(5,getDie(20,[1,2])))
-#puts getPenetratingDie(10,[1,4,20],10)
+diedensity = ([DieDensity.new(3,[2])]*5).inject(:+)
+pp (diedensity<=10)
+moddensity = ModifiedDieDensity.new(diedensity,3,StandardModifier.new)
+pp moddensity<=40 
   
