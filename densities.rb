@@ -10,7 +10,7 @@ class Density
   include Enumerable
   extend Forwardable
 
-  def_delegators :@d, :each, :[], :[]=, :inspect
+  def_delegators :@d, :each, :[], :[]=, :inspect, :delete
   
  
   def initialize(num=0)
@@ -21,7 +21,7 @@ class Density
   # addition of INDEPENDENT densities
   def +(y)
     z=Density.new
-    z[0]=Rational(0)
+    z.delete(0)
     if (y.is_a?Density)
       @d.each do |xkey,xvalue|
         y.each do |ykey,yvalue|
@@ -41,7 +41,7 @@ class Density
   # multiplication of INDEPENDENT densities
   def *(y)
     z=Density.new
-    z[0]=Rational(0)
+    z.delete(0)
     max=(@d.keys + y.keys).collect(:abs).max
     if (y.is_a?Density)
       for n in (-max..max) do 
@@ -84,7 +84,7 @@ end
 class DieDensity < Density
   def initialize(max,rerolls=[])
     super(0)
-    @d[0]=0
+    @d.delete(0)
     n=max-rerolls.size
     for k in (1..max).reject{ |n| rerolls.include?n } do
       @d[k]=Rational(1,n)
@@ -94,25 +94,27 @@ end
   
 # density of a die roll with compound decorator and rerolls
 class CompoundDieDensity < Density
-  def initialize(max,rerolls=[],maxcompound=100)
+  def initialize(max,rerolls=[],maxcompound=1)
     super(0)
-    @d[0]=0
+    @d.delete(0)
     basepart=getBasePart(max,rerolls)
     n=max - rerolls.reject{ |n| n==max }.size         
     i=0
-    while (i<maxcompound) do
+    while (i<=maxcompound) do
       basepart.each do |k,v|
         @d[k+max*i]=Rational(v,n**i)
       end
       i+=1
     end
+    #The last max value has a different probability
+    @d[max*i]=Rational(1,n**i)
   end
   
   # HELPER FUNCTION: returns the density of a die with rerolls
   # but with a removed max value, so this DOESN'T give a density
   def getBasePart(max,rerolls=[])
     z=Density.new
-    z[0]=0
+    z.delete(0)
     n=max - rerolls.reject{ |n| n==max }.size
     for k in (1..(max-1)).reject{ |n| rerolls.include?n } do
       z[k]=Rational(1,n)
@@ -123,9 +125,9 @@ end
 
 # density of a die roll with penetrating decorator and rerolls
 class PenetratingDieDensity < Density
-  def initialize(max,rerolls=[],maxpenetrate=100)
+  def initialize(max,rerolls=[],maxpenetrate=1)
     super(0)
-    @d[0]=0
+    @d.delete(0)
     basepart=getBasePart(max,rerolls)
     n=max - rerolls.reject{ |n| n==max }.size         
   
@@ -136,11 +138,11 @@ class PenetratingDieDensity < Density
       end
       basepart.each do |k,v|
         if (k+max-1 != max)
-          @d[k+(max-1)]=Rational(v,n-1)
+          @d[k+max-1]=Rational(v,n-1)
         end
       end
       i=2
-      while (i<maxpenetrate) do
+      while (i<=maxpenetrate) do
         basepart.each do |k,v|
           @d[k+(max-1)*i]=Rational(v,(n-1)*n**i)
         end
@@ -149,20 +151,22 @@ class PenetratingDieDensity < Density
     #normal case
     else 
       i=0
-      while (i<maxpenetrate) do
+      while (i<=maxpenetrate) do
         basepart.each do |k,v|
           @d[k+(max-1)*i]=Rational(v,n**i)
         end
         i+=1
       end
     end
+    #The last max value has a different probability
+    @d[(max-1)*i+1]=Rational(1,n**i)
   end
 
   # HELPER FUNCTION: returns the density of a die with rerolls
   # but with a removed max value, so this DOESN'T give a density
   def getBasePart(max,rerolls=[])
     z=Density.new
-    z[0]=0
+    z.delete(0)
     n=max - rerolls.reject{ |n| n==max }.size
     for k in (1..(max-1)).reject{ |n| rerolls.include?n } do
       z[k]=Rational(1,n)
@@ -187,7 +191,7 @@ class ModifiedDieDensity < Density
       super()
     elsif (modifier.is_a?Modifier)
       super()
-      @d[0]=0
+      @d.delete(0)
       combination=(density.to_a).repeated_combination(number.abs)
       combination.each do |comb|
         values=comb.map {|a,b| b }
