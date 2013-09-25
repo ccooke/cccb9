@@ -9,10 +9,6 @@ module Dice
 
     class Term
       attr_accessor :density, :value
-      def initialize
-        @density=nil
-        @value=nil
-      end
     end
 
     class Number < Term
@@ -22,6 +18,10 @@ module Dice
         @math_symbol = sign.to_sym
       end
 
+      def density
+        @density||=Density.new(@number)
+      end
+      
       def roll
         @value = @number
       end
@@ -144,7 +144,24 @@ module Dice
         end
       end
 
-      def probabilities
+      def density
+        if (@density.is_a?Density)
+          return @density
+        elsif(@compounding)
+          # TODO getCompoundDie(@size,list of reroll values)
+          # TODO apply getModifierDie with the above density + count + modifier function
+        elsif(@penetrating)
+          # TODO getPenetratingDie(@size, list of reroll values)
+          # TODO apply getModifierDie with the above density + count + modifier function
+        elsif(@exploding)
+          # reroll of max or not? also this case is special...
+          # TODO getExplodingDie(@size, list of reroll values)
+          # SPECIAL
+        else
+          # TODO getDie(@size, list of reroll value)
+          # TODO apply getModifierDie with the above density + count + modifier function
+        end
+        return @density
       end
 
       def roll_die
