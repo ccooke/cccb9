@@ -10,7 +10,7 @@ class Density
   include Enumerable
   extend Forwardable
 
-  def_delegators :@d, :each, :[], :[]=, :inspect, :delete, :keys
+  def_delegators :@d, :each, :[], :[]=, :inspect, :delete
  
   def initialize(num=0)
     @d=Hash.new(Rational(0))
@@ -38,6 +38,7 @@ class Density
   end
 
   # multiplication of INDEPENDENT densities
+  # TODO (if we need it): Fix the issues if it is a density and not a numeric
   def *(y)
     z=Density.new
     z.delete(0)
@@ -191,27 +192,21 @@ class ModifiedDieDensity < Density
   def initialize(density,number,modifier=nil)
     if (number.zero?)
       super()
-    elsif (modifier.is_a?Modifier)
-      super()
-      @d.delete(0)
-      combination=(density.to_a).repeated_combination(number.abs)
-      combination.each do |comb|
-        values=comb.map {|a,b| b }
-        keys=comb.map {|a,b| a }
-        @d[modifier.apply(keys)]+=values.inject(:*)
-      end
+    elsif (modifier.nil?)
+      @d=([density]*number.abs).inject(:+)
       (number<0) ? @d*=-1 : nil
     else
-      @d=([density]*number.abs).inject(:+)
+      # TODO: stop/do something else if there are too many permutations
+      super()
+      @d.delete(0)
+      permutations=(density.to_a).repeated_permutation(number.abs)
+      permutations.each do |comb|
+        values=comb.map {|a,b| b }
+        keys=comb.map {|a,b| a }
+        @d[modifier.fun(keys)]+=values.inject(:*)
+      end
       (number<0) ? @d*=-1 : nil
     end
   end
 end
 
-class Modifier
-end
-class StandardModifier < Modifier
-  def apply(lis)
-    lis.inject(:+)
-  end
-end

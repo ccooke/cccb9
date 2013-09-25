@@ -77,6 +77,11 @@ module Dice
             @dropped = []
           end
 
+          def fun(list)
+            list.sort! { |x,y| (@keep_method==(:min)) ? x<=>y : y<=>x }
+            list.shift(@keep_number).inject(:+)
+          end
+          
           def process(numbers)
             @dropped = []
             until numbers.count <= @keep_number
@@ -103,6 +108,12 @@ module Dice
             @drop_number = match[:drop_num].nil? ? 1 : match[:drop_num].to_i
             @drop_method = match[:drop_lowest] ? :min : :max
             @dropped = []
+          end
+
+          def fun(list)
+            list.sort! { |x,y| (@drop_method==(:max)) ? x<=>y : y<=>x}
+            list.shift(@drop_number);
+            list.inject(:+)
           end
 
           def process(numbers)
@@ -140,6 +151,7 @@ module Dice
         @value = nil
         @rolls = Hash.new(0)
         @reroll_modifiers = @modifiers.select { |m| m.is_a? Modifier::Reroll }
+        @fun_modifiers = @modifiers.select { |m| not (m.is_a? Modifier::Reroll) }
         if (1..@size).all? { |r| @reroll_modifiers.any? { |m| m.reroll_with? r } }
           raise Dice::Parser::Error.new( "Invalid reroll rules: No die roll is possible" )
         end
@@ -150,23 +162,20 @@ module Dice
           return @density
         end
         rerolls=(1..@size).to_a.select { |r| @reroll_modifiers.any? { |m| mod.reroll_with? r } }
+        mod=@fun_modifiers.size > 0 ? @fun_modifiers[0] : nil
         if(@compounding)
           temp=CompoundDieDensity.new(@size,rerolls)
-          # TODO: modifier functions
-          @density=ModifiedDieDensity.new(temp,@count)
+          @density=ModifiedDieDensity.new(temp,@count,mod)
         elsif(@penetrating)
           temp=PenetratingDieDensity.new(@size,rerolls)
-          # TODO: modifier functions
-          @density=ModifiedDieDensity.new(temp,@count)
+          @density=ModifiedDieDensity.new(temp,@count,mod)
         elsif(@exploding)
           temp=ExplodingDieDensity.new(@size,rerolls)
-          # TODO: modifier functions
-          @density=ModifiedDieDensity.new(temp,@count)
+          @density=ModifiedDieDensity.new(temp,@count,mod)
           # TODO: EVERYTHING, at the moment a trivial result is returned
         else
           temp=DieDensity.new(@size,rerolls)
-          # TODO: modifier functions
-          @density=ModifiedDieDensity.new(temp,@count)
+          @density=ModifiedDieDensity.new(temp,@count,mod)
         end
         return @density
       end
