@@ -117,6 +117,7 @@ class CompoundDieDensity < Density
     for k in (1..(max-1)).reject{ |n| rerolls.include?n } do
       z[k]=Rational(1,n)
     end
+    return z
   end
 end
 
@@ -166,11 +167,15 @@ class PenetratingDieDensity < Density
     for k in (1..(max-1)).reject{ |n| rerolls.include?n } do
       z[k]=Rational(1,n)
     end
+    return z
   end
 end
 
 class ExplodingDieDensity < Density
   # TODO
+  def initialize(max,rerolls=[])
+    super()
+  end
 end
 
 # density of a modified die roll:
