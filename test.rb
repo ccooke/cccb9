@@ -3,6 +3,7 @@
 require_relative 'dice'
 
 result=(Dice::Parser.new ARGV[0].dup).terms.inject(Density.new) { |i,term| i+=term.density }
+pp result>=-200
 pp result
 pp result<=5
 

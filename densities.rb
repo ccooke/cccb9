@@ -102,7 +102,7 @@ class CompoundDieDensity < Density
     i=0
     while (i<maxcompound) do
       basepart.each do |k,v|
-        @d[k+max*i]=Rational(v,n**(i+1))
+        @d[k+max*i]=Rational(v,n**i)
       end
       i+=1
     end
@@ -132,11 +132,11 @@ class PenetratingDieDensity < Density
     # a (very) special case (namely if reroll contains max)
     if (rerolls.include?max)
       basepart.each do |k,v|
-        @d[k]=Rational(v,n)
+        @d[k]=v
       end
       basepart.each do |k,v|
         if (k+max-1 != max)
-          @d[k+(max-1)]=Rational(v,(n-1)*n)
+          @d[k+(max-1)]=Rational(v,n-1)
         end
       end
       i=2
@@ -151,7 +151,7 @@ class PenetratingDieDensity < Density
       i=0
       while (i<maxpenetrate) do
         basepart.each do |k,v|
-          @d[k+(max-1)*i]=Rational(v,n**(i+1))
+          @d[k+(max-1)*i]=Rational(v,n**i)
         end
         i+=1
       end
