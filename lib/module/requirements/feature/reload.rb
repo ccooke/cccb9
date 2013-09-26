@@ -79,11 +79,8 @@ module Module::Requirements::Feature::Reload
 
   def reload_then(*args, &block)
     Thread.new do
-      info "Begin reload"
       reload.now = true
-      info "WAit for reload"
       sleep 1 until reload.now == false
-      info "Reload done"
       block.call(*args)
     end
   end

@@ -9,30 +9,50 @@ module Array::Printable
   end
 end
 
+module CCCB::Formattable
+  def format(format_string)
+    format_string.keyreplace { |key|
+      self.send(key).to_s || ""
+    }
+  end
+end
+
 class CCCB::Message 
+  include CCCB::Formattable
   class InvalidMessage < Exception; end
 
+  module BasicMessage
+    def to_channel?
+      false
+    end
+  end
   module ChannelCommands
-    attr_reader :replyto, :channel, :channeluser
+    attr_reader :channel, :channeluser
 
     def process
       if arguments.empty?
         self.arguments = text.split /\s+/
       end
 
-      @replyto = arguments[0]
-
-      if to_channel?
-        @channel = CCCB::Channel.new(self, @restore_from_archive)
+      if arguments[0].start_with? '#'
+        @channel = CCCB::Channel.new(arguments[0], self, @restore_from_archive)
         @channel_name = @channel.name
         @channeluser = @channel[self.user]
+        @replyto = @channel
       end
     end
 
     def to_channel?
-      @replyto.start_with? '#'
+      !!@channel
     end
 
+    def replyto
+      if @channel
+        @channel
+      else
+        @user
+      end
+    end
   end
 
   module ConversationMessage
@@ -50,12 +70,13 @@ class CCCB::Message
       \s*
     $}x
 
-    attr_reader :type, :ctcp, :ctcp_params
+    attr_reader :type, :ctcp, :ctcp_params, :ctcp_text
 
     def process
       if ctcp = CTCP_REGEX.match( @text )
         @ctcp = ctcp[:command].upcase.to_sym
         @ctcp_params = (ctcp[:params]||"").split(/\s+/)
+        @ctcp_text = ctcp[:params]
         @type = :CTCP
       else
         @ctcp = false
@@ -74,6 +95,17 @@ class CCCB::Message
         super
       else
         user.nick
+      end
+    end
+
+    def reply(string)
+      if ctcp? and ctcp != :ACTION
+        network.msg replyto, "NOTICE :\001#{ctcp} #{string}\001"
+      else
+        if string =~ /^\s*\/me\s+(.*)$/i
+          string = "\001ACTION #{$~[1]}\001"
+        end
+        network.msg replyto, string
       end
     end
   end
@@ -129,6 +161,10 @@ class CCCB::Message
     include NickPlusChannel
   end
 
+  module CMD_NOP
+    include ChannelCommands
+  end
+
   module CMD_352
     include NickPlusChannel
     def process
@@ -171,7 +207,14 @@ class CCCB::Message
       end
       @old_nick = user.nick
       return if @restore_from_archive
-      user.rename arguments[0]
+      
+      old_user = user
+      set_user_data ":#{arguments[0]}!#{old_user.username}@#{old_user.host} NULL"
+      old_user.transient_storage.each do |k,v|
+        value = old_user.transient_storage.delete(k)
+        next if k == 'authenticated'
+        user.transient_storage[k] = value
+      end
     end
   end
 
@@ -189,9 +232,9 @@ class CCCB::Message
             mode = ch
             redo
           when 'o'
-            channel[nick].set_mode op: !!(mode=='+')
+            channel.user_by_name(nick).set_mode op: !!(mode=='+')
           when 'v'
-            channel[nick].set_mode voice: !!(mode=='+')
+            channel.user_by_name(nuck).set_mode voice: !!(mode=='+')
           end
         end
       end
@@ -217,7 +260,7 @@ class CCCB::Message
 
   attr_accessor :network, :raw, :from, :command, :arguments, 
                 :text, :hide, :user, :log_format, :command_downcase, 
-                :time
+                :time, :params
 
   def initialize(network, string, restore_from_archive = false)
     @restore_from_archive = restore_from_archive
@@ -231,16 +274,23 @@ class CCCB::Message
 
     @command = match[:command].to_sym
     @command_downcase = match[:command].downcase.to_sym
-    @arguments = match[:arguments].split /\s+/
+    @arguments = match[:arguments].split /\s+/ if match[:arguments]
     @arguments ||= []
     @arguments.extend Array::Printable
-    @text = match[:message]
+    @text = match[:message].to_s
+    @params = @arguments + @text.to_s.split(/\s+/)
+    @params.extend Array::Printable
 
     const = :"CMD_#{@command}"
+    self.extend BasicMessage
     if self.class.constants.include? const
       self.extend self.class.const_get( const ) 
       process
     end
+  end
+
+  def name
+    user.nick
   end
 
   def set_user_data(string)
@@ -269,22 +319,32 @@ class CCCB::Message
     self.user.nick
   end
 
-  def format(format_string)
-    format_string.keyreplace { |key|
-      self.send(key).to_s || ""
-    }
+  def nick_with_mode
+    if self.channeluser
+      self.channeluser.nick_with_mode
+    else 
+      nick
+    end
   end
-  
+
   def log
     info format(@log_format)
   end
 
   def method_missing(sym, *args)
-    if sym.to_s =~ /^arg(\d+)$/
-      number = $1.to_i
+    if sym.to_s =~ /^arg(?<from>\d+)(?:to(?<to>\d+|N))?$/
+      from = ($~[:from] || 0).to_i
+      to = if $~[:to] == "N"
+        @params.count
+      elsif $~[:to]
+        $~[:to].to_i
+      else
+        from
+      end
+      range = Range.new( from, to )
       self.class.instance_exec do 
         define_method sym do
-          arguments[number]
+          @params[range].join(" ")
         end
       end
       self.send(sym,*args)
@@ -323,6 +383,7 @@ end
 
 
 class CCCB::User
+  include CCCB::Formattable
   class InvalidUser < Exception; end
 
   FROM_REGEX = %r{
@@ -340,7 +401,7 @@ class CCCB::User
     $
   }x
 
-  attr_reader :nick, :user, :flag, :host, :id, :network, :history, :from
+  attr_reader :nick, :username, :flag, :host, :id, :network, :history, :from
 
   def self.new(message, restore_from_archive = false)
     if match = FROM_REGEX.match( message.from )
@@ -390,6 +451,10 @@ class CCCB::User
   end
   alias_method :to_str, :to_s
 
+  def name
+    nick
+  end
+
   def rename(new_name)
     new_id = new_name.downcase
     @network.users[new_id] = self.network.users.delete(@id)
@@ -430,6 +495,7 @@ end
 
 
 class CCCB::ChannelUser 
+  include CCCB::Formattable
 
   attr_accessor :op, :voice, :channel, :user
 
@@ -458,8 +524,16 @@ class CCCB::ChannelUser
     is_op? or @mode[:voice]
   end
 
+  def nick_with_mode
+    "#{ is_op? ? '@' : ( is_voice? ? '+' : '' ) }#{nick}"
+  end
+
+  def name
+    user.nick
+  end
+
   def to_s
-    "<#{ is_op? ? '@' : ( is_voice? ? '+' : ' ' ) }#{nick}>"
+    "<#{nick_with_mode}>"
   end
   alias_method :to_str, :to_s
 
@@ -474,12 +548,14 @@ class CCCB::ChannelUser
 end
 
 class CCCB::Channel 
+  include CCCB::Formattable
   include Enumerable
 
   attr_reader :name, :users, :network
+  alias_method :channel, :name
   
-  def self.new(message, restore_from_archive = false) 
-    id = message.replyto.downcase
+  def self.new(name, message, restore_from_archive = false) 
+    id = name.downcase
     spam "Examine #{id} and #{message.network.channels.keys}"
     if channel = message.network.channels[id]
       unless restore_from_archive or message.user.system? or channel[message.user]  
@@ -487,19 +563,31 @@ class CCCB::Channel
       end
       channel
     else
-      message.network.channels[id] = super(message)
+      message.network.channels[id] = super(id,message,restore_from_archive)
     end
   end
 
-  def initialize(message, restore_from_archive = false)
+  def initialize(name, message, restore_from_archive = false)
     info "INIT channel from #{message.inspect}"
     @network = message.network
-    @name = message.replyto
+    @name = name
     @users = {}
     debug "New channel #{name}"
     unless message.user.system? or restore_from_archive
       add_user(message.user)
     end
+  end
+
+  def msg(data)
+    network.msg(self,data)
+  end
+
+  def notice(data)
+    network.notice(self,data)
+  end
+
+  def id
+    @name
   end
 
   def [](user)
@@ -510,9 +598,11 @@ class CCCB::Channel
     @users.each(*args, &block)
   end
   
-  def by_name(nick)
-    id = nick.downcase
-    @users.values.find { |u| u.id == id }
+  def user_by_name(nick)
+    id = nick.to_s.downcase
+    @users.values.find { |u| 
+      u.id == id 
+    }
   end
 
   def add_user(user)
@@ -557,6 +647,7 @@ class CCCB::Channel
 end
 
 class CCCB::Network 
+  include CCCB::Formattable
   include CCCB::Config
 
   BACKOFF = {
@@ -602,6 +693,25 @@ class CCCB::Network
         byte_rate: 128
       }
     }
+  end
+
+  def get_user(name)
+    id = name.downcase
+    if users.include? id
+      users[id]
+    else
+      # autovivify!
+      CCCB::Message.new( self, ":#{name}!nil@nil NOOP", true ).user
+    end
+  end
+
+  def get_channel(name)
+    id = name.downcase
+    if channels.include? id
+      channels[id]
+    else
+      CCCB::Message.new( self, ":internal NOOP #{name}", true ).channel
+    end
   end
 
   def inspect

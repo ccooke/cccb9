@@ -31,16 +31,23 @@ class CCCB::ContentServer
 
 		@@thread.kill if @@thread.respond_to? :kill
 
-		@@server = WEBrick::HTTPServer.new(
-			Port: CCCB.instance.get_setting( "http_server", "port" ),
-			DoNotReverseLookup: true,
-      AccessLog: [
-        [ 
-          CCCB::Logger,
-          "WWW %a GET %U -> %s %b bytes"
+    delay = 1
+    10.times do
+      @@server = WEBrick::HTTPServer.new(
+        Port: CCCB.instance.get_setting( "http_server", "port" ),
+        DoNotReverseLookup: true,
+        AccessLog: [
+          [ 
+            CCCB::Logger,
+            "WWW %a GET %U -> %s %b bytes"
+          ]
         ]
-      ]
-		)
+      )
+      break if @@server
+      error "HTTP server did not start - sleeping a few seconds before retrying"
+      sleep delay
+      delay *= 2
+    end
     
 
     @@server.mount '/static', WEBrick::HTTPServlet::FileHandler, "#{CCCB.instance.basedir}/web/static/"
@@ -95,9 +102,9 @@ module CCCB::Core::HTTPServer
   needs :logging
 
   def module_load
-    add_setting :core, "http_server", :superuser, {}
-    set_setting( "http_server", 9000, "port" ) unless get_setting( "http_server", "port" )
-    set_setting( "http_server", "http://localhost:9000/", "url" ) unless get_setting( "http_server", "url" )
+    add_setting :core, "http_server"
+    set_setting( 9000, "http_server", "port" ) unless get_setting( "http_server", "port" )
+    set_setting( "http://localhost:9000", "http_server", "url" ) unless get_setting( "http_server", "url" )
     begin
       CCCB::ContentServer.restart
     rescue Exception => e
@@ -108,6 +115,16 @@ module CCCB::Core::HTTPServer
       {
         template: :plain_text,
         text: :OK
+      }
+    end
+
+    CCCB::ContentServer.add_keyword_path('debug') do |m| 
+      {
+        template: :plain_text,
+        text: PP.pp( {
+          cccb: CCCB.instance,
+          store: Module::Requirements.instance_variable_get(:@storage)
+        }, "" )
       }
     end
   end

@@ -1,14 +1,17 @@
 require 'thread'
 
 module Module::Requirements::Feature::Hooks
+  class NoFeature < Exception; end
   extend Module::Requirements
   needs :logging, :managed_threading
   
-  def add_hook hook, filter = {}, &block
+  def add_hook feature, hook, filter = {}, &block
     spam "ADD hook #{hook}" 
     hooks.db[ hook ] ||= []
     call = caller_locations(1,1).first
+    hooks.features[feature] = true
     hooks.db[ hook ].push(
+      :feature => feature,
       :filter => filter,
       :source_file => call.absolute_path,
       :container => call.base_label,
@@ -44,20 +47,13 @@ module Module::Requirements::Feature::Hooks
       end
     end
     spam "hooks: #{hook}->(#{args.join(", ")})"
-    begin
-      while hook_list.count > 0
-        item = hook_list.shift
-        spam "RUN: #{ item[:container] }:#{ hook }"
-        item[:code].call( *args )
-      end
-    rescue Exception => e
-      begin
-        hooks.db[:exception].each do |saviour|
-          saviour[:code].call( e, hook, item )
-        end
-      end
-
-      retry
+    while hook_list.count > 0
+      item = hook_list.shift
+      next if args.any? { |a|
+        a.respond_to? :select_hook_feature? and ! a.select_hook_feature?(item[:feature])
+      }
+      spam "RUN: #{ item[:feature] }:#{ hook }->( #{args} )"
+      item[:code].call( *args )
     end
   end
 
@@ -67,8 +63,9 @@ module Module::Requirements::Feature::Hooks
     hooks.queue ||= Queue.new
     hooks.runners = 0
     hooks.lock ||= Mutex.new
+    hooks.features = {}
 
-    add_hook :exception do |exception|
+    add_hook :core, :exception do |exception|
       begin 
         ppdata = ""
         PP.pp(exception.backtrace,ppdata="")
@@ -79,7 +76,7 @@ module Module::Requirements::Feature::Hooks
       end
     end
 
-    global_methods :schedule_hook
+    global_methods :schedule_hook, :run_hooks
     ( 1 + self.servers.count ).times { add_hook_runner }
   end
 

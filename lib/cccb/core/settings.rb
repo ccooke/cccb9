@@ -2,20 +2,37 @@ module CCCB::Settings
 
   class SettingError < Exception; end
 
+  def transient_storage
+    @___cccb_transient_storage___ ||= {}
+  end
+
   def get_setting(name,key=nil)
-    storage[:settings] ||= {}
+    settings = if setting_option( name, :persist )
+      spam "Get #{self}.#{name} is persistant storage #{setting_option(name,:persist).inspect}"
+      if name == "session"
+        info "In #{self}, found session to be persistant: #{CCCB.instance.settings.db[self.class][name]}"
+      end
+      storage[:settings] ||= {}
+    else
+      spam "Get #{self}.#{name} is transient"
+      transient_storage
+    end
+    debug "Getting setting #{self}.#{name} got #{settings.inspect}"
     db = CCCB.instance.settings.db
 
     parent = if CCCB::SETTING_CASCADE.include? self.class
       CCCB::SETTING_CASCADE[self.class].call(self) 
     end
 
-    cursor = if storage[:settings].include? name
-      storage[:settings]
+    debug "get_setting( #{name}, #{key.inspect} ) on #{self}"
+    cursor = if settings.include? name and !settings[name].nil?
+      settings
     elsif db[self.class].include? name
-      storage[:settings][name] = db[self.class][name][:default].dup
+      debug "Defaulted #{name},#{key} on #{self}"
+      settings[name] = Marshal.load( Marshal.dump( setting_option(name, :default) ) )
+      settings
     else
-      raise SettingError.new("No such setting #{name}")
+      raise SettingError.new("No such setting #{name} on #{self}")
     end
 
     result = if cursor.nil?
@@ -27,10 +44,13 @@ module CCCB::Settings
     else
       cursor[name]
     end
-
+    
     if result.nil? 
-      if parent
-        parent.get_setting(name, key)
+      begin
+        if parent
+          parent.get_setting(name, key)
+        end
+      rescue SettingError => e
       end
     else
       result
@@ -46,34 +66,70 @@ module CCCB::Settings
     end
   end
 
-  def set_setting(name, value, key=nil)
+  def set_setting(value, name, key=nil)
     current = get_setting(name, key)
-    cursor = storage[:settings]
-    if key
+    cursor = if setting_option( name, :persist )
+      spam "Set #{self}.#{name} is persistant storage #{setting_option(name,:persist).inspect}"
+      storage[:settings]
+    else
+      spam "Set #{self}.#{name} is transient"
+      transient_storage
+    end
+    debug "Setting setting #{self}.#{name} got #{cursor.inspect}"
+    saved_name = name
+    return_val = if key
       cursor = cursor[name]
       if value.nil?
+        cursor.delete(key)
+        new_value = get_setting(name,key)
+        schedule_hook :setting_set, self, saved_name, key, current, new_value
         return cursor.delete(key)
       end
-      name = key
+      temp = { key => value }
+      run_hooks :pre_setting_set, self, name, temp, throw_exceptions: true
+      temp.each do |k,v|
+        debug "Setting #{self}.#{name}[#{k}] = #{v}"
+        cursor[k] = v
+      end
+    else
+      run_hooks :pre_setting_set, self, name, value, throw_exceptions: true
+      debug "Setting #{self}.#{name} = #{value.inspect}"
+      cursor[name] = value
     end
-    cursor[name] = value
-    schedule_hook :setting_set, self, name, current, value
+    schedule_hook :setting_set, self, saved_name, key, current, value
+  end
+
+  def setting_option(setting,option)
+    spam "Get option #{self}.#{setting}.#{option}"
+    if CCCB.instance.settings.db[self.class].include? setting
+      CCCB.instance.settings.db[self.class][setting][option]
+    end
+  end
+
+  def auth_reject_reason
+    @___auth_reject_reason
   end
 
   def auth_setting(message,name)
-    db = CCCB.instance.settings.db
+    @___auth_reject_reason = "You are not a superuser"
     return true if message.user.superuser?
-    case db[self.class][name][:auth]
+    case setting_option(name, :auth)
     when :network
+      @___auth_reject_reason = "You are not trusted on #{@network}"
       message.network == @network and @network.get_setting("trusted").include? message.from
     when :channel
+      @___auth_reject_reason = "You are not a channel operator in #{self}"
       message.channel == self and
         message.channeluser.channel == self and
         message.channeluser.is_op?
     when :user
+      @___auth_reject_reason = "You are not #{self.nick}"
       message.user.nick == self.nick
     else
-      super
+      begin 
+        super
+      rescue NoMethodError
+      end
     end
   end
 
@@ -82,7 +138,7 @@ end
 module CCCB::Core::Settings
   extend Module::Requirements
   
-  needs :persist, :bot
+  needs :persist
 
   SETTING_TARGET = {
     :core => CCCB,
@@ -93,17 +149,30 @@ module CCCB::Core::Settings
   }
 
   SETTING_CASCADE = {
+    CCCB::User => Proc.new { |obj| obj.network },
     CCCB::Channel => Proc.new { |obj| obj.network },
     CCCB::Network => Proc.new { CCCB.instance }
   }
 
-  def add_setting(type,name,auth,default = false)
+  DEFAULT_AUTH_BY_TYPE = {
+    :core => :superuser,
+    :network => :superuser,
+    :channel => :channel,
+    :channeluser => :channel,
+    :user => :user,
+  }
+
+  def add_setting(type,name,options = {})
+    options[:auth] ||= DEFAULT_AUTH_BY_TYPE[type]
+    options[:default] ||= {}
+    options[:secret] ||= false
+    options[:persist] = true unless options.include? :persist
+    options[:hide_keys] ||= []
+
+
     klass = SETTING_TARGET[type]
     settings.db[klass] ||= {}
-    settings.db[klass][name] = {
-      auth: auth,
-      default: default
-    }
+    settings.db[klass][name] = options.dup
   end
 
   def add_setting_method(type,name,&block)
@@ -132,42 +201,7 @@ module CCCB::Core::Settings
       end
     end
 
-    add_setting :core, "superusers", :superusers, []
-    add_setting :user, "options", :user, {}
-    add_setting :channel, "options", :channel, {}
-    add_setting :network, "options", :superusers, {}
-    add_setting :core, "options", :superusers, {}
-
-    add_setting_method :user, :superuser? do
-      CCCB.instance.get_setting("superusers").include? self.from.to_s.downcase
-    end
     
-    add_request /^\s*superuser\s+override\s*(?<password>.*?)\s*$/ do |match, message|
-      password_valid = (match[:password] == CCCB.instance.superuser_password)
-      if message.to_channel?
-        if password_valid
-          CCCB.instance.superuser_password = (1..32).map { (rand(64) + 32).chr }.join
-        end
-        "Denied. And don't try to use that password again."
-      else
-        p [ match[:password], CCCB.instance.superuser_password ]
-        if password_valid
-          get_setting("superusers") << message.from.downcase.to_s
-          "Okay, you are now a superuser"
-        else
-          "Denied"
-        end
-      end
-    end
-
-    add_request /^\s*superuser\s+resign\s*$/ do |match, message|
-      if message.user.superuser?
-        get_setting("superusers").delete message.from.downcase.to_s
-        "Removed you from the superuser list."
-      else
-        "You weren't a superuser in the first place."
-      end
-    end
   end
 end
 

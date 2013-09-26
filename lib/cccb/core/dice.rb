@@ -475,19 +475,19 @@ module CCCB::Core::Dice
   extend Module::Requirements
 
   def module_load
-    add_setting :user, "roll_presets", :user, {}
-    add_setting :channel, "roll_presets", :channel, {}
-    add_setting :network, "roll_presets", :superuser, {}
-    add_setting :core, "roll_presets", :superuser, {}
+    add_setting :user, "roll_presets"
+    add_setting :channel, "roll_presets"
+    add_setting :network, "roll_presets"
+    add_setting :core, "roll_presets"
 
-    set_setting( "options", "d20", "default_die")
+    set_setting( "d20", "options", "default_die")
 
-    add_request /^\s*jinx\s+(\S)+\s*$/i do |match, message|
+    add_request :dice, /^\s*jinx\s+(\S)+\s*$/i do |match, message|
       message.user.persist[:dice_jinx] ||= true
       match[1].downcase == "me" ? "Ok" : "Ok, #{nick} has been jinxed"
     end
 
-    add_request /^\s*am\s+I\s+jinxed\s*\??\s*$/i do |m, s|
+    add_request :dice, /^\s*am\s+I\s+jinxed\s*\??\s*$/i do |m, s|
       if message.user.persist[:dice_jinx]
         "Yes"
       else
@@ -496,7 +496,7 @@ module CCCB::Core::Dice
     end
 
 
-    add_request /^\s*list\s+(?:(?:my|(\S+?)(?:'s))?\s+)?memories/i do |match,message| 
+    add_request :dice, /^\s*list\s+(?:(?:my|(\S+?)(?:'s))?\s+)?memories/i do |match,message| 
       if message.user.persist[:dice_memory_saved]
         memories = message.user.persist[:dice_memory_saved].sort { |(n1,r1),(n2,r2)| 
           r1[:access] <=> r2[:access] 
@@ -508,7 +508,7 @@ module CCCB::Core::Dice
       end
     end
 
-    add_request /^
+    add_request :dice, /^
         (?<command>toss|qroll|roll|dmroll)
         (?:\s+
           (?<expression>.*?)
@@ -546,7 +546,7 @@ module CCCB::Core::Dice
       nil
     end
 
-    add_request /^\s*
+    add_request :dice, /^\s*
       
       (?:
         (?:
@@ -632,7 +632,7 @@ module CCCB::Core::Dice
       end
     end
 
-    add_request /^\s*forget\s+(?<name>\w+)/i do |match, message|
+    add_request :dice, /^\s*forget\s+(?<name>\w+)/i do |match, message|
       if message.user.persist[:dice_memory_saved]
         if message.user.persist[:dice_memory_saved][match[:name]]
           message.user.persist[:dice_memory_saved].delete match[:name]
@@ -645,7 +645,7 @@ module CCCB::Core::Dice
       end
     end
 
-    add_request /^\s*remember\s+that\s+as\s+(?<name>\w+)/i do |match, message|
+    add_request :dice, /^\s*remember\s+that\s+as\s+(?<name>\w+)/i do |match, message|
       preset = match[:name]
       if message.user.persist[:dice_memory_saved]
         if message.user.persist[:dice_memory_saved]["current"]
@@ -667,6 +667,7 @@ module CCCB::Core::Dice
     end
 
     add_help(
+      :dice, 
       "dice",
       "Commands for rolling dice",
       [

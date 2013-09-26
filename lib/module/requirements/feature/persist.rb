@@ -8,7 +8,7 @@ module Module::Requirements::Feature::Persist
   class PersistException < Exception; end
 
   class Storage
-    def define(klass, key)
+    def define(klass, *key)
       raise PersistException.new("Persistant storage can only be added to Class objects") unless klass.is_a? Class
       persist.lock.synchronize do
         persist.data[klass.name] ||= {}
@@ -16,7 +16,16 @@ module Module::Requirements::Feature::Persist
         persist.data[klass.name][:data] ||= {}
         klass.class_exec(key,persist.data) do |k,store|
           define_method :storage do 
-            store[self.class.name][:data][self.send(k)] ||= {}
+            cursor = store[self.class.name][:data]
+            spam "Access #{self} storage by #{key.inspect}"
+            key.each do |method|
+              spam "Lookup #{method}"
+              subkey = self.send(method)
+              cursor[subkey] ||= {}
+              cursor = cursor[subkey]
+            end
+
+            cursor
           end
         end
       end
@@ -45,6 +54,7 @@ module Module::Requirements::Feature::Persist
       persist.lock.synchronize do
         persist.data.each do |klass,store|
           begin
+            
             debug "Storing persist data for #{klass}"
             File.open( "#{@dir}/#{klass}.db.tmp", 'w' ) do |f|
               stringified = { :class => klass, :data => store }.to_yaml
@@ -67,11 +77,16 @@ module Module::Requirements::Feature::Persist
     persist.lock ||= Mutex.new
     persist.store ||= FileStore.new(".")
     persist.data ||= {}
+    persist.loaded ||= false
   end
 
   def module_start
-    persist.store.load
 
+    unless persist.loaded 
+      persist.store.load
+      persist.loaded = true
+    end
+    
     ManagedThread.new :storage_checkpoint, repeat: 60, start: true, restart: true do
       debug "Running storage checkpoint"
       persist.store.save

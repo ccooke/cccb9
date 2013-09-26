@@ -20,8 +20,8 @@ module Module::Requirements::Feature::Events
     auto_timer_hook = :"auto_timer_#{block.object_id}"
 
     events.lock.synchronize do
-      add_hook auto_timer_hook, block
-      add_event frequency: frequency, hook: auto_timer_hook, name: auto_timer_hook
+      add_hook :events, auto_timer_hook, block
+      add_event frequency: frequency, hook: auto_timer_hook, name: auto_timer_hook, start_time: Time.now + frequency
     end
 
     auto_timer_hook
@@ -30,6 +30,7 @@ module Module::Requirements::Feature::Events
   def add_event(*args)
     events.lock.synchronize do
       events.db << Event.new(args)
+      debug "Added event: #{events.db.last}"
       events.db = sort_events
     end
   end
@@ -43,15 +44,17 @@ module Module::Requirements::Feature::Events
   def module_start
     events.lock ||= Mutex.new
     events.db ||= []
-    ManagedThread.new :events, start: true, frequency: 1 do
+    ManagedThread.new :events, start: true, repeat: 1, restart: true do
       events.lock.synchronize do
         time = Time.now
-        
+        spam "Events since #{time}: #{events.db}"
         while events.db.count > 0 and events.db.first.start_time <= time
-          event = events.db
-          schedule_hook events.next.hook, events.next
+          event = events.db.shift
+          debug "Got event #{info}"
+          schedule_hook event.hook, event
           if event.recurrs
-            event.start_time = event.start_time + event.frequency while event.start_time <= time
+            event.start_time += event.frequency while event.start_time <= time
+            events.db << event
           end
           
           events.db = sort_events

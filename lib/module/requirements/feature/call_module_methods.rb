@@ -1,6 +1,7 @@
 
 module Module::Requirements::Feature::CallModuleMethods
   extend Module::Requirements
+  needs :logging
 
   def call_submodules(method,*args)
     puts "Subcall #{method}(#{args.join(", ")})" if $DEBUG
@@ -9,7 +10,11 @@ module Module::Requirements::Feature::CallModuleMethods
       a.instance_methods.include? method 
     }.each do |a|
       puts "Call #{a}.#{method}(#{args.join(", ")})" if $DEBUG
-      a.instance_method(method).bind(self).(*args)
+      begin
+        a.instance_method(method).bind(self).(*args)
+      rescue Exception => e
+        critical "Exception calling #{a}.#{method}: #{e}"
+      end
     end
   end
 end
