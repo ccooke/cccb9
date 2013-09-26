@@ -3,19 +3,22 @@
 require_relative 'dice'
 
 
-result=(Dice::Parser.new ARGV[0].dup).density
+parser=(Dice::Parser.new ARGV[0].dup)
+density=parser.density
 
-if (result.fail)
+if (density.fail)
   print "FAILURE!\n"
-elsif (result>=-200)==1
+elsif (density>=-200)==1
   print "Densities sum up to 1 (OK)!\n"
 else
-  print "Error: ", Rational(1-(result>=-200)).to_f, "\n"
+  print "Error: ", Rational(1-(density>=-200)).to_f, "\n"
 end
-if (result.uniform and (not result.fail))
+if (density.uniform and (not density.fail))
   print "We have a uniform density.\n"
 end
+print "Expected value: "
+pp parser.expect
 print "Density: "
-pp result
+pp density
 print "Probability that X<=5: "
-print result<=5, "\n"
+print density<=5, "\n"

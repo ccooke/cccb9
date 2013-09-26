@@ -268,7 +268,7 @@ module Dice
       end
     end
 
-    attr_reader :terms
+    attr_reader :terms, :density
 
     CONDITIONAL_BASE = %r{
       (?<conditional>     > | < | = |                                                     ){0}
@@ -393,7 +393,11 @@ module Dice
     end
 
     def density
-      @terms.inject(Density.new) { |i,t| i.send(t.math_symbol,t.density) }      
+      @density||=@terms.inject(Density.new) { |i,t| i.send(t.math_symbol,t.density) }      
+    end
+    
+    def expect
+      @density.expect
     end
 
     def output( callbacks = {}, default_proc = Proc.new { |o,v| v } )

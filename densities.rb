@@ -10,13 +10,14 @@ class Density
   include Enumerable
   extend Forwardable
 
-  attr_accessor :uniform, :fail
+  attr_accessor :uniform, :fail, :exact
   def_delegators :@d, :each, :[], :[]=, :inspect, :delete
  
   def initialize(num=0)
     @d=Hash.new(Rational(0))
     @d[num]=Rational(1)
     @uniform=true
+    @exact=true
     @fail=false
   end
   
@@ -40,11 +41,15 @@ class Density
     z=Density.new
     z.delete(0)
     z.uniform=@uniform
+    z.exact=@exact
     z.fail=@fail
     
     if (y.is_a?Density)
       if (y.fail)
         z.fail=true
+      end
+      if (not y.exact)
+        z.exact=false
       end
       if (y.to_a.size>1 and @d.to_a.size>1)
         z.uniform=false
@@ -70,11 +75,15 @@ class Density
     z=Density.new
     z.delete(0)
     z.uniform=@uniform
+    z.exact=@exact
     z.fail=@fail
 
     if (y.is_a?Density)
       if (y.fail)
         z.fail=true
+      end
+      if (y.exact)
+        z.exact=false
       end
       if (y.to_a.size>1 and @d.to_a.size>1)
         z.uniform=false
@@ -114,6 +123,9 @@ class Density
   end
   def >=(n)
     (n.is_a?Numeric) ? @d.select { |k,v| k>=n }.values.inject(:+) : nil
+  end
+  def expect
+    @d.inject(0) { |i,(k,v)| i+k*v }
   end
 end
 
@@ -159,6 +171,7 @@ class CompoundDieDensity < Density
     z=Density.new
     z.delete(0)
     z.fail=true
+    z.exact=false
     z.uniform=false
     n=max - rerolls.reject{ |n| n==max }.size
     for k in (1..(max-1)).reject{ |n| rerolls.include?n } do
@@ -213,6 +226,7 @@ class PenetratingDieDensity < Density
   def getBasePart(max,rerolls=[])
     z=Density.new
     z.delete(0)
+    z.exact=false
     z.fail=true
     z.uniform=false
     n=max - rerolls.reject{ |n| n==max }.size
@@ -228,6 +242,7 @@ class ExplodingDieDensity < Density
   def initialize(max,rerolls=[])
     super(0)
     @fail=true
+    @exact=false
   end
 end
 
@@ -246,6 +261,7 @@ class ModifiedDieDensity < Density
       # TODO: find a good number
       super(0)
       @fail=true
+      @exact=false
     else
       super(0)
       @uniform=false
