@@ -24,7 +24,7 @@ class Density
     if (@probability_interval.nil?)
       @probability_interval=@d.to_a
       i=0
-      @probability_interval.map! do { |k,v| [k,i=(v+=i)] }
+      @probability_interval.map! { |k,v| [k,i=(v+=i)] }
     end
     r=rand()
     if (Array.respond_to?(:bsearch))
