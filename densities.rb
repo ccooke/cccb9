@@ -10,11 +10,14 @@ class Density
   include Enumerable
   extend Forwardable
 
+  attr_accessor :uniform, :fail
   def_delegators :@d, :each, :[], :[]=, :inspect, :delete
  
   def initialize(num=0)
     @d=Hash.new(Rational(0))
     @d[num]=Rational(1)
+    @uniform=true
+    @fail=false
   end
   
   # addition of INDEPENDENT densities
@@ -22,6 +25,12 @@ class Density
     z=Density.new
     z.delete(0)
     if (y.is_a?Density)
+      if (y.fail)
+        @fail=true
+      end
+      if (y.to_a.size>1 and x.to_a.size>1)
+        @uniform=false
+      end
       @d.each do |xkey,xvalue|
         y.each do |ykey,yvalue|
           z[xkey+ykey]+=xvalue*yvalue
@@ -43,6 +52,12 @@ class Density
     z=Density.new
     z.delete(0)
     if (y.is_a?Density)
+      if (y.fail)
+        @fail=true
+      end
+      if (y.to_a.size>1 and x.to_a.size>1)
+        @uniform=false
+      end
       max=(@d.keys + y.keys).collect(:abs).max
       for n in (-max..max) do 
         ((-n..n).collect { |d| [d,n/d] if ((n/d) * d) == n}.compact).each do |d,e|
@@ -87,6 +102,9 @@ end
 class DieDensity < Density
   def initialize(max,rerolls=[])
     super(0)
+    if (rerolls.size>0)
+      @uniform=false
+    end
     @d.delete(0)
     n=max-rerolls.size
     for k in (1..max).reject{ |n| rerolls.include?n } do
@@ -99,6 +117,7 @@ end
 class CompoundDieDensity < Density
   def initialize(max,rerolls=[],maxcompound=10)
     super(0)
+    @uniform=false
     @d.delete(0)
     basepart=getBasePart(max,rerolls)
     n=max - rerolls.reject{ |n| n==max }.size         
@@ -130,6 +149,7 @@ end
 class PenetratingDieDensity < Density
   def initialize(max,rerolls=[],maxpenetrate=10)
     super(0)
+    @uniform=false
     @d.delete(0)
     basepart=getBasePart(max,rerolls)
     n=max - rerolls.reject{ |n| n==max }.size         
@@ -181,7 +201,8 @@ end
 class ExplodingDieDensity < Density
   # TODO
   def initialize(max,rerolls=[])
-    super()
+    super(0)
+    @fail=true
   end
 end
 
@@ -191,13 +212,18 @@ end
 class ModifiedDieDensity < Density
   def initialize(density,number,modifiers=[])
     if (number.zero?)
-      super()
+      super(0)
     elsif (modifiers==[])
       @d=([density]*number.abs).inject(:+)
       (number<0) ? @d*=-1 : nil
+    elsif (density.to_a.size**number.abs > 100000)
+      # TODO: too many things to calculate, choose a different approach (monte carlo)
+      # TODO: find a good number
+      super(0)
+      @fail=true
     else
-      # TODO: stop/do something else if there are too many permutations
-      super()
+      super(0)
+      @uniform=false
       @d.delete(0)
       permutations=(density.to_a).repeated_permutation(number.abs)
       permutations.each do |comb|
