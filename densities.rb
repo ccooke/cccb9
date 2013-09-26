@@ -25,15 +25,15 @@ class Density
     if (@probability_interval.nil?)
       @probability_interval=@d.to_a
       i=0
-      @probability_interval.map! { |k,v| [k,i=(v+=i)] }
+      @probability_interval.map! { |k,v| [k,i=(v+i)] }
     end
     r=rand()
     if (Array.respond_to?(:bsearch))
-      index=@probability_interval.bsearch { |k,v| v>=r }
+      index=@probability_interval.bsearch { |k| k[1]>r }
     else
-      index=@probability_interval.index { |k| k[1]>=r }
+      index=@probability_interval.index { |k| k[1]>r }
     end
-    return @probability_interval[index-1][0]
+    return @probability_interval[index][0]
   end
   
   # addition of INDEPENDENT densities
@@ -113,17 +113,23 @@ class Density
 
   # returns the probability that X<n, X>n, X<=n, X>=n
   def <(n)
-    (n.is_a?Numeric) ? @d.select { |k,v| k<n }.values.inject(:+) : nil
+    entries=@d.select { |k,v| k<n };
+    (entries.empty?) ? 0 : entries.values.inject(:+)
   end
   def >(n)
-    (n.is_a?Numeric) ? @d.select { |k,v| k>n }.values.inject(:+) : nil
+    entries=@d.select { |k,v| k>n };
+    (entries.empty?) ? 0 : entries.values.inject(:+)
   end
   def <=(n)
-    (n.is_a?Numeric) ? @d.select { |k,v| k<=n }.values.inject(:+) : nil
+    entries=@d.select { |k,v| k<=n };
+    (entries.empty?) ? 0 : entries.values.inject(:+)
   end
   def >=(n)
-    (n.is_a?Numeric) ? @d.select { |k,v| k>=n }.values.inject(:+) : nil
+    entries=@d.select { |k,v| k>=n };
+    (entries.empty?) ? 0 : entries.values.inject(:+)
   end
+
+  # returns the expecctation value
   def expect
     @d.inject(0) { |i,(k,v)| i+k*v }
   end
@@ -251,17 +257,29 @@ end
 # if no modifier is present then the dice results are simply summed
 class ModifiedDieDensity < Density
   def initialize(density,number,modifiers=[])
+    # TODO: find a good number
+    num=10000
+    (modifiers.is_a? Array) ? mods=modifiers : mods=[modifiers]
     if (number.zero?)
       super(0)
     elsif (modifiers==[])
       @d=([density]*number.abs).inject(:+)
-      (number<0) ? @d*=-1 : nil
-    elsif (density.to_a.size**number.abs > 100000)
-      # TODO: too many things to calculate, choose a different approach (monte carlo)
-      # TODO: find a good number
+    elsif (density.to_a.size**number.abs > num*10)
       super(0)
-      @fail=true
       @exact=false
+      @uniform=false
+      @d.delete(0)
+      i=0
+      while (i<num)
+        keys=Array.new(number.abs).map! { |i| density.roll }
+        newkeys=mods.inject(keys) { |i,m| m.fun(i) }
+        if newkeys.size==0
+          @d[0]+=values.inject(:*)
+        else
+          @d[newkeys.inject(:+)]+=Rational(1,num)
+        end
+        i+=1
+      end
     else
       super(0)
       @uniform=false
@@ -270,18 +288,16 @@ class ModifiedDieDensity < Density
       permutations.each do |comb|
         values=comb.map {|a,b| b }
         keys=comb.map {|a,b| a }
-        if (modifiers.is_a? Array)
-          newkeys=modifiers.inject(keys) { |i,m| m.fun(i) }
-        else
-          newkeys=modifiers.fun(keys)
-        end
+        newkeys=mods.inject(keys) { |i,m| m.fun(i) }
         if newkeys.size==0
           @d[0]+=values.inject(:*)
         else
           @d[newkeys.inject(:+)]+=values.inject(:*)
         end
       end
-      (number<0) ? @d*=-1 : nil
+    end
+    if (number<0)
+      @d*=-1
     end
   end
 end

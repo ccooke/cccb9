@@ -7,18 +7,30 @@ parser=(Dice::Parser.new ARGV[0].dup)
 density=parser.density
 
 if (density.fail)
-  print "FAILURE!\n"
-elsif (density>=-200)==1
-  print "Densities sum up to 1 (OK)!\n"
+  print "The calculation was a failure!\n"
 else
-  print "Error: ", Rational(1-(density>=-200)).to_f, "\n"
+  print "The calculation was a success.\n"
 end
-if (density.uniform and (not density.fail))
-  print "We have a uniform density.\n"
+if (density.exact)
+  print "The result is exact.\n"
+else
+  print "The result is just an approximation!\n"
 end
-print "Expected value: "
+if (density.uniform)
+  print "The density is uniform.\n"
+else
+  print "The density is probably not uniform!\n"
+end
+
+if (density>-100000)==1
+  print "The result is consistent: The densities sum up to 1.\n"
+else
+  print "The result is inconsistent. The densities don't sum up to 1 with this error: ", Rational(1-(density>=-1000000)).to_f, "\n"
+end
+
+print "The expected value is: "
 pp parser.expect
-print "Density: "
+print "The density is: "
 pp density
-print "Probability that X<=5: "
+print "The probability that X<=5 is: "
 print density<=5, "\n"
