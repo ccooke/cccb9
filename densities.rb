@@ -24,12 +24,15 @@ class Density
   def +(y)
     z=Density.new
     z.delete(0)
+    z.uniform=@uniform
+    z.fail=@fail
+    
     if (y.is_a?Density)
       if (y.fail)
-        @fail=true
+        z.fail=true
       end
-      if (y.to_a.size>1 and x.to_a.size>1)
-        @uniform=false
+      if (y.to_a.size>1 and @d.to_a.size>1)
+        z.uniform=false
       end
       @d.each do |xkey,xvalue|
         y.each do |ykey,yvalue|
@@ -51,12 +54,15 @@ class Density
   def *(y)
     z=Density.new
     z.delete(0)
+    z.uniform=@uniform
+    z.fail=@fail
+
     if (y.is_a?Density)
       if (y.fail)
-        @fail=true
+        z.fail=true
       end
-      if (y.to_a.size>1 and x.to_a.size>1)
-        @uniform=false
+      if (y.to_a.size>1 and @d.to_a.size>1)
+        z.uniform=false
       end
       max=(@d.keys + y.keys).collect(:abs).max
       for n in (-max..max) do 
@@ -137,6 +143,8 @@ class CompoundDieDensity < Density
   def getBasePart(max,rerolls=[])
     z=Density.new
     z.delete(0)
+    z.fail=true
+    z.uniform=false
     n=max - rerolls.reject{ |n| n==max }.size
     for k in (1..(max-1)).reject{ |n| rerolls.include?n } do
       z[k]=Rational(1,n)
@@ -190,6 +198,8 @@ class PenetratingDieDensity < Density
   def getBasePart(max,rerolls=[])
     z=Density.new
     z.delete(0)
+    z.fail=true
+    z.uniform=false
     n=max - rerolls.reject{ |n| n==max }.size
     for k in (1..(max-1)).reject{ |n| rerolls.include?n } do
       z[k]=Rational(1,n)
