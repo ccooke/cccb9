@@ -20,6 +20,21 @@ class Density
     @fail=false
   end
   
+  def roll
+    if (@probability_interval.nil?)
+      @probability_interval=@d.to_a
+      i=0
+      @probability_interval.map! do { |k,v| [k,i=(v+=i)] }
+    end
+    r=rand()
+    if (Array.respond_to?(:bsearch))
+      index=@probability_interval.bsearch { |k,v| v>=r }
+    else
+      index=@probability_interval.index { |k| k[1]>=r }
+    end
+    return @probability_interval[index-1][0]
+  end
+  
   # addition of INDEPENDENT densities
   def +(y)
     z=Density.new
