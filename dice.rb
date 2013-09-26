@@ -78,8 +78,8 @@ module Dice
           end
 
           def fun(list)
-            list.sort! { |x,y| (@keep_method==(:min)) ? x<=>y : y<=>x }
-            list.shift(@keep_number).inject(:+)
+            list.sort! { |x,y| (@keep_method==(:max)) ? x<=>y : y<=>x }
+            newlist=list.shift(@keep_number)
           end
           
           def process(numbers)
@@ -111,9 +111,8 @@ module Dice
           end
 
           def fun(list)
-            list.sort! { |x,y| (@drop_method==(:max)) ? x<=>y : y<=>x}
-            list.shift(@drop_number);
-            list.inject(:+)
+            list.sort! { |x,y| (@drop_method==(:min)) ? x<=>y : y<=>x}
+            newlist=list.drop(@drop_number);
           end
 
           def process(numbers)
@@ -162,20 +161,19 @@ module Dice
           return @density
         end
         rerolls=(1..@size).to_a.select { |r| @reroll_modifiers.any? { |m| mod.reroll_with? r } }
-        mod=@fun_modifiers.size > 0 ? @fun_modifiers[0] : nil
         if(@compounding)
           temp=CompoundDieDensity.new(@size,rerolls)
-          @density=ModifiedDieDensity.new(temp,@count,mod)
+          @density=ModifiedDieDensity.new(temp,@count,@fun_modifiers)
         elsif(@penetrating)
           temp=PenetratingDieDensity.new(@size,rerolls)
-          @density=ModifiedDieDensity.new(temp,@count,mod)
+          @density=ModifiedDieDensity.new(temp,@count,@fun_modifiers)
         elsif(@exploding)
           temp=ExplodingDieDensity.new(@size,rerolls)
-          @density=ModifiedDieDensity.new(temp,@count,mod)
+          @density=ModifiedDieDensity.new(temp,@count,@fun_modifiers)
           # TODO: EVERYTHING, at the moment a trivial result is returned
         else
           temp=DieDensity.new(@size,rerolls)
-          @density=ModifiedDieDensity.new(temp,@count,mod)
+          @density=ModifiedDieDensity.new(temp,@count,@fun_modifiers)
         end
         return @density
       end

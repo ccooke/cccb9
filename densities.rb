@@ -189,10 +189,10 @@ end
 # n identical dices are rolled and then modified according to some function (modifier)
 # if no modifier is present then the dice results are simply summed
 class ModifiedDieDensity < Density
-  def initialize(density,number,modifier=nil)
+  def initialize(density,number,modifiers=[])
     if (number.zero?)
       super()
-    elsif (modifier.nil?)
+    elsif (modifiers==[])
       @d=([density]*number.abs).inject(:+)
       (number<0) ? @d*=-1 : nil
     else
@@ -203,7 +203,16 @@ class ModifiedDieDensity < Density
       permutations.each do |comb|
         values=comb.map {|a,b| b }
         keys=comb.map {|a,b| a }
-        @d[modifier.fun(keys)]+=values.inject(:*)
+        if (modifiers.is_a? Array)
+          newkeys=modifiers.inject(keys) { |i,m| m.fun(i) }
+        else
+          newkeys=modifiers.fun(keys)
+        end
+        if newkeys.size==0
+          @d[0]+=values.inject(:*)
+        else
+          @d[newkeys.inject(:+)]+=values.inject(:*)
+        end
       end
       (number<0) ? @d*=-1 : nil
     end
