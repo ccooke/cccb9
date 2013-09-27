@@ -77,26 +77,30 @@ module CCCB::Settings
     end
     debug "Setting setting #{self}.#{name} got #{cursor.inspect}"
     saved_name = name
+    translation = {}
     return_val = if key
       cursor = cursor[name]
-      if value.nil?
-        cursor.delete(key)
-        new_value = get_setting(name,key)
-        schedule_hook :setting_set, self, saved_name, key, current, new_value
-        return cursor.delete(key)
-      end
       temp = { key => value }
-      run_hooks :pre_setting_set, self, name, temp, throw_exceptions: true
+      run_hooks :pre_setting_set, self, name, temp, translation, throw_exceptions: true
       temp.each do |k,v|
-        debug "Setting #{self}.#{name}[#{k}] = #{v}"
-        cursor[k] = v
+        if v.nil?
+          debug "Deleting #{self}.#{name}[#{k}]"
+          cursor.delete k
+          new_value = get_setting(name,k)
+          schedule_hook :setting_set, self, saved_name, key, current, new_value
+        else
+          debug "Setting #{self}.#{name}[#{k}] = #{v}"
+          cursor[k] = v
+        end
       end
     else
-      run_hooks :pre_setting_set, self, name, value, throw_exceptions: true
+      run_hooks :pre_setting_set, self, name, value, translation, throw_exceptions: true
       debug "Setting #{self}.#{name} = #{value.inspect}"
       cursor[name] = value
+      translation
     end
     schedule_hook :setting_set, self, saved_name, key, current, value
+    translation
   end
 
   def setting_option(setting,option)

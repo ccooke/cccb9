@@ -260,6 +260,7 @@ class CCCB::DieRoller
 
   def get_dice_preset(name)
     [ CCCB.instance, @message.network, @message.channel, @message.user ].each do |obj|
+      next if obj.nil?
       if preset = obj.get_setting( "roll_presets", name )
         return preset
       end

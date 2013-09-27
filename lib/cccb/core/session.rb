@@ -117,13 +117,13 @@ module CCCB::Core::Session
         parent_id = next_parent.downcase
 
         parent = obj.network.get_user( parent_id )
-        parents << parent
 
         puts "Is #{parent_id} in #{parents.map { |p| p.nick }}?"
         if parents.any? { |p| p.nick.downcase == parent_id }
           raise Incest.new("Circular parent loops are not allowed") 
         end
 
+        parents << parent
         next_parent = parent.get_setting("identity", "parent")
         info "Found parent for parent chain: #{next_parent}"
       end

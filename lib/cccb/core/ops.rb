@@ -6,6 +6,30 @@ module CCCB::Core::Ops
   def module_load
 
     add_setting :network, "ops"
+    add_setting :channel, "auto-op"
+
+    add_hook :ops, :pre_setting_set do |obj, setting, hash, translation|
+      next unless obj.is_a? CCCB::Channel
+      next unless setting == "auto-op"
+
+      hash.keys.each do |nick|
+        next if nick =~ /^[^!]+![^@]+@\S+$/
+        user = obj.user_by_name(nick) or raise "Unable to find user with nick 'nick'"
+        hash[user.from] = hash.delete(nick)
+        translation[nick] = user.from
+      end
+    end
+
+    add_hook :ops, :join do |message|
+      auto_op = message.channel.get_setting("auto-op")
+      if auto_op
+        auto_op.each do |from,enabled|
+          if enabled and message.from == from
+            message.network.puts "MODE #{message.channel} +o #{message.nick}"
+          end
+        end
+      end
+    end
 
     add_hook :ops, :ctcp_OP do |message|
       next if message.to_channel?

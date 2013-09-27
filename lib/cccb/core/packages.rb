@@ -4,7 +4,16 @@ module CCCB::Core::Packages
 
   def module_load
     add_setting :channel, "packages", auth: :superuser, default: [], persist: false
+    add_setting :channel, "protected", auth: :superuser
+    add_setting :network, "protected"
     set_setting true, "options", "bombs_armed"
+
+    networking.networks.each do |name,network|
+      info network.nick
+      info network.get_user(network.nick)
+      info network.user
+      network.set_setting true, "protected", network.user.id
+    end
 
     irc_nick = /[-A-Za-z0-9_^%`]+/
 
@@ -18,6 +27,11 @@ module CCCB::Core::Packages
       next unless match = message.ctcp_text.match( /^\s*#{verbs}#{target}#{package}/i )
 
       if message.to_channel? and target = message.channel.user_by_name(match[:target])
+
+        if message.channel.get_setting("protected",target.id)
+          target = message.user.id
+        end
+
         if match[:verb].to_s.downcase == 'gives' and message.user.authenticated?
           package = {
             :fuse => 30,

@@ -210,10 +210,10 @@ module CCCB::Core::Bot
       |
         ::
       )?
-      (?<setting> \w+)
+      (?<setting> [-\w]+)
       (?:
         ::
-        (?<key> \w+)
+        (?<key> [^\s=]+)
       )?
       (?:
         \s+
@@ -259,7 +259,7 @@ module CCCB::Core::Bot
       if object.nil?
         "Unable to find #{setting_name} in #{match[:type]}::#{match[:setting]}"
       elsif object.auth_setting( message, name )
-        if match[:value]
+        translation = if match[:value]
           begin
             value = case match[:value]
             when "nil", ""
@@ -280,6 +280,13 @@ module CCCB::Core::Bot
             next "Sorry, there's something wrong with the value '#{match[:value]}' (#{e})"
           end
         end
+
+        info "Got translation: #{translation.inspect}"
+        if translation and key and translation.include? key
+          setting_name = [ object, name, translation[key] ] .compact.join('::')
+          key = translation[key]
+        end
+
         value = if object.setting_option(name, :secret) and message.to_channel?
           "<secret>"
         else
@@ -358,6 +365,11 @@ module CCCB::Core::Bot
       else
         "You weren't a superuser in the first place."
       end
+    end
+
+    add_request :core, /^reconnect$/ do |_, message|
+      next "Denied" unless message.user.superuser?
+      message.network.puts "QUIT Reconnecting"
     end
   end
 

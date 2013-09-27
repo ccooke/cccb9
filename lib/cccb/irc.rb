@@ -681,7 +681,7 @@ class CCCB::Network
       state: :disconnected,
       sock: nil,
       nick: conf[:nick] || @client.nick,
-      user: conf[:user] || @client.user,
+      username: conf[:user] || @client.user,
       host: conf[:host] || 'irc',
       port: conf[:port] || 6667,
       pass: conf[:pass] || nil,
@@ -693,6 +693,11 @@ class CCCB::Network
         byte_rate: 128
       }
     }
+  end
+
+  def user
+    info "Getting network user for #{self}, nick is #{self.nick}"
+    get_user(self.nick)
   end
 
   def get_user(name)
@@ -738,7 +743,7 @@ class CCCB::Network
       self.state = :pre_login
       schedule_hook :connecting, self
     when :pre_login
-      write "USER #{self.user} 0 * :#{@client.userstring}\n"
+      write "USER #{self.username} 0 * :#{@client.userstring}\n"
       write "PASS #{self.pass}\n" unless self.pass.nil?
       write "NICK #{self.nick}\n"
       self.state = :connected

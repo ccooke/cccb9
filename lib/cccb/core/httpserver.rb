@@ -62,6 +62,11 @@ class CCCB::ContentServer
 
 	def self.request(req,res)
 
+    network = if match = req.path =~ %r{^/network/(?<network>[^/]+)(?<path>.*)$}
+      req.path.replace match[:path]
+      CCCB.instance.networking.networks[match[:network]]
+    end
+
 		@@blocks.each do |(send,matcher,block)|
 			match_object = if send == nil
 				req
@@ -69,7 +74,7 @@ class CCCB::ContentServer
 				req.send(send)
 			end
 			if match = matcher.match( match_object )
-				block.call( match, req, res )
+				block.call( network, match, req, res )
         return
 			end
 		end
@@ -81,7 +86,7 @@ class CCCB::ContentServer
 	end
 
   def self.add_keyword_path( keyword, &block )
-    add_path %r{^/#{keyword}(?:/(?<call>.*))?$}, :path do |match,req,res|
+    add_path %r{^/#{keyword}(?:/(?<call>.*))?$}, :path do |network,match,req,res|
       hash = block.call(match)
       template = hash[:template] || 'default'
       if template == :plain_text
