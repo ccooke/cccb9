@@ -191,12 +191,13 @@ class Density
   end
   
   # density plot
-  def plot(width=50)
+  def plot(width=70)
     max=@d.values.max
     minperc=max*0.5/width*0.95
 
     plotvar=sprintf("\n")
-    @d.select {|k,v| v>=minperc}.each do |k,v|
+    sorted=@d.to_a.sort {|a,b| a.first<=>b.first }
+    sorted.select {|k,v| v>=minperc}.each do |k,v|
       plotvar+=sprintf("%5d | ",k)
       barnum=(v*width*1.0/max).round
       for k in (1..barnum) do
