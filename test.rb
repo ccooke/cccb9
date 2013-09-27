@@ -35,10 +35,10 @@ if (ARGV.length>0)
   print "\n"
   print "The density plot is: "
   print density.plot
-  print "The density is: "
-  pp density
-  print "The probability that X<=5 is: "
-  print density<=5, "\n"
+  #print "The density is: "
+  #pp density
+  #print "The probability that X<=5 is: "
+  #print density<=5, "\n"
 else
   print "Usage: test.rb <string>\n"
 end
