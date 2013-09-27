@@ -185,10 +185,27 @@ class Density
     @d.inject(Rational(-mu*mu)) { |i,(k,v)| i+k*k*v }
   end
   
-  #returns the standard deviation
+  # returns the standard deviation
   def stdev
     Math.sqrt(variance)
-  end  
+  end
+  
+  # density plot
+  def plot(width=50)
+    max=@d.values.max
+    minperc=max*0.5/width*0.95
+
+    plotvar=sprintf("\n")
+    @d.select {|k,v| v>=minperc}.each do |k,v|
+      plotvar+=sprintf("%5d | ",k)
+      barnum=(v*width*1.0/max).round
+      for k in (1..barnum) do
+        plotvar+="|"
+      end
+      plotvar+="\n"
+    end
+    plotvar
+  end
 end
 
 
