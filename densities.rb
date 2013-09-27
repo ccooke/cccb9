@@ -10,8 +10,8 @@ class Density
   include Enumerable
   extend Forwardable
 
-  attr_accessor :uniform, :fail, :exact
-  def_delegators :@d, :each, :[], :[]=, :inspect, :delete
+  attr_accessor :uniform, :fail, :exact, :d
+  def_delegators :@d, :each, :[], :[]=, :inspect, :delete, :values
  
   def initialize(num=0)
     @d=Hash.new(Rational(0))
@@ -63,8 +63,6 @@ class Density
       @d.each do |xkey,xvalue|
         z[xkey+y]+=xvalue
       end    
-    else
-      #TODO
     end
     return z
   end
@@ -98,8 +96,6 @@ class Density
       @d.each do |k,v|
         z[k*y]=v
       end
-    else
-      #TODO
     end
     return z
   end
@@ -111,6 +107,56 @@ class Density
     return self+(y*(-1))
   end
 
+  # reduce the probability of all entries matching <condition> to zero, adjust the rest accordingly
+  def delete_if
+    remove_values=@d.select {|item| yield item }.values
+    remove_prob=(remove_values==[]) ? 0 : remove_values.inject(:+)
+    if (remove_prob<1)
+      @d.delete_if {|item| yield item }
+      @d=(self.mult(Rational(1,1-remove_prob))).d
+    else
+      # TODO
+    end
+  end
+
+  # keep only the entries matching <condition>, adjust their probability accordingly
+  def keep_if
+    keep_values=(@d.select {|item| yield item}).values
+    keep_prob=(keep_values==[]) ? 0 : keep_values.inject(:+)
+    if (keep_prob>0)
+      @d.keep_if {|item| yield item}
+      @d=(self.mult(Rational(1,keep_prob))).d
+    else
+      # TODO
+    end
+  end
+
+  # assumes that y is a Density and does pointwise addition. The result is no longer a density!!
+  def add(y)
+    z=Density.new
+    z.delete(0)
+    z.uniform=false
+    z.exact=false
+    z.fail=true
+
+    z.d=@d.merge(y.d){|key, oldval, newval| newval + oldval}
+    return z
+  end
+  # Assumes that y is a Numeric and does pointwise multiplication. The result is no longer a density!!
+  def mult(y)
+    z=Density.new
+    z.delete(0)
+    z.uniform=false
+    z.exact=false
+    z.fail=true
+
+    @d.each { |k,v| z[k]=v*y }
+    return z
+  end
+  def sub(y)
+    return self.add(y.mult(-1))
+  end
+  
   # returns the probability that X<n, X>n, X<=n, X>=n
   def <(n)
     entries=@d.select { |k,v| k<n };
@@ -140,7 +186,7 @@ end
 # density of a die roll with rerolls
 class DieDensity < Density
   def initialize(max,rerolls=[])
-    super(0)
+    super()
     if (rerolls.size>0)
       @uniform=false
     end
@@ -155,7 +201,7 @@ end
 # density of a die roll with compound decorator and rerolls
 class CompoundDieDensity < Density
   def initialize(max,rerolls=[],maxcompound=10)
-    super(0)
+    super()
     @uniform=false
     @d.delete(0)
     basepart=getBasePart(max,rerolls)
@@ -190,7 +236,7 @@ end
 # density of a die roll with penetrating decorator and rerolls
 class PenetratingDieDensity < Density
   def initialize(max,rerolls=[],maxpenetrate=10)
-    super(0)
+    super()
     @uniform=false
     @d.delete(0)
     basepart=getBasePart(max,rerolls)
@@ -243,62 +289,146 @@ class PenetratingDieDensity < Density
   end
 end
 
-class ExplodingDieDensity < Density
-  # TODO
-  def initialize(max,rerolls=[])
-    super(0)
-    @fail=true
-    @exact=false
+# density for the _number_ of rolled exploding dices (starting with count), with rerolls
+# and up to maxexplode explosions
+class ExplodingDieNumberDensity < Density
+  def initialize(max,rerolls=[],count=1,maxexplode=10)
+    super()
+    @uniform=false
+    z=Density.new
+    z.delete(0)
+    
+    if (rerolls.include?max)
+      n=max - rerolls.size + 1
+      z[1]=Rational(n-1,n)
+      for k in (2..maxexplode) do
+        for r in (1..(k-1)) do
+          z[k]+=Rational(z[r]*z[k-r],n)
+        end
+      end
+      z[maxexplode+1]=1-z.values.inject(:+)
+    else
+      n=max - rerolls.size
+      for k in (1..maxexplode) do
+        z[k]=Rational(n-1,n**k)
+      end
+      z[maxexplode+1]=Rational(1,n**(e-1))
+    end
+
+    @d=(([z]*count).inject(:+)).d
+    # if we only limit the explosions of individual dices don't do the following command:
+    delete_if { |k,v| k > maxexplode + 1}
   end
 end
 
 # density of a modified die roll:
-# n identical dices are rolled and then modified according to some function (modifier)
+# number identical dices are rolled and then modified according to some function (modifier)
 # if no modifier is present then the dice results are simply summed
+# if number is a Density then each case is considered with the appropriate probability
 class ModifiedDieDensity < Density
   def initialize(density,number,modifiers=[])
-    # TODO: find a good number
+    # TODO: find a good number and a good factor (monte carlo step vs. exact step)
     num=10000
+    factor=10
+
     (modifiers.is_a? Array) ? mods=modifiers : mods=[modifiers]
-    if (number.zero?)
-      super(0)
-    elsif (modifiers==[])
-      @d=([density]*number.abs).inject(:+)
-    elsif (density.to_a.size**number.abs > num*10)
-      super(0)
-      @exact=false
-      @uniform=false
-      @d.delete(0)
-      i=0
-      while (i<num)
-        keys=Array.new(number.abs).map! { |i| density.roll }
-        newkeys=mods.inject(keys) { |i,m| m.fun(i) }
-        if newkeys.size==0
-          @d[0]+=values.inject(:*)
-        else
-          @d[newkeys.inject(:+)]+=Rational(1,num)
-        end
-        i+=1
+
+    # if we have a distribution of numbers given by a density
+    if (number.is_a? Density)
+      super()
+ 
+      initial_density=Density.new;
+      initial_density.delete[0];
+      z=number.inject(initial_density) do |i,(n,p)|
+        temp_d=ModifiedDieDensity.new(density,n,modifiers)
+        fail=(temp_d.fail or i.fail)
+        exact=(temp_d.exact and i.exact)
+        i=i.add(temp_d.mult(p))
+        i.fail=fail
+        i.exact=exact
+        i.uniform=false
       end
-    else
-      super(0)
+      
+      @d=z.d
+      @fail=z.fail
+      @exact=z.exact
       @uniform=false
-      @d.delete(0)
-      permutations=(density.to_a).repeated_permutation(number.abs)
-      permutations.each do |comb|
-        values=comb.map {|a,b| b }
-        keys=comb.map {|a,b| a }
-        newkeys=mods.inject(keys) { |i,m| m.fun(i) }
-        if newkeys.size==0
-          @d[0]+=values.inject(:*)
-        else
-          @d[newkeys.inject(:+)]+=values.inject(:*)
+ 
+    # if we have a fixed number
+    else 
+      if (number.zero?)
+        super()
+      elsif (modifiers==[])
+        @d=(([density]*number).inject(:+)).d
+      elsif (density.to_a.size**number > num*factor)
+        super()
+        @exact=false
+        @uniform=false
+        @d.delete(0)
+        i=0
+        while (i<num)
+          keys=Array.new(number).map! { |i| density.roll }
+          newkeys=mods.inject(keys) { |i,m| m.fun(i) }
+          if newkeys.size==0
+            @d[0]+=values.inject(:*)
+          else
+            @d[newkeys.inject(:+)]+=Rational(1,num)
+          end
+          i+=1
+        end
+      else
+        super()
+        @uniform=false
+        @d.delete(0)
+        permutations=(density.to_a).repeated_permutation(number)
+        permutations.each do |comb|
+          values=comb.map {|a,b| b }
+          keys=comb.map {|a,b| a }
+          newkeys=mods.inject(keys) { |i,m| m.fun(i) }
+          if newkeys.size==0
+            @d[0]+=values.inject(:*)
+          else
+            @d[newkeys.inject(:+)]+=values.inject(:*)
+          end
         end
       end
-    end
-    if (number<0)
-      @d*=-1
     end
   end
 end
 
+# density of an exploding die which doesn't reroll maximal values (with modifiers!)
+# "density" is the density of the basic reroll (maximum is also rerolled!) die
+# "max" is the maximal die number (i.e. the one causing an explosion)
+# "number" is the Density of the number of rolled dices
+# (i.e. number-1 is the density of the number of explosions)
+# "modifiers" is as usual a list of modifiers
+class ExplodingDieDensity < Density
+  def initialize(density,max,number,modifiers=[])
+    (modifiers.is_a? Array) ? mods=modifiers : mods=[modifiers]
+
+    # if we have a distribution of numbers given by a density
+    if (number.is_a? Density)
+      initial_density=Density.new;
+      initial_density.delete[0];
+
+      z=number.inject(initial_density) do |i,(n,p)|
+        temp_density=Density.new
+        temp_density.delete(0)
+        density.each do |k,v|
+          newkeys = (modifiers==[]) ? ([max]*(n-1) << k) : mods.inject([max]*(n-1) << k) { |i,m| m.fun(i) }
+          if newkeys.size==0
+            temp_density[0]+=v
+          else
+            temp_density[newkeys.inject(:+)]+=v
+          end
+        end
+        i=i.add(temp_density.mult(p))
+      end
+
+      @d=z.d
+      @fail=false
+      @exact=true
+      @uniform=false
+    end
+  end
+end

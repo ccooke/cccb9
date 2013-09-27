@@ -157,7 +157,7 @@ module Dice
       end
 
       def density
-        if (@density.is_a?Density)
+        if (@density.is_a? Density)
           return @density
         end
         rerolls=(1..@size).to_a.select { |r| @reroll_modifiers.any? { |m| mod.reroll_with? r } }
@@ -167,10 +167,20 @@ module Dice
         elsif(@penetrating)
           temp=PenetratingDieDensity.new(@size,rerolls)
           @density=ModifiedDieDensity.new(temp,@count,@fun_modifiers)
+        # This is a rather special case....
         elsif(@exploding)
-          temp=ExplodingDieDensity.new(@size,rerolls)
-          @density=ModifiedDieDensity.new(temp,@count,@fun_modifiers)
-          # TODO: EVERYTHING, at the moment a trivial result is returned
+          nomaxrolls=rerolls
+          if (not rerolls.include? @size)
+            nomaxrolls << @size
+          end
+          temp=DieDensity.new(@size,nomaxrolls)
+          count=ExplodingDieNumberDensity.new(@size,rerolls,@count)
+
+          if (rerolls.include? @size)
+            @density=ModifiedDieDensity.new(temp,@count,@fun_modifiers)
+          else
+            @density=ExplodingDieDensity.new(temp,@size,@count,@fun_modifiers)
+          end
         else
           temp=DieDensity.new(@size,rerolls)
           @density=ModifiedDieDensity.new(temp,@count,@fun_modifiers)
