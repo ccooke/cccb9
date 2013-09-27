@@ -50,7 +50,7 @@ class Density
       if (not y.exact)
         z.exact=false
       end
-      if (y.to_a.size>1 and self.to_a.size>1)
+      if ((not y.uniform) or (y.to_a.size>1 and self.to_a.size>1))
         z.uniform=false
       end
       @d.each do |xkey,xvalue|
@@ -67,7 +67,6 @@ class Density
   end
 
   # multiplication of INDEPENDENT densities
-  # TODO (if we need it): Fix the issues if it is a density and not a numeric
   def *(y)
     z=Density.new
     z.delete(0)
@@ -198,9 +197,7 @@ end
 class DieDensity < Density
   def initialize(max,rerolls=[])
     super()
-    if (rerolls.size>0)
-      @uniform=false
-    end
+    @uniform=false
     @d.delete(0)
     n=max-rerolls.size
     for k in (1..max).reject{ |n| rerolls.include?n } do
@@ -346,6 +343,7 @@ class ModifiedDieDensity < Density
     (modifiers.is_a? Array) ? mods=modifiers : mods=[modifiers]
 
     # if we have a distribution of numbers given by a density
+    # (potentially also BRUTE FORCE)
     if (number.is_a? Density)
       initial_density=Density.new;
       initial_density.delete(0);
@@ -372,6 +370,7 @@ class ModifiedDieDensity < Density
           @uniform=false
         end
       # This is (the only place) where we decide whether we do APPROXIMATIONS or precise calculations
+      # Monte-Carlo approximation
       elsif (stepnum(density.to_a.size,number) > num*factor)
         @exact=false
         @uniform=false
@@ -387,6 +386,7 @@ class ModifiedDieDensity < Density
           end
           i+=1
         end
+      # BRUTE FORCE
       else
         @uniform=false
         @d.delete(0)
