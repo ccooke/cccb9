@@ -1,4 +1,3 @@
-require 'facets/array/combination'
 require 'forwardable'
  
 
@@ -51,7 +50,7 @@ class Density
       if (not y.exact)
         z.exact=false
       end
-      if (y.to_a.size>1 and @d.to_a.size>1)
+      if (y.to_a.size>1 and self.to_a.size>1)
         z.uniform=false
       end
       @d.each do |xkey,xvalue|
@@ -62,7 +61,7 @@ class Density
     elsif (y.is_a?Numeric)
       @d.each do |xkey,xvalue|
         z[xkey+y]+=xvalue
-      end    
+      end
     end
     return z
   end
@@ -294,7 +293,6 @@ end
 class ExplodingDieNumberDensity < Density
   def initialize(max,rerolls=[],count=1,maxexplode=10)
     super()
-    @uniform=false
     z=Density.new
     z.delete(0)
     
@@ -316,6 +314,7 @@ class ExplodingDieNumberDensity < Density
     end
 
     @d=(([z]*count).inject(:+)).d
+    @uniform=false
     # if we only limit the explosions of individual dices don't do the following command:
     delete_if { |k,v| k > maxexplode + 1}
   end
@@ -328,6 +327,7 @@ end
 class ModifiedDieDensity < Density
   def initialize(density,number,modifiers=[])
     # TODO: find a good number and a good factor (monte carlo step vs. exact step)
+    super()
     num=10000
     factor=10
 
@@ -335,17 +335,15 @@ class ModifiedDieDensity < Density
 
     # if we have a distribution of numbers given by a density
     if (number.is_a? Density)
-      super()
- 
       initial_density=Density.new;
       initial_density.delete(0);
       z=number.inject(initial_density) do |i,(n,p)|
         temp_d=ModifiedDieDensity.new(density,n,modifiers)
-        fail=temp_d.fail or i.fail
-        exact=temp_d.exact and i.exact
+        temp_fail=temp_d.fail or i.fail
+        temp_exact=temp_d.exact and i.exact
         i=i.add(temp_d.mult(p))
-        i.fail=fail
-        i.exact=exact
+        i.fail=temp_fail
+        i.exact=temp_exact
         i
       end
       
@@ -356,14 +354,12 @@ class ModifiedDieDensity < Density
     # if we have a fixed number
     else 
       if (number.zero?)
-        super()
       elsif (modifiers==[])
         @d=(([density]*number).inject(:+)).d
         if (number>1)
           @uniform=false
         end
       elsif (density.to_a.size**number > num*factor)
-        super()
         @exact=false
         @uniform=false
         @d.delete(0)
@@ -379,7 +375,6 @@ class ModifiedDieDensity < Density
           i+=1
         end
       else
-        super()
         @uniform=false
         @d.delete(0)
         permutations=(density.to_a).repeated_permutation(number)
