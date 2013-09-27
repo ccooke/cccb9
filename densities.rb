@@ -338,28 +338,30 @@ class ModifiedDieDensity < Density
       super()
  
       initial_density=Density.new;
-      initial_density.delete[0];
+      initial_density.delete(0);
       z=number.inject(initial_density) do |i,(n,p)|
         temp_d=ModifiedDieDensity.new(density,n,modifiers)
-        fail=(temp_d.fail or i.fail)
-        exact=(temp_d.exact and i.exact)
+        fail=temp_d.fail or i.fail
+        exact=temp_d.exact and i.exact
         i=i.add(temp_d.mult(p))
         i.fail=fail
         i.exact=exact
-        i.uniform=false
+        i
       end
       
       @d=z.d
       @fail=z.fail
       @exact=z.exact
       @uniform=false
- 
     # if we have a fixed number
     else 
       if (number.zero?)
         super()
       elsif (modifiers==[])
         @d=(([density]*number).inject(:+)).d
+        if (number>1)
+          @uniform=false
+        end
       elsif (density.to_a.size**number > num*factor)
         super()
         @exact=false

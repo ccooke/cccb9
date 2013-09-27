@@ -174,18 +174,18 @@ module Dice
             nomaxrolls << @size
           end
           temp=DieDensity.new(@size,nomaxrolls)
-          count=ExplodingDieNumberDensity.new(@size,rerolls,@count)
+          exploding_count=ExplodingDieNumberDensity.new(@size,rerolls,@count)
 
           if (rerolls.include? @size)
-            @density=ModifiedDieDensity.new(temp,@count,@fun_modifiers)
+            @density=ModifiedDieDensity.new(temp,exploding_count,@fun_modifiers)
           else
-            @density=ExplodingDieDensity.new(temp,@size,@count,@fun_modifiers)
+            @density=ExplodingDieDensity.new(temp,@size,exploding_count,@fun_modifiers)
           end
         else
           temp=DieDensity.new(@size,rerolls)
           @density=ModifiedDieDensity.new(temp,@count,@fun_modifiers)
         end
-        return @density
+        @density
       end
 
       def roll_die
