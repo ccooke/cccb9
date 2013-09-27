@@ -75,6 +75,7 @@ class Density
     z.exact=@exact
     z.fail=@fail
 
+    # TODO: check if this is working correctly
     if (y.is_a?Density)
       if (y.fail)
         z.fail=true
@@ -321,9 +322,9 @@ class ExplodingDieNumberDensity < Density
 end
 
 # density of a modified die roll:
-# number identical dices are rolled and then modified according to some function (modifier)
-# if no modifier is present then the dice results are simply summed
-# if number is a Density then each case is considered with the appropriate probability
+# "number" identical dices are rolled and then modified according to some function (modifier)
+# if no "modifier" is present then the dice results are simply summed
+# if "number" is a Density then each case is considered with the appropriate probability
 class ModifiedDieDensity < Density
   def initialize(density,number,modifiers=[])
     # TODO: find a good number and a good factor (monte carlo step vs. exact step)
@@ -359,7 +360,8 @@ class ModifiedDieDensity < Density
         if (number>1)
           @uniform=false
         end
-      elsif (density.to_a.size**number > num*factor)
+      # This is (the only place) where we decide whether we do APPROXIMATIONS or precise calculations
+      elsif (stepnum(density.to_a.size,number) > num*factor)
         @exact=false
         @uniform=false
         @d.delete(0)
@@ -377,19 +379,33 @@ class ModifiedDieDensity < Density
       else
         @uniform=false
         @d.delete(0)
-        permutations=(density.to_a).repeated_permutation(number)
-        permutations.each do |comb|
+        combinations=(density.to_a).repeated_combination(number)
+        combinations.each do |comb|
           values=comb.map {|a,b| b }
           keys=comb.map {|a,b| a }
+          # number of permutations of these given keys
+          permutation_number=Rational((1..(keys.size)).reduce(1,:*),keys.uniq.map {|e| (1..(keys.count(e))).reduce(1,:*)}.inject(:*))
           newkeys=mods.inject(keys) { |i,m| m.fun(i) }
           if newkeys.size==0
-            @d[0]+=values.inject(:*)
+            @d[0]+=values.inject(:*)*permutation_number
           else
-            @d[newkeys.inject(:+)]+=values.inject(:*)
+            @d[newkeys.inject(:+)]+=values.inject(:*)*permutation_number
           end
         end
       end
     end
+  end
+
+  # n choose k
+  def choose(n,k)
+    pTop = (n-k+1 .. n).inject(1, &:*) 
+    pBottom = (1 .. k).inject(1, &:*)
+    pTop / pBottom
+  end
+
+  # number of steps
+  def stepnum(density_size,comb_length)
+    choose(density_size+comb_length-1,comb_length)
   end
 end
 
