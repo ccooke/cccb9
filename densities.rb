@@ -390,8 +390,7 @@ class ModifiedDieDensity < Density
       else
         @uniform=false
         @d.delete(0)
-        combinations=(density.to_a).repeated_combination(number)
-        combinations.each do |comb|
+        (density.to_a).repeated_combination(number).each do |comb|
           values=comb.map {|a,b| b }
           keys=comb.map {|a,b| a }
           # number of permutations of these given keys
