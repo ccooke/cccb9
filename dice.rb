@@ -160,7 +160,7 @@ module Dice
         if (@density.is_a? Density)
           return @density
         end
-        rerolls=(1..@size).to_a.select { |r| @reroll_modifiers.any? { |m| mod.reroll_with? r } }
+        rerolls=(1..@size).to_a.select { |r| @reroll_modifiers.any? { |m| m.reroll_with? r } }
         if(@compounding)
           temp=CompoundDieDensity.new(@size,rerolls)
           @density=ModifiedDieDensity.new(temp,@count,@fun_modifiers)
