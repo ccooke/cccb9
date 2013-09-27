@@ -179,6 +179,17 @@ class Density
   def expect
     @d.inject(0) { |i,(k,v)| i+k*v }
   end
+
+  # returns the variance
+  def variance
+    mu=expect()
+    @d.inject(Rational(-mu*mu)) { |i,(k,v)| i+k*k*v }
+  end
+  
+  #returns the standard deviation
+  def stdev
+    Math.sqrt(variance)
+  end  
 end
 
 

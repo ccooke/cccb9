@@ -30,6 +30,8 @@ if (ARGV.length>0)
   
   print "The expected value is: "
   pp parser.expect
+  print "The standard deviation is: "
+  pp density.stdev
   print "The density is: "
   pp density
   print "The probability that X<=5 is: "
