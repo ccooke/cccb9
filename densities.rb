@@ -389,12 +389,12 @@ class ModifiedDieDensity < Density
         end
       # This is (the only place) where we decide whether we do APPROXIMATIONS or precise calculations
       # Monte-Carlo approximation
-      elsif (stepnum(density.to_a.size,number) > num*factor)
+      elsif (stepnum(density.to_a.size,number) > num)
         @exact=false
         @uniform=false
         @d.delete(0)
         i=0
-        while (i<num)
+        while (i<num*factor)
           keys=Array.new(number).map! { |i| density.roll }
           newkeys=mods.inject(keys) { |i,m| m.fun(i) }
           if newkeys.size==0
