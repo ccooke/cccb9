@@ -193,7 +193,7 @@ class Density
   # density plot
   def plot(width=70)
     max=@d.values.max
-    minperc=max*0.5/width*0.95
+    minperc=max*0.5/width*0.8
 
     plotvar=sprintf("\n")
     sorted=@d.to_a.sort {|a,b| a.first<=>b.first }
@@ -337,7 +337,7 @@ class ExplodingDieNumberDensity < Density
       for k in (1..maxexplode) do
         z[k]=Rational(n-1,n**k)
       end
-      z[maxexplode+1]=Rational(1,n**(e-1))
+      z[maxexplode+1]=Rational(1,n**maxexplode)
     end
 
     @d=(([z]*count).inject(:+)).d
@@ -355,8 +355,8 @@ class ModifiedDieDensity < Density
   def initialize(density,number,modifiers=[])
     # TODO: find a good number and a good factor (monte carlo step vs. exact step)
     super()
-    num=10000
-    factor=10
+    num=100000
+    factor=1
 
     (modifiers.is_a? Array) ? mods=modifiers : mods=[modifiers]
 
@@ -450,7 +450,7 @@ class ExplodingDieDensity < Density
     # if we have a distribution of numbers given by a density
     if (number.is_a? Density)
       initial_density=Density.new;
-      initial_density.delete[0];
+      initial_density.delete(0);
 
       z=number.inject(initial_density) do |i,(n,p)|
         temp_density=Density.new

@@ -169,11 +169,7 @@ module Dice
           @density=ModifiedDieDensity.new(temp,@count,@fun_modifiers)
         # This is a rather special case....
         elsif(@exploding)
-          nomaxrolls=rerolls
-          if (not rerolls.include? @size)
-            nomaxrolls << @size
-          end
-          temp=DieDensity.new(@size,nomaxrolls)
+          temp=DieDensity.new(@size,(rerolls+[@size]).uniq)
           exploding_count=ExplodingDieNumberDensity.new(@size,rerolls,@count)
 
           if (rerolls.include? @size)
