@@ -175,7 +175,7 @@ module Dice
           if (rerolls.include? @size)
             @density=ModifiedDieDensity.new(temp,exploding_count,@fun_modifiers)
           else
-            @density=ExplodingDieDensity.new(temp,@size,exploding_count,@fun_modifiers)
+            @density=ExplodingDieDensity.new(temp,@size,@count,exploding_count,@fun_modifiers)
           end
         else
           temp=DieDensity.new(@size,rerolls)

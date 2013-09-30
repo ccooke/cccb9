@@ -343,7 +343,9 @@ class ExplodingDieNumberDensity < Density
     @d=(([z]*count).inject(:+)).d
     @uniform=false
     # if we only limit the explosions of individual dices don't do the following command:
-    delete_if { |k,v| k > maxexplode + 1}
+    cutoff_probability=@d.select { |k,v| k > maxexplode + count }.values.inject(0,:+)
+    @d[maxexplode+count]+=cutoff_probability
+    @d.delete_if { |k,v| k > maxexplode + count }
   end
 end
 
@@ -440,11 +442,12 @@ end
 # density of an exploding die which doesn't reroll maximal values (with modifiers!)
 # "density" is the density of the basic reroll (maximum is also rerolled!) die
 # "max" is the maximal die number (i.e. the one causing an explosion)
+# "count" is the number of initial dices
 # "number" is the Density of the number of rolled dices
 # (i.e. number-1 is the density of the number of explosions)
 # "modifiers" is as usual a list of modifiers
 class ExplodingDieDensity < Density
-  def initialize(density,max,number,modifiers=[])
+  def initialize(density,max,count,number,modifiers=[])
     (modifiers.is_a? Array) ? mods=modifiers : mods=[modifiers]
 
     # if we have a distribution of numbers given by a density
@@ -453,23 +456,29 @@ class ExplodingDieDensity < Density
       initial_density.delete(0);
 
       z=number.inject(initial_density) do |i,(n,p)|
-        temp_density=Density.new
-        temp_density.delete(0)
-        density.each do |k,v|
-          newkeys = (modifiers==[]) ? ([max]*(n-1) << k) : mods.inject([max]*(n-1) << k) { |i,m| m.fun(i) }
-          if newkeys.size==0
-            temp_density[0]+=v
-          else
-            temp_density[newkeys.inject(:+)]+=v
-          end
-        end
-        i=i.add(temp_density.mult(p))
+        newmodifiers=[ExplodingModifier.new(max,n-count)] + modifiers
+        temp_d=ModifiedDieDensity.new(density,count,newmodifiers)
+        temp_fail=temp_d.fail or i.fail
+        temp_exact=temp_d.exact and i.exact
+        i=i.add(temp_d.mult(p))
+        i.fail=temp_fail
+        i.exact=temp_exact
+        i
       end
-
       @d=z.d
-      @fail=false
-      @exact=true
+      @fail=z.fail
+      @exact=z.exact
       @uniform=false
     end
+  end
+end
+
+class ExplodingModifier
+  def initialize(max,explosions)
+    @max=max
+    @explosions=explosions
+  end
+  def fun(list)
+    list + [@max]*@explosions
   end
 end
