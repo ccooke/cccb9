@@ -63,6 +63,95 @@ module CCCB::Core::Bot
     end
   end
 
+  def resolve_object_type message, type
+    use_type = if type
+      type
+    elsif message.to_channel?
+      :channel
+    else
+      :user
+    end
+
+    case use_type.to_sym
+    when :core 
+      CCCB.instance
+    when :channel 
+      message.channel 
+    when :network 
+      message.network
+    when :user 
+      message.user
+    when :channeluser 
+      message.channeluser
+    when /^u(?:ser)?\((?<user>[^\]]+)\)$/i
+      message.network.get_user($~[:user].downcase)
+    when /^c(?:hannel)?\((?<channel>#[^\]]+)\)$/i
+      message.network.get_channel($~[:channel].downcase)
+    when /^n(?:etwork)?\((?<network>#[^\]]+)\)$/i
+      CCCB.instance.networking.networks[$~[:network].downcase]
+    else
+      message.network.channels[use_type.downcase] || message.network.users[use_type.downcase]
+    end
+  end
+
+  def user_setting message, type, name, key, value_string = nil
+    object = resolve_object_type( message, type )
+    setting_name = [ object, name, key ].compact.join('::')
+
+    return "Unable to find #{setting_name} in #{object}::#{name}" if object.nil?
+    return "Denied: #{object.auth_reject_reason}" unless object.auth_setting( message, name)
+
+    translation = if value_string
+      begin
+        value = case value_string
+        when "nil", ""
+          nil
+        when "true"
+          true
+        when "false"
+          false
+        when /^\s*\w+/
+          value_string
+        else
+          JSON.parse( "[ #{value_string} ]", create_additions: false ).first
+        end
+
+        object.set_setting(value, name, key)
+      rescue Exception => e
+        debug "EXCEPTION: #{e} #{e.backtrace}"
+        return "Sorry, there's something wrong with the value '#{value_string}' (#{e})"
+      end
+    end
+
+    verbose "Got translation: #{translation.inspect}"
+    if translation and key and translation.include? key
+      setting_name = [ object, name, translation[key] ] .compact.join('::')
+      key = translation[key]
+    end
+
+    value = if object.setting_option(name, :secret) and message.to_channel?
+      "<secret>"
+    else
+      copy = if key
+        { key => object.get_setting(name,key) }
+      else
+        object.get_setting(name).dup
+      end
+
+      object.setting_option(name,:hide_keys).each do |k|
+        if copy.delete(k) and key and k == key
+          copy[k] = "<secret>"
+        end
+      end
+
+      if key
+        copy = copy[key]
+      end
+      copy.to_json
+    end
+    "Setting #{setting_name} is set to #{value}"
+  end
+
   def write_to_log string, target = nil
     info string
     schedule_hook :log_message, string, target if target
@@ -98,6 +187,10 @@ module CCCB::Core::Bot
 
     hide_irc_commands :"315", :"352", :"366", :"QUIT"
     hide_irc_commands :PING unless $DEBUG
+
+    add_hook :core, :server_send do |network, string|
+      write_to_log ">>> " + string, network
+    end
 
     add_hook :core, :server_message do |message|
       message.log_format = LOG_FORMATS[message.command] || LOG_SERVER
@@ -224,93 +317,9 @@ module CCCB::Core::Bot
       \s*$
     /x do |match, message|
       name = match[:setting]
-      type = if match[:type]
-        match[:type]
-      elsif message.to_channel?
-        :channel
-      else
-        :user
-      end
-      type_name = 'core'
         
-      object = case type.to_sym
-      when :core 
-        CCCB.instance
-      when :channel 
-        message.channel 
-      when :network 
-        message.network
-      when :user 
-        message.user
-      when :channeluser 
-        message.channeluser
-      when /^user\((?<user>[^\]]+)\)$/
-        message.network.get_user($~[:user])
-      when /^channel\((?<channel>#[^\]]+)\)$/
-        message.network.get_channel($~[:channel])
-      else
-        message.network.channels[type.downcase] || message.network.users[type.downcase]
-      end
-
       key = match[:key]
-
-      setting_name = [ object, name, key ].compact.join('::')
-
-      if object.nil?
-        "Unable to find #{setting_name} in #{match[:type]}::#{match[:setting]}"
-      elsif object.auth_setting( message, name )
-        translation = if match[:value]
-          begin
-            value = case match[:value]
-            when "nil", ""
-              nil
-            when "true"
-              true
-            when "false"
-              false
-            when /^\s*\w+/
-              match[:value]
-            else
-              JSON.parse( "[ #{match[:value]} ]", create_additions: false ).first
-            end
-
-            object.set_setting(value, name, key)
-          rescue Exception => e
-            debug "EXCEPTION: #{e} #{e.backtrace}"
-            next "Sorry, there's something wrong with the value '#{match[:value]}' (#{e})"
-          end
-        end
-
-        info "Got translation: #{translation.inspect}"
-        if translation and key and translation.include? key
-          setting_name = [ object, name, translation[key] ] .compact.join('::')
-          key = translation[key]
-        end
-
-        value = if object.setting_option(name, :secret) and message.to_channel?
-          "<secret>"
-        else
-          copy = if key
-            { key => object.get_setting(name,key) }
-          else
-            object.get_setting(name).dup
-          end
-
-          object.setting_option(name,:hide_keys).each do |k|
-            if copy.delete(k) and key and k == key
-              copy[k] = "<secret>"
-            end
-          end
-
-          if key
-            copy = copy[key]
-          end
-          copy.to_json
-        end
-        "Setting #{setting_name} is set to #{value}"
-      else
-        "Denied: #{object.auth_reject_reason}"
-      end
+      user_setting( message, match[:type], name, key, match[:value] )
     end
 
     add_request :core, /^\s*reload\s*$/i do |match, message|
