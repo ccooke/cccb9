@@ -1,3 +1,4 @@
+require 'etc'
 require 'managedthreads'
 require 'string_format'
 require 'module/requirements'
@@ -56,12 +57,13 @@ class CCCB
     @reload = false
     statedir = args[:statedir] || args[:basedir] + '/conf/state/'
     persist.store = Module::Requirements::Feature::Persist::FileStore.new( statedir ) 
+    logging.tag = args[:logfile_tag]
 
     {
       log_to_file: args[:log_to_file] || true,
       log_to_stdout: args[:log_to_stdout] || true,
-      user: args[:user] || ENV['USER'],
-      nick: args[:nick] || ENV['USER'],
+      user: args[:user] || Etc.getlogin,
+      nick: args[:nick] || Etc.getlogin,
       servers: args[:servers],
       userstring: args[:userstring] || "An extendable ruby bot",
       debug_privmsg: args[:debug_privmsg] || "#cccb-debug}",
@@ -69,6 +71,7 @@ class CCCB
       basedir: args[:basedir],
       statedir: statedir,
       codedir: args[:codedir] || args[:basedir] + '/lib/cccb/usercode',
+      logfile_tag: args[:logfile_tag], 
       logfile: args[:logfile] || args[:basedir] + '/logs/cccb.log',
       botpattern: args[:botpattern] || /^cccb/,
     }

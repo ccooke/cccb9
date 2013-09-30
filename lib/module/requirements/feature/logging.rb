@@ -35,6 +35,7 @@ module Module::Requirements::Feature::Logging
   def log( *strings )
     begin
       strings.each do |string|
+        string = "#{logging.tag} #{string}" if logging.tag
         message = sprintf( "[%s] %s",
           Time.now.strftime("%Y-%m-%d %H:%M:%S"),
           string
