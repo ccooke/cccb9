@@ -641,13 +641,16 @@ module CCCB::Core::Dice
 
       hash.keys.each do |key|
         next if hash[key].nil?
-        if key =~ CCCB::DieRoller::DICE_REGEX
+        if key =~ CCCB::DieRoller::DICE_REGEX and key =~ /\d*d\d+/
           hash[key] = "=1; =map Cheat :-)"
         end
       end
     end
 
-    add_request :dice_set, /^\s*set\s+(?<preset>\w+)(?:\s+(?<value>.*?))?\s*$/ do |match, message|
+    add_request :dice, /^\s*(?<keyword>set|preset)\s+(?!my|channel|#)(?<preset>\w+)(?!\s+\S+\s+to)(?:\s+(?<value>.*?))?\s*$/ do |match, message|
+      if match[:keyword] == 'set'
+        message.reply "Please use 'preset' instead of 'set' to define dice expression presets in future: this usage of 'set' is deprecated and will be removed later"
+      end
       user_setting( message, :user, "roll_presets", match[:preset], match[:value] || "" )
     end
 
