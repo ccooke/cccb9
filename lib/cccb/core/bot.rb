@@ -58,6 +58,7 @@ module CCCB::Core::Bot
           message.reply Array(result) unless result.nil?
         rescue Exception => e
           message.reply "Sorry, that didnt work: #{e}"
+          verbose "#{e} #{e.backtrace}"
         end
       end
     end
@@ -110,10 +111,10 @@ module CCCB::Core::Bot
           true
         when "false"
           false
-        when /^\s*\w+/
-          value_string
-        else
+        when /^\s*[\[\{]/
           JSON.parse( "[ #{value_string} ]", create_additions: false ).first
+        else
+          value_string
         end
 
         object.set_setting(value, name, key)

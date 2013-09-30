@@ -313,6 +313,7 @@ class CCCB::DieRoller
 
   def roll(expression, default, mode)
     success = false
+    expression ||= ""
     rolls = []
     processed_expression = []
     until success 
@@ -579,7 +580,7 @@ module CCCB::Core::Dice
 
           list.select! { |l| l[:msg].user.id == user.id }
         elsif message.to_channel?
-          list.select! { |l| l[:msg].replyto.id == message.replyto.id }
+          list.select! { |l| l[:msg].replyto.to_s.downcase == message.replyto.id }
         end
         index = if match[:index] == 'last'
           0
@@ -590,7 +591,8 @@ module CCCB::Core::Dice
         else
           match[:index].gsub(/[^\d]/,'').to_i - 1
         end
-
+        
+        next "No such roll" if list.empty?
         user ||= list[index][:msg].user
         list[index]
       elsif match[:memory]
@@ -631,6 +633,17 @@ module CCCB::Core::Dice
         nil
       else
         "I can't find that."
+      end
+    end
+
+    add_hook :dice, :pre_setting_set do |object, setting, hash|
+      next unless setting == "roll_presets"
+
+      hash.keys.each do |key|
+        next if hash[key].nil?
+        if key =~ CCCB::DieRoller::DICE_REGEX
+          hash[key] = "=1; =map Cheat :-)"
+        end
       end
     end
 
