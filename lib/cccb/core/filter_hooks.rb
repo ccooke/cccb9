@@ -8,13 +8,12 @@ module CCCB::Core::FilterHooks
       if feature == :core
         true
       else
-        self.network.get_setting("allowed_features", feature.to_s)
+        self.get_setting("allowed_features", feature.to_s)
       end
     end
   end
 
   FILTER_CLASSES = [
-    CCCB::Message,
     CCCB::User,
     CCCB::ChannelUser,
     CCCB::Network
@@ -23,6 +22,8 @@ module CCCB::Core::FilterHooks
   def module_load
     add_setting :core, "allowed_features", default: { core: true }
     add_setting :network, "allowed_features", auth: :superuser
+    add_setting :channel, "allowed_features", auth: :superuser
+    add_setting :user, "allowed_features", auth: :superuser
     set_setting true, "allowed_features", "core"
 
     FILTER_CLASSES.each do |klass|
