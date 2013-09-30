@@ -39,6 +39,8 @@ class CCCB::Message
         @channel_name = @channel.name
         @channeluser = @channel[self.user]
         @replyto = @channel
+      else 
+        @channel = nil
       end
     end
 
@@ -146,6 +148,12 @@ class CCCB::Message
         schedule_hook :user_quit, self, c
       end
       network.users.delete user
+    end
+  end
+
+  module CMD_001
+    def process
+      schedule_hook :connected, self.network
     end
   end
 
@@ -696,7 +704,6 @@ class CCCB::Network
   end
 
   def user
-    info "Getting network user for #{self}, nick is #{self.nick}"
     get_user(self.nick)
   end
 
@@ -743,12 +750,12 @@ class CCCB::Network
       self.state = :pre_login
       schedule_hook :connecting, self
     when :pre_login
-      write "USER #{self.username} 0 * :#{@client.userstring}\n"
-      write "PASS #{self.pass}\n" unless self.pass.nil?
-      write "NICK #{self.nick}\n"
-      self.state = :connected
-      schedule_hook :connected, self
-    when :connected
+      puts "USER #{self.username} 0 * :#{@client.userstring}"
+      puts "PASS #{self.pass}" unless self.pass.nil?
+      puts "NICK #{self.nick}"
+      self.state = :login
+      schedule_hook :login, self
+    when :connected, :login
       loop do
         if line = self.sock.gets
           begin
@@ -783,7 +790,8 @@ class CCCB::Network
   end
 
   def puts(data)
-    write data.gsub(/\n/,"") + "\n"
+    write data + "\r\n"
+    schedule_hook :server_send, self, data
   end
 
   def notice(target, lines)
@@ -842,6 +850,7 @@ class CCCB::Network
         
           spam "#{self.name} SEND #{chunk}"
           self.sock.write( chunk )
+          schedule_hook :server_lowlevel_write, self, chunk
           @line_buffer -= 1
           @byte_buffer -= chunk.length
 
