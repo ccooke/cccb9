@@ -56,7 +56,7 @@ module CCCB::Core::PublicLogs
         end
       end
 
-      file = "logs/#{ message.replyto.downcase }.log"
+      file = "logs/#{ message.replyto.id }.log"
       string = "[%(time)] #{toggle.upcase} %(from) #{session}"
       open( file, 'a' ) { |f| f.puts message.format(string) }
 
