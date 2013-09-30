@@ -9,9 +9,6 @@ module CCCB::Core::Packages
     set_setting true, "options", "bombs_armed"
 
     networking.networks.each do |name,network|
-      info network.nick
-      info network.get_user(network.nick)
-      info network.user
       network.set_setting true, "protected", network.user.id
     end
 
