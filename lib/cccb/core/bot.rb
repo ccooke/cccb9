@@ -80,7 +80,7 @@ module CCCB::Core::Bot
       message.channel 
     when :network 
       message.network
-    when :user 
+    when :user, :my
       message.user
     when :channeluser 
       message.channeluser
@@ -297,7 +297,7 @@ module CCCB::Core::Bot
     end
 
     add_request :core, /^
-      \s* setting \s*
+      \s* setting \s+
       (?:
         (?<type>core|channel|network|user|channeluser|[^:]+?)
         ::
@@ -316,11 +316,33 @@ module CCCB::Core::Bot
         (?<value>.*?)
       )?
       \s*$
-    /x do |match, message|
+    /xi do |match, message|
       name = match[:setting]
         
       key = match[:key]
       user_setting( message, match[:type], name, key, match[:value] )
+    end
+
+    add_request :core, /^
+      \s* set \s+
+      (?:
+        (?<object> my | channel )
+      | 
+        (?<object> \#\S+ ) 's
+      )
+      (?:
+        \s+
+        (?<key> \S+)
+        (?: 
+          \s+
+          to
+          \s+
+          (?<value> .*? )
+        )?
+      )?
+      \s*$
+    /xi do |match, message|
+      user_setting( message, match[:object], "options", match[:key], match[:value] )
     end
 
     add_request :core, /^\s*reload\s*$/i do |match, message|
