@@ -39,6 +39,9 @@ if (ARGV.length>0)
   pp density
   #print "The probability that X<=5 is: "
   #print density<=5, "\n"
+
+  puts parser.roll
+  puts parser.output
 else
   print "Usage: test.rb <string>\n"
 end
