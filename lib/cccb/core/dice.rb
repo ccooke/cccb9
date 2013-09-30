@@ -180,7 +180,7 @@ class CCCB::DieRoller
     rolls.each do |entry|
       #p "EN:", entry, mode, compact
       if compact and entry[:type] != :roll and not batch.empty?
-        @message.network.msg @message.replyto, "==> #{batch.inspect}"
+        @message.reply "==> #{batch.inspect}"
         batch = []
       end
 
@@ -201,20 +201,21 @@ class CCCB::DieRoller
           batch << entry[:roll]
           next
         end
-        @message.network.msg @message.replyto, if mode == 'roll'
+        replytext = if mode == 'roll'
           "#{entry[:detail].join} ==> #{entry[:roll]}"
         end
+        @message.reply replytext
       when :pointbuy
-        @message.network.msg @message.replyto, "Point-buy equivalent: D&D #{entry[:dnd]}, Pathfinder #{entry[:pf]}"
+        @message.reply "Point-buy equivalent: D&D #{entry[:dnd]}, Pathfinder #{entry[:pf]}"
       when :reroll
-        @message.network.msg @message.replyto, "Roll ##{entry[:rerolls]}:"
+        @message.reply "Roll ##{entry[:rerolls]}:"
       when :note
-        @message.network.msg @message.replyto, "Note: #{entry[:text]}"
+        @message.reply "Note: #{entry[:text]}"
       when :literal
-        @message.network.msg @message.replyto, "#{entry[:text]}"
+        @message.reply "#{entry[:text]}"
       end
     end
-    @message.network.msg @message.replyto, "==> #{batch.inspect}" if batch.count > 0
+    @message.reply "==> #{batch.inspect}" if batch.count > 0
   end
 
   def point_buy_total(rolls)
@@ -578,7 +579,7 @@ module CCCB::Core::Dice
 
           list.select! { |l| l[:msg].user.id == user.id }
         elsif message.to_channel?
-          list.select! { |l| l[:msg].replyto.downcase == message.replyto.downcase }
+          list.select! { |l| l[:msg].replyto.id == message.replyto.id }
         end
         index = if match[:index] == 'last'
           0
@@ -625,12 +626,16 @@ module CCCB::Core::Dice
           "query"
         end
 
-        message.network.msg message.replyto, "#{ jinx }#{selected[:msg].nick} rolled #{selected[:expression].join("; ")} in #{location} on #{selected[:msg].time} and got: (m:#{mode})"
+        message.reply "#{ jinx }#{selected[:msg].nick} rolled #{selected[:expression].join("; ")} in #{location} on #{selected[:msg].time} and got: (m:#{mode})"
         CCCB::DieRoller.new(message).message_die_roll( message.nick, selected[:rolls], mode )
         nil
       else
         "I can't find that."
       end
+    end
+
+    add_request :dice_set, /^\s*set\s+(?<preset>\w+)(?:\s+(?<value>.*?))?\s*$/ do |match, message|
+      user_setting( message, :user, "roll_presets", match[:preset], match[:value] || "" )
     end
 
     add_request :dice, /^\s*forget\s+(?<name>\w+)/i do |match, message|
@@ -653,7 +658,7 @@ module CCCB::Core::Dice
           lru = message.user.persist[:dice_memory_saved].sort { |(n1,r1),(n2,r2)| r1[:access] <=> r2[:access] }
           if message.user.persist[:dice_memory_saved].count > 9
             message.user.persist[:dice_memory_saved].delete(lru.first[0])
-            message.network.msg message.replyto, "Deleted #{lru.first[0]}. #{lru[1][0]} will be deleted next"
+            message.reply "Deleted #{lru.first[0]}. #{lru[1][0]} will be deleted next"
           elsif message.user.persist[:dice_memory_saved].count == 9
             message.network.msg message.replyto, "#{lru.first[0]} will be deleted if you store one more"
           end
