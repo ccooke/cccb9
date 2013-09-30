@@ -1,4 +1,4 @@
-require_relative 'densities'
+require 'densities'
 require 'securerandom'
 require 'strscan'
 require 'pp'

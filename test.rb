@@ -1,6 +1,6 @@
-#!/usr/bin/ruby
+#!/usr/bin/ruby -Ilib
 
-require_relative 'dice'
+require  'd20code'
 
 if (ARGV.length>0)
   parser=(Dice::Parser.new ARGV[0].dup)
