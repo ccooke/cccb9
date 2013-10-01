@@ -64,7 +64,7 @@ module Dice
             number.send( @condition_test, @condition_num )
           end
           
-          def output(callbacks)
+          def output(callbacks, parser)
           end
         end
 
@@ -93,9 +93,9 @@ module Dice
             numbers
           end
           
-          def output(callbacks)
+          def output(callbacks, parser)
             output = @dropped.map do |die|
-              callbacks[:die].(self, die)
+              callbacks[:die].(parser, die)
             end
             "(unkept: #{output.join(", ")})"
           end
@@ -128,9 +128,9 @@ module Dice
             numbers
           end
 
-          def output(callbacks)
+          def output(callbacks, parser)
             output = @dropped.map do |die|
-              callbacks[:die].(self,die)
+              callbacks[:die].(parser,die)
             end
             "(dropped #{output.join(", ")})"
           end
@@ -255,7 +255,7 @@ module Dice
           end
           output << "]"
           if @modifiers.any? { |m| m.respond_to? :process }
-            output << @modifiers.map { |m| m.output( callbacks ) }
+            output << @modifiers.map { |m| m.output( callbacks, self ) }
           end
         end
         output
@@ -333,12 +333,16 @@ module Dice
 
     def initialize(string, options = {})
       @default = options[:default] || "+ 1d20"
-      string.gsub! /\s+/, ''
-      @default.gsub! /\s+/, ''
-      unless string.start_with? '+'
-        string = '+' + string
+      @default = @default.gsub(/\s+/, '')
+      unless @default.start_with? '-' or @default.start_with? '+'
+        @default = "+#{@default}"
       end
-      @string = string
+      expression = string.gsub /\s+/, ''
+      @default.gsub! /\s+/, ''
+      unless expression.start_with? '+'
+        expression = '+' + expression
+      end
+      @string = expression
       @terms = parse
     end
 
@@ -358,13 +362,14 @@ module Dice
     def tokenize_dice_expression
       items = tokenize(EXPRESSION, @string)
       if items.none? { |i| i[:die] }
-        items << EXPRESSION.match( @default )
+        items += tokenize( EXPRESSION, @default )
       end
-      items
+      items.compact
     end
 
     def parse
       tokenize_dice_expression.map do |term|
+        p term 
         if term[:constant_number]
           Number.new term[:constant_number].to_i, term[:mathlink]
         elsif term[:die]

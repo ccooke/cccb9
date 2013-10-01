@@ -119,7 +119,7 @@ module CCCB::Core::Bot
 
         object.set_setting(value, name, key)
       rescue Exception => e
-        debug "EXCEPTION: #{e} #{e.backtrace}"
+        verbose "EXCEPTION: #{e} #{e.backtrace}"
         return "Sorry, there's something wrong with the value '#{value_string}' (#{e})"
       end
     end

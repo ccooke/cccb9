@@ -157,21 +157,11 @@ class Density
   end
   
   # returns the probability that X<n, X>n, X<=n, X>=n
-  def <(n)
-    entries=@d.select { |k,v| k<n };
-    (entries.empty?) ? 0 : entries.values.inject(:+)
-  end
-  def >(n)
-    entries=@d.select { |k,v| k>n };
-    (entries.empty?) ? 0 : entries.values.inject(:+)
-  end
-  def <=(n)
-    entries=@d.select { |k,v| k<=n };
-    (entries.empty?) ? 0 : entries.values.inject(:+)
-  end
-  def >=(n)
-    entries=@d.select { |k,v| k>=n };
-    (entries.empty?) ? 0 : entries.values.inject(:+)
+  [ :<, :>, :<=, :>=, :== ].each do |sym|
+    define_method sym do |n|
+      entries=@d.select { |k,v| k.send( sym, n ) };
+      (entries.empty?) ? 0 : entries.values.inject(:+)
+    end
   end
 
   # returns the expecctation value

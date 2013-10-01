@@ -1,21 +1,8 @@
 require 'securerandom'
+require 'densities'
+require 'd20code'
 
 class CCCB::DieRoller
-
-  DICE_REGEX = /
-    \s*
-    (?:
-      ([-+])?
-      (\d+)
-    )?
-    (?:
-      d
-      (\d+|F)
-    )?
-    (!?)
-    (d(?:\d*)[hl]|r(\d+)(?:,(\d+)?)?)?
-    \s*
-  /ix
 
   def initialize(message)
     @message = message
@@ -29,149 +16,30 @@ class CCCB::DieRoller
     else
       :no_jinx
     end
+    @expression_cache = {}
   end
 
-  def dice_colour( max, rolls )
-    string = rolls.each_with_object("") do |roll,str| 
-      #p roll, str
-      if roll == 1
-        str << "\x03" + "041" + "\x0F,"
-      elsif roll > max
-        str << "\x03" + "03#{roll}" + "\x0F!,"
-      elsif roll == max
-        str << "\x03" + "11#{roll}" + "\x0F,"
-      else
-        str << "#{roll},"
-      end
-
+  def self.dice_colour( max, roll )
+    if roll == 1
+      "\x03" + "041" + "\x0F"
+    elsif roll > max
+      "\x03" + "03#{roll}" + "\x0F!"
+    elsif roll == max
+      "\x03" + "11#{roll}" + "\x0F"
+    else
+      roll
     end
-    #string.force_encoding("US-ASCII")
-    #p string
-    string.gsub!( /,$/, '' )
-    string
   end
 
-  def roll_die( die, explode = false )
-    debug "Jinx pending" if @dice_current_jinx != :no_jinx
-    roll = 0
-    loop do
-      r = if @dice_current_jinx != :no_jinx and SecureRandom.random_number( 2 ) == 0
-        debug "Jinxed"
-        @dice_current_jinx = :applied_jinx
-        SecureRandom.random_number( die.to_i / 2 ) + 1
-      else
-        SecureRandom.random_number( die.to_i ) + 1
-      end
-      roll += r
-      redo if explode and r == die.to_i
-      break
+  def self.is_expression?(expression)
+    begin
+      info "Is_expression? #{expression}"
+      !! Dice::Parser.new( expression )
+    rescue Dice::Parser::Error => e
+      false
+    rescue Dice::Parser::NoModifier => e
+      false
     end
-    roll
-  end
-
-  def apply_dice_modifier(mod,die,rolls,output)
-    if mod =~ /^d(\d+)?(h|l)$/
-      count = $1 ? $1.to_i : 1
-      count = count >= rolls.count ? rolls.count - 1 : count
-      drop = []
-      count.downto(1).each do
-        outlier = $2 == 'h' ? rolls.max : rolls.min
-        rolls.delete_at( rolls.index( outlier ) )
-        drop << outlier
-      end
-      output << "(drop #{dice_colour(die.to_i, drop)})"
-    elsif mod =~ /^r\d/
-      reroll ||= 1
-      reroll = reroll.to_i > die.to_i ? 0 : reroll
-      reroll_count ||= 1
-      reroll_count = reroll_count.to_i > 10 ? 10 : reroll_count
-      rerolls = []
-      rolls = rolls.map do |r|
-        debug "Roll: #{r}"
-        if r <= reroll.to_i
-          debug "Reroll!"
-          old_roll = r
-          limit = reroll_count.to_i
-          while r <= reroll.to_i and (limit -= 1) >= 0 
-            debug "#{limit} rerolls left"
-            old_r = r
-            r = roll_die(die, explode) 
-            debug "new roll: #{r}"
-            rerolls << [ old_r, r ]
-          end
-          r
-        else
-          r
-        end
-      end
-      unless rerolls.empty?
-        output << "(rerolls: " + rerolls.map { |(old,new)| "#{old}->#{new}" }.join(", ") + ")"
-      end
-      #p rolls
-    end
-    return rolls,output
-  end
-
-  def dice_string( string, default = "+1d20" )
-    #p string, default
-    total = 0
-    output = []
-    string.gsub! /\s*/, ''
-    string = "+#{string}" unless string.match /^[-+]/
-    unless string.match( /(?:#{DICE_REGEX})+/ )
-      return 0, [ "That wasn't (entirely?) a dice expression. I support expressions like '2d6 +3', '4d6 dl' or '+5' (I'll assume d20+5 for the last one)" ]
-    end
-    scanned = string.scan( DICE_REGEX )
-    debug scanned.inspect
-    scanned.each do |(sign,count,die,explode,mod,reroll,reroll_count)|
-      next unless count or die
-      explode = ( explode == "!" )
-      spam [ sign, count, die, mod ].inspect
-      sign ||= '+'
-      if die.nil? and output.empty?
-        (total, output) = dice_string( default )
-      end
-
-      fudge_die = false
-      unless die.nil?
-        if die =~ /f/i
-          die = 6
-          fudge_die = true
-        end
-        return 0, [ "Sorry, no count over 200" ] if count.to_i > 200
-        return 0, [ "Sorry, no die over 1,000,000" ] if die.to_i > 1000000
-        count ||= 1
-        rolls = nil
-        value = 0
-        if fudge_die
-          rolls = [ (1..count.to_i).map { roll_die( die, false ) }.map { |r| 
-            if r <= 1 * die.to_i / 3
-              total -= 1
-              "-"
-            elsif r <= 2 * die.to_i / 3
-              " "
-            else
-              total += 1 
-              "+"
-            end
-          } ]
-          output << "#{sign}#{count}dF(#{rolls.join})"
-          value = rolls.join
-          total = sprintf("%+d", total)
-        else
-          rolls = (1..count.to_i).map { roll_die( die, explode ) }
-          output << "#{sign}#{count}d#{die}(#{dice_colour(die.to_i,rolls)})"
-          (rolls,output) = apply_dice_modifier(mod,die,rolls,output)
-          value = rolls.inject(:+)
-          total = total.send( sign.to_sym, value )
-        end
-      else
-        count ||= 0
-        total = total.send( sign.to_sym, count.to_i )
-        output << "#{sign}#{count}"
-      end
-    end
-    return total, output
   end
 
   def message_die_roll(nick, rolls, mode )
@@ -202,7 +70,7 @@ class CCCB::DieRoller
           next
         end
         replytext = if mode == 'roll'
-          "#{entry[:detail].join} ==> #{entry[:roll]}"
+          "#{entry[:detail]} ==> #{entry[:roll]}"
         end
         @message.reply replytext
       when :pointbuy
@@ -309,6 +177,25 @@ class CCCB::DieRoller
       end
     end
     new_expressions
+  end
+
+  def dice_string(expression, default)
+    parser = if @expression_cache.include? expression
+      @expression_cache[expression]
+    else
+      info "New parser: #{expression} with default #{default}"
+      @expression_cache[expression] = Dice::Parser.new( expression, default: default ) 
+    end
+    parser.roll
+    [ parser.value, parser.output( self.callbacks ) ]
+  end
+
+  def callbacks
+    {
+      die: Proc.new do |obj, roll|
+        CCCB::DieRoller.dice_colour( obj.size, roll )
+      end
+    }
   end
 
   def roll(expression, default, mode)
@@ -498,7 +385,6 @@ module CCCB::Core::Dice
       end
     end
 
-
     add_request :dice, /^\s*list\s+(?:(?:my|(\S+?)(?:'s))?\s+)?memories/i do |match,message| 
       if message.user.persist[:dice_memory_saved]
         memories = message.user.persist[:dice_memory_saved].sort { |(n1,r1),(n2,r2)| 
@@ -509,6 +395,32 @@ module CCCB::Core::Dice
       else
         "None."
       end
+    end
+
+    add_request :dice, /^
+      \s*
+      probability
+      \s+
+      (?<expression> .*? )
+      \s+
+      (?<symbol> < | = | > | >= | <= )
+      \s*
+      (?<number> \d+ )
+      \s*
+    /ix do |match, message|
+      parser = Dice::Parser.new( match[:expression], default: message.replyto.get_setting( "roll_presets", "default_die" ) )
+      
+      number = match[:number].to_i
+      sym = case match[:symbol]
+      when "="
+        :==
+      else
+        match[:symbol].to_sym
+      end
+
+      density = parser.density
+      rational = density.send(sym, number)
+      "Probability: %s (%.2f%%)" % [ rational.to_s, rational.to_f * 100 ]
     end
 
     add_request :dice, /^
@@ -641,7 +553,7 @@ module CCCB::Core::Dice
 
       hash.keys.each do |key|
         next if hash[key].nil?
-        if key =~ CCCB::DieRoller::DICE_REGEX and key =~ /\d*d\d+/
+        if CCCB::DieRoller.is_expression? key
           hash[key] = "=1; =map Cheat :-)"
         end
       end
