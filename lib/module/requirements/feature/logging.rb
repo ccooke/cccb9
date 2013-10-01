@@ -54,7 +54,7 @@ module Module::Requirements::Feature::Logging
 
   def module_load
   
-    logging.loglevel = VERBOSE
+    logging.loglevel = INFO
     if have_feature? :managed_threading
       logging.log_queue ||= Queue.new
     else

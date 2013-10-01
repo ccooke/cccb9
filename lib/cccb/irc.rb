@@ -153,6 +153,7 @@ class CCCB::Message
 
   module CMD_001
     def process
+      info "Connection established to #{self.network}"
       schedule_hook :connected, self.network
     end
   end

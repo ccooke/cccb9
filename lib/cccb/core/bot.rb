@@ -2,7 +2,7 @@ require 'json'
 
 module CCCB::Core::Bot
   extend Module::Requirements
-  needs :hooks, :reload, :call_module_methods, :managed_threading, :events, :persist, :settings
+  needs :hooks, :reload, :call_module_methods, :managed_threading, :events, :persist, :settings, :networking
   
   LOG_CONVERSATION    = "%(network) [%(replyto)]"
   LOG_GENERIC         = "%(network) %(raw)"
@@ -185,6 +185,7 @@ module CCCB::Core::Bot
     bot.commands = {}
 
     add_hook :core, :connected do |network|
+      info "CONNECTED #{network}"
       network.auto_join_channels.each do |channel|
         network.puts "JOIN #{Array(channel).join(" ")}"
       end
