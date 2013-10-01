@@ -192,6 +192,10 @@ class CCCB::DieRoller
 
   def callbacks
     {
+      fudge: Proc.new do |obj, roll|
+        info "Fudge called with #{obj}, #{roll}"
+        { -1 => :-, 0 => :" ", +1 => '+' }[roll]
+      end,
       die: Proc.new do |obj, roll|
         CCCB::DieRoller.dice_colour( obj.size, roll )
       end
@@ -399,7 +403,7 @@ module CCCB::Core::Dice
 
     add_request :dice, /^
       \s*
-      probability
+      prob(?:ability)?
       \s+
       (?<expression> .*? )
       \s+

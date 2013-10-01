@@ -241,14 +241,13 @@ module Dice
         @value.inject(:+)
       end
 
-      def output( callbacks )
+      def output( callbacks, callback_to_use = :die )
         output = [ @math_symbol ]
         if @value
           output << "["
           @value.each_with_index do |v,i|
-            callbacks[:die].( v, @size, @rolls[i] )
-            if callbacks.include? :die
-              output << callbacks[:die].( self, v )
+            if callbacks.include? callback_to_use
+              output << callbacks[callback_to_use].( self, v )
             else
               output << v
             end
@@ -263,14 +262,18 @@ module Dice
     end
 
     class FudgeDie < Die
-      def initialize(match)
+      def initialize(options = {})
+        options[:size] = 6
+        options[:modifiers] = []
         super
-        @modifiers = []
-        @size = 6
       end
       
       def roll_die
         [ -1, -1, 0, 0, +1, +1 ][ SecureRandom.random_number(@size) ]
+      end
+
+      def output( callbacks, callback_to_use = :fudge )
+        super( callbacks, callback_to_use )
       end
     end
 
