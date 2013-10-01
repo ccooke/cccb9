@@ -77,7 +77,7 @@ module Module::Requirements::Feature::Hooks
     end
 
     global_methods :schedule_hook, :run_hooks
-    ( 1 + self.servers.count ).times { add_hook_runner }
+    add_hook_runner
   end
 
   def add_hook_runner

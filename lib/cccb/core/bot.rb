@@ -175,6 +175,10 @@ module CCCB::Core::Bot
     set_setting true, "options", "join_on_invite"
     set_setting true, "options", "bang_commands_enabled"
 
+    ( networking.networks.count * 2 + 1 ).times do
+      add_hook_runner
+    end
+
     add_setting_method :user, :superuser? do
       CCCB.instance.get_setting("superusers").include? self.from.to_s.downcase
     end
