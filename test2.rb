@@ -4,7 +4,8 @@ require  'd20code'
 
 if (ARGV.length>0)
   parser=(Dice::Parser.new ARGV[0].dup)
-  density=parser.density
+  parser2=(Dice::Parser.new ARGV[1].dup)
+  density= parser.density - parser2.density
 
   if (density.fail)
     print "The calculation was a failure!\n"
@@ -43,7 +44,7 @@ if (ARGV.length>0)
   puts parser.roll
   puts parser.output
 
-  p density > ARGV[1].to_f
+  p density > 0
 else
   print "Usage: test.rb <string>\n"
 end

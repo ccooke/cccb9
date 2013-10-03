@@ -405,25 +405,38 @@ module CCCB::Core::Dice
       \s*
       prob(?:ability)?
       \s+
-      (?<expression> .*? )
+      (?<expression1> .*? )
       \s+
-      (?<symbol> < | = | > | >= | <= )
+      (?<symbol> gt | eq | lt | le | ge )
       \s*
-      (?<number> \d+ )
+      (?<expression2> .*? )
       \s*
+      $
     /ix do |match, message|
-      parser = Dice::Parser.new( match[:expression], default: message.replyto.get_setting( "roll_presets", "default_die" ) )
-      
-      number = match[:number].to_i
-      sym = case match[:symbol]
-      when "="
-        :==
+      p match
+      default = if message.to_channel?
+        message.replyto.get_setting( "roll_presets", "default_die" )
       else
-        match[:symbol].to_sym
+        user.get_setting( "roll_presets", "default_die" )
+      end
+      parser1 = Dice::Parser.new( match[:expression1], default: default )
+     # parser2 = Dice::Parser.new( match[:expression2], default: default )
+      
+      sym = case match[:symbol]
+      when 'gt'
+        :>
+      when 'eq'
+        :==
+      when 'lt'
+        :<
+      when 'le'
+        :<=
+      when 'ge'
+        :>=
       end
 
-      density = parser.density
-      rational = density.send(sym, number)
+      density = parser1.density
+      rational = density.send(sym, match[:expression2].to_i)
       "Probability: %s (%.2f%%)" % [ rational.to_s, rational.to_f * 100 ]
     end
 

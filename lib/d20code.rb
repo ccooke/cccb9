@@ -57,7 +57,7 @@ module Dice
             else
               @condition_test = :==
             end
-            @condition_num  = match[:condition_number].to_i
+            @condition_num  = (match[:condition_number]||1).to_i
           end
 
           def reroll_with?(number)
@@ -145,7 +145,7 @@ module Dice
         @exploding = options[:exploding]
         @compounding = options[:compounding]
         @penetrating = options[:penetrating]
-        @count = options[:count]
+        @count = options[:count] > 100 ? 100 : options[:count]
         @string = options[:string]
         @value = nil
         @rolls = Hash.new(0)
@@ -321,9 +321,9 @@ module Dice
 
       (?<mathlink>        \+ | -                                                          ){0}
 
-      (?<die>    (?<count> \g<nonzero> ) d \g<die_size> \g<decoration>? \g<die_modifiers>?){0}
+      (?<die>    (?<count> \g<nonzero> )? d \g<die_size> \g<decoration>? \g<die_modifiers>?){0}
 
-      (?<constant>        (?<constant_number> \g<nonzero> )                               ){0}
+      (?<constant>        (?<constant_number> \d+ )                                       ){0}
 
       (?<dice_string>
         \g<die>
@@ -342,7 +342,7 @@ module Dice
       end
       expression = string.gsub /\s+/, ''
       @default.gsub! /\s+/, ''
-      unless expression.start_with? '+'
+      unless expression.start_with? '+' or expression.start_with? '-'
         expression = '+' + expression
       end
       @string = expression
@@ -383,7 +383,7 @@ module Dice
             math_symbol: term[:mathlink].to_sym,
             string: term[:dice_string],
             
-            count: term[:count].to_i,
+            count: (term[:count] || 1).to_i,
           }
           if term[:fudge]
             FudgeDie.new options
