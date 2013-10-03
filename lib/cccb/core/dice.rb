@@ -437,7 +437,12 @@ module CCCB::Core::Dice
 
       density = parser1.density - parser2.density
       rational = density.send(sym, 0)
-      "Probability: %s (%.2f%%)" % [ rational.to_s, rational.to_f * 100 ]
+
+      if density.exact
+        "Probability: %s (%.2f%%)" % [ rational.to_s, rational.to_f * 100 ]
+      else
+        "Probability: ~%.2f%% (exact results unavailable)" % [ rational.to_f * 100 ]
+      end
     end
 
     add_request :dice, /^
