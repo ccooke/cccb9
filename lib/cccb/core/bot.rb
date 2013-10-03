@@ -404,9 +404,14 @@ module CCCB::Core::Bot
       end
     end
 
-    add_request :core, /^reconnect$/ do |_, message|
+    add_request :core, /^reconnect(?:\s+(?<network>\w+))?\s*$/ do |match, message|
       next "Denied" unless message.user.superuser?
-      message.network.puts "QUIT Reconnecting"
+      network = if match[:network]
+        CCCB.instance.networking.networks[match[:network]]
+      else
+        message.network
+      end
+      network.puts "QUIT Reconnecting"
     end
   end
 
