@@ -4,7 +4,7 @@ require  'd20code'
 
 if (ARGV.length>0)
   parser=(Dice::Parser.new ARGV[0].dup)
-  parser2=(Dice::Parser.new ARGV[1].dup)
+  parser2=(Dice::Parser.new( ARGV[2].dup, default: "1d1" ))
   density= parser.density - parser2.density
 
   if (density.fail)
@@ -37,14 +37,26 @@ if (ARGV.length>0)
   print "The density plot is: "
   print density.plot
   print "The density is: "
-  pp density
+  p density
   #print "The probability that X<=5 is: "
   #print density<=5, "\n"
 
-  puts parser.roll
   puts parser.output
 
-  p density > 0
+  sign = case ARGV[1]
+  when 'eq'
+    :==
+  when 'gt'
+    :>
+  when 'lt'
+    :<
+  when 'le'
+    :<= 
+  when 'ge'
+    :>=
+  end
+
+  p density.send(sign, 0)
 else
   print "Usage: test.rb <string>\n"
 end

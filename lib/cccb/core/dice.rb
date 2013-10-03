@@ -420,7 +420,7 @@ module CCCB::Core::Dice
         user.get_setting( "roll_presets", "default_die" )
       end
       parser1 = Dice::Parser.new( match[:expression1], default: default )
-     # parser2 = Dice::Parser.new( match[:expression2], default: default )
+      parser2 = Dice::Parser.new( match[:expression2], default: "1d1" )
       
       sym = case match[:symbol]
       when 'gt'
@@ -435,7 +435,7 @@ module CCCB::Core::Dice
         :>=
       end
 
-      density = parser1.density
+      density = parser1.density - parser2.density
       rational = density.send(sym, match[:expression2].to_i)
       "Probability: %s (%.2f%%)" % [ rational.to_s, rational.to_f * 100 ]
     end
