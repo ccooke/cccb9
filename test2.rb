@@ -4,7 +4,7 @@ require  'd20code'
 
 if (ARGV.length>0)
   parser=(Dice::Parser.new ARGV[0].dup)
-  parser2=(Dice::Parser.new( ARGV[2].dup, default: "1d1" ))
+  parser2=(Dice::Parser.new( ARGV[2].dup, default: "+0" ))
   density= parser.density - parser2.density
 
   if (density.fail)
