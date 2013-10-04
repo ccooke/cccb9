@@ -38,52 +38,132 @@ module Dice
 
     class Die < Term
       class Modifier
-        def self.new(match)
+
+        def self.gen(match,size,modifiers)
           if match[:reroll]
-            Reroll.new(match)
+            obj = Reroll.new(match,size)
           elsif match[:keep]
-            Keep.new(match)
+            obj = Keep.new(match,size)
           elsif match[:drop]
-            Drop.new(match)
+            obj = Drop.new(match,size)
+          elsif match[:success] or match[:failure]
+            pre = modifiers.find { |m| m.is_a? Test }
+            if pre
+              pre.add_match(match, size)
+              return pre
+            else
+              obj = Test.new(match, size)
+            end
           else
             raise Dice::Parser::NoModifier.new( "No such modifier: #{match[0]}" )
           end
+          modifiers << obj
+          obj
         end
 
-        class Reroll
-          def initialize(match)
-            if match[:conditional] != ""
-              @condition_test = match[:conditional] == "=" ? :== : match[:conditional].to_sym
+        class Conditional < Modifier
+          def init_condition(test, num, default = :==)
+            if test.nil? or test == ""
+              @condition_test = default
             else
-              @condition_test = :==
+              @condition_test = test == "=" ? default : test.to_sym
             end
-            @condition_num  = (match[:condition_number]||1).to_i
+            @condition_num = num.to_i
+          end
+
+          def applies?(number)
+            number.send(@condition_test, @condition_num)
+          end
+        end
+
+        def process(input)
+          return input
+        end
+        alias_method :fun, :process
+
+        def output(callbacks, parser)
+        end
+
+        class Test < Modifier
+          def initialize(match,size)
+            @tests = []
+            add_match(match,size)
+          end
+
+          def add_match(match,size)
+            if match[:success]
+              @tests << Success.new( match[:conditional], match[:condition_number] || size, :>= )
+            else
+              @tests << Failure.new( match[:conditional], match[:condition_number] || size )
+            end
+          end
+
+          def process(input)
+            p input
+            input.map do |n|
+              if @tests.any? { |i| i.fail? n }
+                -1
+              elsif @tests.any? { |i| i.success? n }
+                1
+              else
+                0
+              end
+            end
+          end
+        end
+
+        class Success < Conditional
+          def initialize(cond,size,default = :==)
+            init_condition( cond, size, default )
+          end
+
+          def success?(number)
+            p self, number
+            applies?(number)
+          end
+
+          def fail?(number)
+            false
+          end
+        end
+
+        class Failure < Success
+          def success?(number)
+            false
+          end
+
+          def fail?(number)
+            p self, number
+            applies?(number)
+          end
+        end
+
+        class Reroll < Conditional
+          def initialize(match,size)
+            p match
+            init_condition( match[:conditional], match[:condition_number] || 1 )
           end
 
           def reroll_with?(number)
-            number.send( @condition_test, @condition_num )
+            applies? number
           end
           
           def output(callbacks, parser)
           end
         end
 
-        class Keep
+        class Keep < Modifier
           attr_reader :dropped
 
-          def initialize(match)
+          def initialize(match,size)
             @keep_number = match[:keep_num].nil? ? 1 : match[:keep_num].to_i
             @keep_method = match[:keep_lowest] ? :max : :min
             @dropped = []
           end
 
-          def fun(list)
-            list.sort! { |x,y| (@keep_method==(:max)) ? x<=>y : y<=>x }
-            newlist=list.shift(@keep_number)
-          end
-          
-          def process(numbers)
+          def process(input)
             @dropped = []
+            numbers = input.dup
             until numbers.count <= @keep_number
               remove = numbers.send(@keep_method)
               puts "Keep dropping #{remove}" if $DEBUG
@@ -101,23 +181,19 @@ module Dice
           end
         end
 
-        class Drop
+        class Drop < Modifier
           attr_reader :dropped
 
-          def initialize(match)
+          def initialize(match,size)
             @drop_number = match[:drop_num].nil? ? 1 : match[:drop_num].to_i
             @drop_method = match[:drop_lowest] ? :min : :max
             @dropped = []
           end
 
-          def fun(list)
-            list.sort! { |x,y| (@drop_method==(:min)) ? x<=>y : y<=>x}
-            newlist=list.drop(@drop_number);
-          end
-
-          def process(numbers)
+          def process(input)
             @dropped = []
             dropped = 0
+            numbers = input.dup
             until dropped == @drop_number or numbers.count == 0
               remove = numbers.send(@drop_method)
               puts "Dropping #{remove}" if $DEBUG
@@ -145,14 +221,30 @@ module Dice
         @exploding = options[:exploding]
         @compounding = options[:compounding]
         @penetrating = options[:penetrating]
+        @decorator_condition = options[:decorator_condition] == "=" ? :== : options[:decorator_condition].to_sym
+        @decorator_number = options[:decorator_number] || @size
         @count = options[:count] > 100 ? 100 : options[:count]
         @string = options[:string]
         @value = nil
         @rolls = Hash.new(0)
         @reroll_modifiers = @modifiers.select { |m| m.is_a? Modifier::Reroll }
         @fun_modifiers = @modifiers.select { |m| not (m.is_a? Modifier::Reroll) }
-        if (1..@size).all? { |r| @reroll_modifiers.any? { |m| m.reroll_with? r } }
+        safe = (1..@size).select { |r| @reroll_modifiers.none? { |m| m.reroll_with? r } }
+        if safe.empty?
           raise Dice::Parser::Error.new( "Invalid reroll rules: No die roll is possible" )
+        end
+        if safe.all? { |n| explode? n }
+          p self
+          raise Dice::Parser::Error.new( "Pathological expression: Reroll and Explode rules overlap" )
+        end
+      end
+
+      def explode?(number)
+        if @penetrating or @exploding or @compounding
+          p "explode? #{number}: ", [ @decorator_condition, @decorator_number ]
+          number.send(@decorator_condition, @decorator_number)
+        else 
+          false
         end
       end
 
@@ -201,7 +293,7 @@ module Dice
             number += this_roll
             puts "Rolled a #{this_roll}. Total is now #{number}" if $DEBUG
 
-            if this_roll == @size
+            if explode? this_roll
               if @penetrating
                 puts "Reroll(penetrate)" if $DEBUG
                 number -= 1
@@ -211,7 +303,7 @@ module Dice
                 throw :reroll          
               elsif @exploding 
                 puts "Reroll(explode)" if $DEBUG
-                count += 1
+                count += 1 if count < 100
               end
             end
             
@@ -230,9 +322,12 @@ module Dice
       end
 
       def process_modifiers(numbers)
+        p numbers
         @modifiers.each do |m|
           next unless m.respond_to? :process
+          p m
           numbers = m.process(numbers)
+          p numbers
         end
         numbers
       end
@@ -282,7 +377,7 @@ module Dice
     CONDITIONAL_BASE = %r{
       (?<conditional>     > | < | = |                                                     ){0}
       (?<nonzero>         [1-9]\d*                                                        ){0}
-      (?<condition>       \g<conditional> (?<condition_number> \g<nonzero> )              ){0}
+      (?<condition>       \g<conditional> \s* (?<condition_number> \g<nonzero> )          ){0}
     }x
 
     MODIFIERS = %r{
@@ -293,9 +388,11 @@ module Dice
       (?<drop_lowest>     dl | d                                                          ){0}
       (?<keep>            (\g<keep_lowest> | \g<keep_highest>) (?<keep_num> \g<nonzero> )?){0}
       (?<drop>            (\g<drop_highest> | \g<drop_lowest>) (?<drop_num> \g<nonzero> )?){0}
-      (?<reroll>          r \g<condition>?                                                ){0}
+      (?<failure>         f \s* \g<condition>?                                            ){0}
+      (?<success>         s \s* \g<condition>?                                            ){0}
+      (?<reroll>          r \s* \g<condition>?                                            ){0}
 
-      (?<die_modifier>    \g<drop> | \g<keep> | \g<reroll>                                ){0}
+      (?<die_modifier>    \g<drop> | \g<keep> | \g<reroll> | \g<success> | \g<failure>    ){0}
       (?<die_modifiers>   \g<die_modifier>*                                               ){0}
 
     }x
@@ -304,7 +401,7 @@ module Dice
       \G
       #{MODIFIERS}
       
-      \g<die_modifier>
+      \s* \g<die_modifier> \s*
     }x
 
     EXPRESSION = %r{
@@ -314,14 +411,16 @@ module Dice
       (?<penetrating>     !p                                                              ){0}
       (?<compounding>     !!                                                              ){0}
       (?<explode>         !                                                               ){0}
-      (?<decoration>      \g<compounding> | \g<penetrating> | \g<explode>                 ){0}
+      (?<dconditional>    \g<conditional>                                                 ){0}
+      (?<dcondition>      \g<dconditional> \s* (?<dcondition_number> \g<nonzero> )        ){0}
+      (?<decoration>      \g<compounding> | \g<penetrating> | \g<explode> \s* \g<dcondition>?     ){0}
   
       (?<fudge>           f                                                               ){0}
       (?<die_size>        \g<nonzero> | \g<fudge>                                         ){0}
 
       (?<mathlink>        \+ | -                                                          ){0}
 
-      (?<die>    (?<count> \g<nonzero> )? d \g<die_size> \g<decoration>? \g<die_modifiers>?){0}
+      (?<die>    (?<count> \g<nonzero> )? \s* d \s* \g<die_size> \s* \g<decoration>? \s* \g<die_modifiers>?){0}
 
       (?<constant>        (?<constant_number> \d+ )                                       ){0}
 
@@ -331,7 +430,7 @@ module Dice
         \g<constant>
       ){0}
 
-      \g<mathlink> \g<dice_string>
+      \s* \g<mathlink> \s* \g<dice_string> \s*
     }ix
 
     def initialize(string, options = {})
@@ -380,6 +479,8 @@ module Dice
             penetrating: !!term[:penetrating],
             compounding: !!term[:compounding],
             exploding: !!term[:explode],
+            decorator_condition: term[:dconditional] || '>=',
+            decorator_number: ( term[:dcondition_number] || term[:die_size] ).to_i,
             math_symbol: term[:mathlink].to_sym,
             string: term[:dice_string],
             
@@ -389,7 +490,8 @@ module Dice
             FudgeDie.new options
           else
             options[:size] = term[:die_size].to_i
-            options[:modifiers] = tokenize( MODIFIER_TERMS, term[:die_modifiers] ).map { |m| Die::Modifier.new( m ) }
+            options[:modifiers] = []
+            tokenize( MODIFIER_TERMS, term[:die_modifiers] ).map { |m| Die::Modifier.gen( m, options[:size], options[:modifiers] ) }
             Die.new options
           end
         end
