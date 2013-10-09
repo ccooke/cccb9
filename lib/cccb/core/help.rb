@@ -66,7 +66,8 @@ module CCCB::Core::Help
       :superuser
     )
 
-    CCCB::ContentServer.add_keyword_path('help') do |network,match|
+    CCCB::ContentServer.add_keyword_path('help') do |session,match|
+      network = session.network
       if match[:call] and help.topics.include? match[:call]
         {
           title: "Help topic: #{match[:call]}",
