@@ -728,7 +728,7 @@ class CCCB::Network
   end
 
   def inspect
-    "<Network:#{self}:CHAN=#{self.channels.keys.inspect};USERS=#{self.users.values.map(&:to_s).inspect}>"
+    "<Network:#{self}>"
   end
 
   def disconnect
