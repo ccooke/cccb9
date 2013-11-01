@@ -40,39 +40,56 @@ module Dice
       class Modifier
 
         def self.gen(match,size,modifiers)
+
+          sub = nil
+          subexpression = if match[:mod_subexpression]
+            sub = Dice::Parser.new( match[:mod_subexpression] )
+            sub.roll
+            sub.value
+          end
+
           if match[:reroll]
-            obj = Reroll.new(match,size)
+            obj = Reroll.new(match,size, subexpression)
           elsif match[:keep]
-            obj = Keep.new(match,size)
+            obj = Keep.new(match,size, subexpression)
           elsif match[:drop]
-            obj = Drop.new(match,size)
+            obj = Drop.new(match,size, subexpression)
           elsif match[:success] or match[:failure]
             pre = modifiers.find { |m| m.is_a? Test }
             if pre
-              pre.add_match(match, size)
+              pre.add_match(match, size, subexpression)
               return pre
             else
-              obj = Test.new(match, size)
+              obj = Test.new(match, size, subexpression)
             end
           else
             raise Dice::Parser::NoModifier.new( "No such modifier: #{match[0]}" )
           end
           modifiers << obj
+          obj.instance_variable_set :@subexpressions, sub
           obj
         end
 
         class Conditional < Modifier
-          def init_condition(test, num, default = :==)
+          def init_condition(test, num, subexpression = nil, default = :==)
             if test.nil? or test == ""
               @condition_test = default
             else
               @condition_test = test == "=" ? default : test.to_sym
             end
-            @condition_num = num.to_i
+            @condition_num = subexpression ? subexpression : num.to_i
           end
 
           def applies?(number)
             number.send(@condition_test, @condition_num)
+          end
+
+          def condition_to_s
+            "#{@condition_test == :== ? :"=" : @condition_test}#{@condition_num}"
+          end
+
+          def to_s
+            "#{ self.class.name.split('::').last[0].downcase }#{condition_to_s}"
           end
         end
 
@@ -85,16 +102,17 @@ module Dice
         end
 
         class Test < Modifier
-          def initialize(match,size)
+          def initialize(match,size, subexpression=nil)
             @tests = []
-            add_match(match,size)
+            add_match(match,size, subexpression)
           end
 
-          def add_match(match,size)
+          def add_match(match,size, subexpression=nil)
+            number = subexpression ? subexpression : match[:condition_number].to_i
             if match[:success]
-              @tests << Success.new( match[:conditional], match[:condition_number] || size, :>= )
+              @tests << Success.new( match[:conditional], number || size, :>= )
             else
-              @tests << Failure.new( match[:conditional], match[:condition_number] || size )
+              @tests << Failure.new( match[:conditional], number || size )
             end
           end
 
@@ -113,8 +131,8 @@ module Dice
         end
 
         class Success < Conditional
-          def initialize(cond,size,default = :==)
-            init_condition( cond, size, default )
+          def initialize(cond, size, subexpression = nil, default = :==)
+            init_condition( cond, size, subexpression, default )
           end
 
           def success?(number)
@@ -139,9 +157,10 @@ module Dice
         end
 
         class Reroll < Conditional
-          def initialize(match,size)
+          def initialize(match,size, subexpression)
+            number = subexpression ? subexpression : match[:condition_number].to_i
             p match
-            init_condition( match[:conditional], match[:condition_number] || 1 )
+            init_condition( match[:conditional], number || 1 )
           end
 
           def reroll_with?(number)
@@ -155,8 +174,9 @@ module Dice
         class Keep < Modifier
           attr_reader :dropped
 
-          def initialize(match,size)
-            @keep_number = match[:keep_num].nil? ? 1 : match[:keep_num].to_i
+          def initialize(match,size, subexpression)
+            number = subexpression ? subexpression : match[:keep_num].to_i
+            @keep_number = match[:keep_num].nil? ? 1 : number
             @keep_method = match[:keep_lowest] ? :max : :min
             @dropped = []
           end
@@ -179,13 +199,18 @@ module Dice
             end
             "(unkept: #{output.join(", ")})"
           end
+          
+          def to_s
+            "k#{@keep_method == :max ? 'l' : 'h' }#{@keep_number}"
+          end
         end
 
         class Drop < Modifier
           attr_reader :dropped
 
-          def initialize(match,size)
-            @drop_number = match[:drop_num].nil? ? 1 : match[:drop_num].to_i
+          def initialize(match,size, subexpression)
+            number = subexpression ? subexpression : match[:drop_num].to_i
+            @drop_number = match[:drop_num].nil? ? 1 : number
             @drop_method = match[:drop_lowest] ? :min : :max
             @dropped = []
           end
@@ -210,6 +235,10 @@ module Dice
             end
             "(dropped #{output.join(", ")})"
           end
+
+          def to_s
+            "d#{@drop_method == :max ? 'h' : 'l'}#{@drop_number}"
+          end
         end
       end
 
@@ -218,6 +247,9 @@ module Dice
         @math_symbol = options[:math_symbol].to_sym
         @modifiers = options[:modifiers]
         @size = options[:size]
+        if @size > 9999 
+          raise Dice::Parser::Error.new( "Invalid die: No more than 10,000 sides" )
+        end
         @exploding = options[:exploding]
         @compounding = options[:compounding]
         @penetrating = options[:penetrating]
@@ -245,6 +277,29 @@ module Dice
           number.send(@decorator_condition, @decorator_number)
         else 
           false
+        end
+      end
+
+      def decorator_condition
+        if @decorator_condition == :>= and @decorator_number == @size
+          ""
+        else
+          "#{@decorator_condition}#{@decorator_number}"
+        end
+      end
+
+      def decorators
+        if @penetrating or @exploding or @compounding
+          case
+          when @penetrating
+            '!p'
+          when @compounding
+            '!!'
+          when @exploding
+            '!'
+          end + decorator_condition
+        else
+          ""
         end
       end
 
@@ -332,12 +387,16 @@ module Dice
         numbers
       end
 
+      def modifiers
+        @modifiers.map(&:to_s).join(" ")
+      end
+
       def value
         @value.inject(:+)
       end
 
       def output( callbacks, callback_to_use = :die )
-        output = [ @math_symbol ]
+        output = [ to_s ]
         if @value
           output << "["
           @value.each_with_index do |v,i|
@@ -354,6 +413,11 @@ module Dice
         end
         output
       end
+
+      def to_s
+        "#{ @math_symbol }#{@count}d#{size}#{decorators}#{modifiers}"
+      end
+
     end
 
     class FudgeDie < Die
@@ -374,53 +438,38 @@ module Dice
 
     attr_reader :terms, :density
 
-    CONDITIONAL_BASE = %r{
+    EXPRESSION_BASE = %r{
       (?<conditional>     > | < | = |                                                     ){0}
-      (?<nonzero>         [1-9]\d*                                                        ){0}
-      (?<condition>       \g<conditional> \s* (?<condition_number> \g<nonzero> )          ){0}
-    }x
-
-    MODIFIERS = %r{
-      #{CONDITIONAL_BASE}
+      (?<paren_expression> \( (?: (?> [^()]+ ) | \g<paren_expression> )* \)               ){0}
+      (?<mod_nonzero>     [1-9]\d* | (?<mod_subexpression> \g<paren_expression> )         ){0}
+      (?<die_nonzero>     [1-9]\d* | (?<die_subexpression> \g<paren_expression> )         ){0}
+      (?<dc_nonzero>      [1-9]\d* | (?<dc_subexpression> \g<paren_expression> )          ){0}
+      (?<condition>       \g<conditional> \s* (?<condition_number> \g<mod_nonzero> )      ){0}
       (?<keep_highest>    kh | k                                                          ){0}
       (?<keep_lowest>     kl                                                              ){0}
       (?<drop_highest>    dh                                                              ){0}
       (?<drop_lowest>     dl | d                                                          ){0}
-      (?<keep>            (\g<keep_lowest> | \g<keep_highest>) (?<keep_num> \g<nonzero> )?){0}
-      (?<drop>            (\g<drop_highest> | \g<drop_lowest>) (?<drop_num> \g<nonzero> )?){0}
+      (?<keep>            (\g<keep_lowest> | \g<keep_highest>) (?<keep_num> \g<mod_nonzero> )?){0}
+      (?<drop>            (\g<drop_highest> | \g<drop_lowest>) (?<drop_num> \g<mod_nonzero> )?){0}
       (?<failure>         f \s* \g<condition>?                                            ){0}
       (?<success>         s \s* \g<condition>?                                            ){0}
       (?<reroll>          r \s* \g<condition>?                                            ){0}
 
       (?<die_modifier>    \g<drop> | \g<keep> | \g<reroll> | \g<success> | \g<failure>    ){0}
       (?<die_modifiers>   \g<die_modifier>*                                               ){0}
-
-    }x
-
-    MODIFIER_TERMS = %r{
-      \G
-      #{MODIFIERS}
-      
-      \s* \g<die_modifier> \s*
-    }x
-
-    EXPRESSION = %r{
-      \G
-      #{MODIFIERS}
-
       (?<penetrating>     !p                                                              ){0}
       (?<compounding>     !!                                                              ){0}
       (?<explode>         !                                                               ){0}
       (?<dconditional>    \g<conditional>                                                 ){0}
-      (?<dcondition>      \g<dconditional> \s* (?<dcondition_number> \g<nonzero> )        ){0}
+      (?<dcondition>      \g<dconditional> \s* (?<dcondition_number> \g<dc_nonzero> )        ){0}
       (?<decoration>      \g<compounding> | \g<penetrating> | \g<explode> \s* \g<dcondition>?     ){0}
   
       (?<fudge>           f                                                               ){0}
-      (?<die_size>        \g<nonzero> | \g<fudge>                                         ){0}
+      (?<die_size>        \g<die_nonzero> | \g<fudge>                                         ){0}
 
       (?<mathlink>        \+ | -                                                          ){0}
 
-      (?<die>    (?<count> \g<nonzero> )? \s* d \s* \g<die_size> \s* \g<decoration>? \s* \g<die_modifiers>?){0}
+      (?<die>    (?<count> \g<die_nonzero> )? \s* d \s* \g<die_size> \s* \g<decoration>? \s* \g<die_modifiers>?){0}
 
       (?<constant>        (?<constant_number> \d+ )                                       ){0}
 
@@ -430,12 +479,30 @@ module Dice
         \g<constant>
       ){0}
 
+      (?<dice_expression> \g<dice_string> (?: \s* \g<mathlink> \s* \g<dice_string> \s* )* ){0}
+    }ix
+
+    PAREN_EXPRESSION = %r{
+      #{EXPRESSION_BASE}
+      \s* \g<mathlink> \s* \g<paren_expression>
+    }ix
+
+    EXPRESSION = %r{
+      \G
+      #{EXPRESSION_BASE}
       \s* \g<mathlink> \s* \g<dice_string> \s*
+    }ix
+
+    MODIFIER_TERMS = %r{
+      \G
+      #{EXPRESSION_BASE}
+      \s* \g<die_modifier> \s*
     }ix
 
     def initialize(string, options = {})
       @default = options[:default] || "+ 1d20"
       @default = @default.gsub(/\s+/, '')
+      @subexpressions = []
       unless @default.start_with? '-' or @default.start_with? '+'
         @default = "+#{@default}"
       end
@@ -443,6 +510,10 @@ module Dice
       @default.gsub! /\s+/, ''
       unless expression.start_with? '+' or expression.start_with? '-'
         expression = '+' + expression
+      end
+      p expression
+      if PAREN_EXPRESSION.match( expression )
+        expression.gsub!( /^\s*([-+])\s*\(\s*(.*?)\s*\)\s*$/, "\\1\\2" )
       end
       @string = expression
       @terms = parse
@@ -472,15 +543,34 @@ module Dice
     def parse
       tokenize_dice_expression.map do |term|
         p term 
+        subexpression = if term[:die_subexpression]
+          sub = Dice::Parser.new(term[:die_subexpression])
+          @subexpressions << sub
+          sub.roll
+          sub.value
+        else
+          nil
+        end
+
         if term[:constant_number]
-          Number.new term[:constant_number].to_i, term[:mathlink]
+          constant = subexpression ? subexpression : term[:constant_number].to_i
+          Number.new constant, term[:mathlink]
         elsif term[:die]
+          die_size = subexpression ? subexpression : term[:die_size].to_i
+          condition_subexpression = if term[:dc_subexpression]
+            sub = Dice::Parser.new(term[:dc_subexpression])
+            @subexpressions << sub
+            sub.roll
+            sub.value
+          else
+            nil
+          end
           options = {
             penetrating: !!term[:penetrating],
             compounding: !!term[:compounding],
             exploding: !!term[:explode],
             decorator_condition: term[:dconditional] || '>=',
-            decorator_number: ( term[:dcondition_number] || term[:die_size] ).to_i,
+            decorator_number: ( condition_subexpression || term[:dcondition_number] || die_size ).to_i,
             math_symbol: term[:mathlink].to_sym,
             string: term[:dice_string],
             
@@ -489,7 +579,7 @@ module Dice
           if term[:fudge]
             FudgeDie.new options
           else
-            options[:size] = term[:die_size].to_i
+            options[:size] = die_size
             options[:modifiers] = []
             tokenize( MODIFIER_TERMS, term[:die_modifiers] ).map { |m| Die::Modifier.gen( m, options[:size], options[:modifiers] ) }
             Die.new options

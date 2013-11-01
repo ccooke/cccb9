@@ -74,7 +74,7 @@ class CCCB::DieRoller
         end
         @message.reply replytext
       when :pointbuy
-        @message.reply "Point-buy equivalent: D&D #{entry[:dnd]}, Pathfinder #{entry[:pf]}"
+        @message.reply "Point-buy equivalent: D&D #{entry[:dnd]}, D&D Next: #{entry[:dnd5e]}, Pathfinder #{entry[:pf]}"
       when :reroll
         @message.reply "Roll ##{entry[:rerolls]}:"
       when :note
@@ -124,7 +124,8 @@ class CCCB::DieRoller
         #puts "#{roll} #{total_pf}"
       end
     end
-    rolls << { type: :pointbuy, dnd: total_dnd, pf: total_pf }
+    total_dnd5e = total_pf + 12
+    rolls << { type: :pointbuy, dnd: total_dnd, dnd5e: total_dnd5e, pf: total_pf }
   end
 
   def get_dice_preset(name)
@@ -272,7 +273,7 @@ class CCCB::DieRoller
               next
             end
 
-            if expr =~ /^\s*=PB(?:\s*(dnd|d&d|pf|pathfinder)?\s*(>|=|<)\s*(-?\d+))?\s*$/i
+            if expr =~ /^\s*=PB(?:\s*(dnd|next|5e|d&d5e|d&dnext|d&d|pf|pathfinder)?\s*(>|=|<)\s*(-?\d+))?\s*$/i
               unless rolls.last[:type] == :pointbuy
                 point_buy_total(rolls)
               end
@@ -286,6 +287,10 @@ class CCCB::DieRoller
                   system = :pf
                   system_max = 102
                   system_min = -7 * 6
+                elsif $1 == '5e' or $1 == 'd&d5e' or $1 == 'next' or $1 == 'd&dnext'
+                  system = :dnd5e
+                  system_max = 114
+                  sysemt_min = -5 * 6
                 end
               
                 if limit >= system_max
@@ -537,7 +542,7 @@ module CCCB::Core::Dice
         end
 
         if user.persist[:dice_memory_saved] and user.persist[:dice_memory_saved].include? match[:memory]
-          user.persist[:dice_memory_saved][recall]
+          user.persist[:dice_memory_saved][match[:memory]]
         end
       end
 
@@ -581,6 +586,17 @@ module CCCB::Core::Dice
       end
     end
 
+    add_hook :dice, :pre_setting_set do |object, setting, hash|
+      next unless setting == "options"
+      next unless hash.include? "default_die"
+
+      if hash["default_die"] =~ /^\s*1?\s*d\s*(\d+)\s*$/
+        hash["default_die"] = "d#{$1}"
+      elsif not hash["default_die"].nil?
+        raise "Invalid default die: #{hash["default_die"]}"
+      end
+    end
+
     add_request :dice, /^\s*(?<keyword>set|preset)\s+(?!my|channel|#)(?<preset>\w+)(?!\s+\S+\s+to)(?:\s+(?<value>.*?))?\s*$/ do |match, message|
       if match[:keyword] == 'set'
         message.reply "Please use 'preset' instead of 'set' to define dice expression presets in future: this usage of 'set' is deprecated and will be removed later"
@@ -612,7 +628,7 @@ module CCCB::Core::Dice
           elsif message.user.persist[:dice_memory_saved].count == 9
             message.network.msg message.replyto, "#{lru.first[0]} will be deleted if you store one more"
           end
-          (message.user.persist[:dice_memory_saved] ||= {})[name] = message.user.persist[:dice_memory_saved]["current"]
+          (message.user.persist[:dice_memory_saved] ||= {})[preset] = message.user.persist[:dice_memory_saved]["current"]
           "Done."
         else
           "Sorry, I don't remember your roll"
