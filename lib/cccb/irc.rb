@@ -758,7 +758,18 @@ class CCCB::Network
       schedule_hook :login, self
     when :connected, :login
       loop do
-        if line = self.sock.gets
+        
+        line = nil
+        begin
+          Timeout.timeout(120) do
+            line = self.sock.gets
+          end
+        rescue Timeout::Error
+          puts "ISON #{self.nick}"
+          retry
+        end
+
+        if line
           begin
             # IRC protocol actually is dealt with from CCCB::Message.new
             spam "RAW #{line}"

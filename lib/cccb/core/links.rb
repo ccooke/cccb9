@@ -25,11 +25,13 @@ module CCCB::Core::Links
 
 
         begin
+          info "Connect to DB"
           dbh = DBI.connect(
             CCCB.instance.get_setting( "secure", "midnight_db_dbi" ),
             CCCB.instance.get_setting( "secure", "midnight_db_user" ),
             CCCB.instance.get_setting( "secure", "midnight_db_password" ),
           )
+          info "Connected to DB"
           q_pic = dbh.prepare("INSERT INTO image (link,poster,channel,NSFW,comment,date) VALUES (?,?,?,?,?,NOW())")
           q_lnk = dbh.prepare("INSERT INTO link (link,poster,channel,comment,date) VALUES (?,?,?,?,NOW())")
           q_vid = dbh.prepare("INSERT INTO video (id,source,poster,channel,comment,title,date) VALUES (?,?,?,?,?,?,NOW())")

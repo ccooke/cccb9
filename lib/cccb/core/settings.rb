@@ -17,18 +17,18 @@ module CCCB::Settings
       spam "Get #{self}.#{name} is transient"
       transient_storage
     end
-    debug "Getting setting #{self}.#{name} got #{settings.inspect}"
+    spam "Getting setting #{self}.#{name} got #{settings.inspect}"
     db = CCCB.instance.settings.db
 
     parent = if CCCB::SETTING_CASCADE.include? self.class
       CCCB::SETTING_CASCADE[self.class].call(self) 
     end
 
-    debug "get_setting( #{name}, #{key.inspect} ) on #{self}"
+    spam "get_setting( #{name}, #{key.inspect} ) on #{self}"
     cursor = if settings.include? name and !settings[name].nil?
       settings
     elsif db[self.class].include? name
-      debug "Defaulted #{name},#{key} on #{self}"
+      spam "Defaulted #{name},#{key} on #{self}"
       settings[name] = Marshal.load( Marshal.dump( setting_option(name, :default) ) )
       settings
     else
@@ -75,7 +75,7 @@ module CCCB::Settings
       spam "Set #{self}.#{name} is transient"
       transient_storage
     end
-    debug "Setting setting #{self}.#{name} got #{cursor.inspect}"
+    spam "Setting setting #{self}.#{name} got #{cursor.inspect}"
     saved_name = name
     translation = {}
     return_val = if key
@@ -84,18 +84,18 @@ module CCCB::Settings
       run_hooks :pre_setting_set, self, name, temp, translation, throw_exceptions: true
       temp.each do |k,v|
         if v.nil?
-          debug "Deleting #{self}.#{name}[#{k}]"
+          spam "Deleting #{self}.#{name}[#{k}]"
           cursor.delete k
           new_value = get_setting(name,k)
           schedule_hook :setting_set, self, saved_name, key, current, new_value
         else
-          debug "Setting #{self}.#{name}[#{k}] = #{v}"
+          spam "Setting #{self}.#{name}[#{k}] = #{v}"
           cursor[k] = v
         end
       end
     else
       run_hooks :pre_setting_set, self, name, value, translation, throw_exceptions: true
-      debug "Setting #{self}.#{name} = #{value.inspect}"
+      spam "Setting #{self}.#{name} = #{value.inspect}"
       cursor[name] = value
       translation
     end

@@ -1,4 +1,5 @@
 require 'thread'
+require 'yaml'
 
 module Module::Requirements::Feature::Hooks
   class NoFeature < Exception; end
@@ -30,6 +31,7 @@ module Module::Requirements::Feature::Hooks
   end
 
   def run_hooks hook, *args
+    hook_stat :run_hooks, hook, args
     unless hooks.db.include? hook
       hooks.db[ hook ] = []
     end
@@ -47,23 +49,48 @@ module Module::Requirements::Feature::Hooks
       end
     end
     spam "hooks: #{hook}->(#{args.join(", ")})"
+    hook_debug = []
+    hook_stat :hooks_visited, hook_debug
     while hook_list.count > 0
       item = hook_list.shift
       next if args.any? { |a|
         a.respond_to? :select_hook_feature? and ! a.select_hook_feature?(item[:feature])
       }
       spam "RUN: #{ item[:feature] }:#{ hook }->( #{args} )"
+      hook_debug << [ Time.now, item ]
       item[:code].call( *args )
     end
   end
 
+  def hook_stat_dump
+    warning "DUMPING HOOK STATE: "
+    warning hooks.stats.to_yaml
+  end
+
   def module_load
+
+    dump_hook_stats = false
+
+    Signal.trap("USR1") do
+      dump_hook_stats = true
+    end
 
     hooks.db = {}
     hooks.queue ||= Queue.new
     hooks.runners = 0
     hooks.lock ||= Mutex.new
     hooks.features = {}
+    hooks.stats = {}
+
+    ManagedThread.new :hook_stats do
+      loop do
+        sleep 1
+        if dump_hook_stats 
+          hook_stat_dump
+          dump_hook_stats = false
+        end
+      end
+    end
 
     add_hook :core, :exception do |exception|
       begin 
@@ -80,15 +107,28 @@ module Module::Requirements::Feature::Hooks
     add_hook_runner
   end
 
+  def hook_stat( name, *args )
+    hooks.stats[name] ||= {}
+    hooks.stats[name][Thread.current] = {
+      time: Time.now,
+      args: args
+    }
+  end
+
   def add_hook_runner
     hooks.lock.synchronize do
-      hooks.runners += 1
+      hook_id = (hooks.runners += 1)
       ManagedThread.new :"hook_runner_#{hooks.runners}" do
+        hook_stat :runner_id, hook_id
         loop do
           begin
+            hook_stat :current, :waiting
             (hook_to_run, args) = hooks.queue.pop
+            hook_stat :current, :processing, hook_to_run, args
             run_hooks hook_to_run, *args
           rescue Exception => e
+            hook_stat :exception, 
+            stats[:current] = [ :exception, Time.now, e ]
             run_hooks :exception, e
           end
         end

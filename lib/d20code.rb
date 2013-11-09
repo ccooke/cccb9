@@ -117,7 +117,7 @@ module Dice
           end
 
           def process(input)
-            p input
+            #p input
             input.map do |n|
               if @tests.any? { |i| i.fail? n }
                 -1
@@ -136,7 +136,7 @@ module Dice
           end
 
           def success?(number)
-            p self, number
+            #p self, number
             applies?(number)
           end
 
@@ -151,7 +151,7 @@ module Dice
           end
 
           def fail?(number)
-            p self, number
+            #p self, number
             applies?(number)
           end
         end
@@ -159,7 +159,7 @@ module Dice
         class Reroll < Conditional
           def initialize(match,size, subexpression)
             number = subexpression ? subexpression : match[:condition_number].to_i
-            p match
+            #p match
             init_condition( match[:conditional], number || 1 )
           end
 
@@ -266,14 +266,14 @@ module Dice
           raise Dice::Parser::Error.new( "Invalid reroll rules: No die roll is possible" )
         end
         if safe.all? { |n| explode? n }
-          p self
+          #p self
           raise Dice::Parser::Error.new( "Pathological expression: Reroll and Explode rules overlap" )
         end
       end
 
       def explode?(number)
         if @penetrating or @exploding or @compounding
-          p "explode? #{number}: ", [ @decorator_condition, @decorator_number ]
+          #p "explode? #{number}: ", [ @decorator_condition, @decorator_number ]
           number.send(@decorator_condition, @decorator_number)
         else 
           false
@@ -377,12 +377,12 @@ module Dice
       end
 
       def process_modifiers(numbers)
-        p numbers
+        #p numbers
         @modifiers.each do |m|
           next unless m.respond_to? :process
-          p m
+          #p m
           numbers = m.process(numbers)
-          p numbers
+          #p numbers
         end
         numbers
       end
@@ -441,9 +441,10 @@ module Dice
     EXPRESSION_BASE = %r{
       (?<conditional>     > | < | = |                                                     ){0}
       (?<paren_expression> \( (?: (?> [^()]+ ) | \g<paren_expression> )* \)               ){0}
-      (?<mod_nonzero>     [1-9]\d* | (?<mod_subexpression> \g<paren_expression> )         ){0}
-      (?<die_nonzero>     [1-9]\d* | (?<die_subexpression> \g<paren_expression> )         ){0}
-      (?<dc_nonzero>      [1-9]\d* | (?<dc_subexpression> \g<paren_expression> )          ){0}
+      (?<mod_nonzero>     [0-9]\d* | (?<mod_subexpression> \g<paren_expression> )         ){0}
+      (?<die_nonzero>     [0-9]\d* | (?<die_subexpression> \g<paren_expression> )         ){0}
+      (?<dc_nonzero>      [0-9]\d* | (?<dc_subexpression> \g<paren_expression> )          ){0}
+      (?<con_nonzero>      [0-9]\d* | (?<con_subexpression> \g<paren_expression> )          ){0}
       (?<condition>       \g<conditional> \s* (?<condition_number> \g<mod_nonzero> )      ){0}
       (?<keep_highest>    kh | k                                                          ){0}
       (?<keep_lowest>     kl                                                              ){0}
@@ -461,17 +462,17 @@ module Dice
       (?<compounding>     !!                                                              ){0}
       (?<explode>         !                                                               ){0}
       (?<dconditional>    \g<conditional>                                                 ){0}
-      (?<dcondition>      \g<dconditional> \s* (?<dcondition_number> \g<dc_nonzero> )        ){0}
+      (?<dcondition>      \g<dconditional> \s* (?<dcondition_number> \g<dc_nonzero> )     ){0}
       (?<decoration>      \g<compounding> | \g<penetrating> | \g<explode> \s* \g<dcondition>?     ){0}
   
       (?<fudge>           f                                                               ){0}
-      (?<die_size>        \g<die_nonzero> | \g<fudge>                                         ){0}
+      (?<die_size>        \g<die_nonzero> | \g<fudge>                                     ){0}
 
       (?<mathlink>        \+ | -                                                          ){0}
 
       (?<die>    (?<count> \g<die_nonzero> )? \s* d \s* \g<die_size> \s* \g<decoration>? \s* \g<die_modifiers>?){0}
 
-      (?<constant>        (?<constant_number> \d+ )                                       ){0}
+      (?<constant>        (?<constant_number> \g<con_nonzero> )                           ){0}
 
       (?<dice_string>
         \g<die>
@@ -511,7 +512,7 @@ module Dice
       unless expression.start_with? '+' or expression.start_with? '-'
         expression = '+' + expression
       end
-      p expression
+      #p expression
       if PAREN_EXPRESSION.match( expression )
         expression.gsub!( /^\s*([-+])\s*\(\s*(.*?)\s*\)\s*$/, "\\1\\2" )
       end
@@ -542,7 +543,7 @@ module Dice
 
     def parse
       tokenize_dice_expression.map do |term|
-        p term 
+        #p term 
         subexpression = if term[:die_subexpression]
           sub = Dice::Parser.new(term[:die_subexpression])
           @subexpressions << sub
@@ -562,8 +563,12 @@ module Dice
             @subexpressions << sub
             sub.roll
             sub.value
-          else
-            nil
+          end
+          count_subexpression = if term[:con_subexpression]
+            sub = Dice::Parser.new(term[:con_subexpression])
+            @subexpression << sub
+            sub.roll
+            sub.value
           end
           options = {
             penetrating: !!term[:penetrating],
@@ -574,7 +579,7 @@ module Dice
             math_symbol: term[:mathlink].to_sym,
             string: term[:dice_string],
             
-            count: (term[:count] || 1).to_i,
+            count: (count_subexpression || term[:count] || 1).to_i,
           }
           if term[:fudge]
             FudgeDie.new options

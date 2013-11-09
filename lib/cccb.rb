@@ -29,6 +29,8 @@ require 'cccb/core/session'
 require 'cccb/core/ops'
 require 'cccb/core/packages'
 require 'cccb/core/yarn'
+require 'cccb/core/pom'
+require 'cccb/core/auto-reconnect'
 
 class String
   include String::Keyreplace
