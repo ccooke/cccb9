@@ -34,18 +34,30 @@ class CCCB::ContentServer
 
     delay = 1
     10.times do
-      @@server = WEBrick::HTTPServer.new(
+      options = { 
         Port: CCCB.instance.get_setting( "http_server", "port" ),
         DoNotReverseLookup: true,
         SSLEnable: true,
-        SSLCertName: [ %w{ CN localhost } ],
         AccessLog: [
           [ 
             CCCB::Logger,
             "WWW %a GET %U -> %s %b bytes"
           ]
         ]
-      )
+      }
+      if cert_file = CCCB.instance.get_setting("http_server", "cert_file")
+        options[:SSLCertificate] = OpenSSL::X509::Certificate.new File.read(cert_file)
+      end
+      if key_file = CCCB.instance.get_setting("http_server", "cert_key")
+        options[:SSLPrivateKey] = OpenSSL::PKey::RSA.new File.read(key_file)
+      end
+      unless options.include? :SSLCertificate and options.include? :SSLPrivateKey
+        options.delete( :SSLCertificate )
+        options.delete( :SSLPrivateKey )
+        options[:SSLCertName] = [ %w{ CN localhost } ]
+      end
+        
+      @@server = WEBrick::HTTPServer.new options
       break if @@server
       error "HTTP server did not start - sleeping a few seconds before retrying"
       sleep delay
@@ -66,6 +78,7 @@ class CCCB::ContentServer
 	def self.request(req,res)
     cccb = CCCB.instance
     session = nil
+    network = nil
 
     if match = %r{^(?<cp>/network/(?<network>[^/]+))(?<path>.*)$}.match( req.path )
       debug "Req.path #{req.path.inspect} replace with #{match[:path]}"
@@ -77,22 +90,23 @@ class CCCB::ContentServer
       raise "No such network" if network.nil?
 
       session_cookie = req.cookies.find { |c| c.name == match[:cp] }
-      key = req.remote_ip + ':' + session_cookie.value
-      session = network.get_setting( "web_sessions", key )
+      if session_cookie.nil?
+        session = nil
+      else
+        key = req.remote_ip + ':' + session_cookie.value
+        session = CCCB.instance.get_setting( "web_sessions", key )
+      end
 
       if session.nil?
         sid = SecureRandom.uuid
         key = req.remote_ip + ':' + sid
         info "New (or expired) session #{key}"
         session = OpenStruct.new
-        network.set_setting( session, "web_sessions", key )
+        CCCB.instance.set_setting( session, "web_sessions", key )
         res.cookies << WEBrick::Cookie.new( match[:cp], sid )
       end
-
-      session.network = network
     else
       session = OpenStruct.new
-      session.network = false
     end
 
     session.addr = req.remote_ip
@@ -105,7 +119,8 @@ class CCCB::ContentServer
 				req.send(send)
 			end
 			if match = matcher.match( match_object )
-				block.call( session, match, req, res )
+        
+				block.call( network, session, match, req, res )
         return
 			end
 		end
@@ -117,8 +132,8 @@ class CCCB::ContentServer
 	end
 
   def self.add_keyword_path( keyword, &block )
-    add_path %r{^/#{keyword}(?:/(?<call>.*))?$}, :path do |network,match,req,res|
-      hash = block.call(network, match)
+    add_path %r{^/#{keyword}(?:/(?<call>.*))?$}, :path do |network,session,match,req,res|
+      hash = block.call(network, session, match)
       template = hash[:template] || 'default'
       if template == :plain_text
         res["Content-type"] = "text/plain"
@@ -141,7 +156,7 @@ module CCCB::Core::HTTPServer
     add_setting :core, "http_server"
     add_setting :core, "web"
     add_setting :network, "web"
-    add_setting :network, "web_sessions", persist: false
+    add_setting :core, "web_sessions", persist: false
     set_setting( 9000, "http_server", "port" ) unless get_setting( "http_server", "port" )
     set_setting( "http://localhost:9000", "http_server", "url" ) unless get_setting( "http_server", "url" )
     set_setting( 15, "web", "session_expire" ) unless get_setting( "http_server", "session_expire" )
@@ -156,7 +171,7 @@ module CCCB::Core::HTTPServer
       run = Time.now
       CCCB.instance.networking.networks.each do |name, network|
         expiry = network.get_setting( "web", "session_expire" ).to_f
-        sessions = network.get_setting("web_sessions")
+        sessions = CCCB.instance.get_setting("web_sessions")
         sessions.each do |sid, session|
           if session.time + expiry < run 
             info "Expire session #{sid}"
@@ -183,7 +198,7 @@ module CCCB::Core::HTTPServer
       }
     end
 
-    CCCB::ContentServer.add_keyword_path('status') do |session,match,req,res|
+    CCCB::ContentServer.add_keyword_path('status') do |network,session,match,req,res|
       {
         title: "Status for #{session.network.name}",
         blocks: [

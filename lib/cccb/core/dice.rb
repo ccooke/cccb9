@@ -654,6 +654,7 @@ module CCCB::Core::Dice
     )
 
     add_help(
+      :dice,
       "dice_commands",
       "roll, dmroll, qroll, etc",
       [
@@ -664,6 +665,7 @@ module CCCB::Core::Dice
       :info
     )
     add_help(
+      :dice,
       "dice_exp_simple",
       "roll, dmroll, qroll, etc",
       [
@@ -683,6 +685,7 @@ module CCCB::Core::Dice
       :info
     )
     add_help(
+      :dice,
       "dice_exp_complex",
       "roll, dmroll, qroll, etc",
       [
@@ -698,18 +701,20 @@ module CCCB::Core::Dice
       :info
     )
     add_help(
+      :dice,
       "roll_presets",
       "roll, dmroll, qroll, etc",
       [
-        "!set <name> <value>",
+        "!preset <name> <value>",
         "  sets <name> as a preset, which can be used in an expression",
-        "!set <name>",
+        "!preset <name>",
         "  unsets <name> for your user",
       ],
       :info
     )
 
     add_help(
+      :dice,
       "dice_memory",
       "Recalling and storing rolls",
       [

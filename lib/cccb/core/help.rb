@@ -66,32 +66,42 @@ module CCCB::Core::Help
       :superuser
     )
 
-    CCCB::ContentServer.add_keyword_path('help') do |session,match|
-      network = session.network
-      if match[:call] and help.topics.include? match[:call]
+    CCCB::ContentServer.add_keyword_path('help') do |network,session,match|
+      features = network.get_setting("allowed_features")
+      url = "/help/"
+      local_topics = if network
+        url = "/network/#{network.name}/help/"
+        local_topics = help.topics.each_with_object({}) do |(name,topic),hash| 
+          hash[name] = topic if features.include? topic[:feature].to_s
+        end
+      else
+        help.topics
+      end
+
+      if match[:call] and local_topics.include? match[:call]
         {
           title: "Help topic: #{match[:call]}",
           blocks: [
             [ :content, 
-              help.topics[match[:call].to_s][:text].map { |line|
+              local_topics[match[:call].to_s][:text].map { |line|
                 line = CGI::escapeHTML(line)
                 line.split(/\s+/).map { |word|
-                  if help.topics.include? word
-                    "<a href=\"/help/#{word}\">#{word}</a>"
+                  if local_topics.include? word
+                    "<a href=\"#{url}#{word}\">#{word}</a>"
                   else
                     word
                   end
                 }.join(" ")
               }.join("<br/>")
             ],
-            [ :nav, "Return to <a href=\"/help\">index</a>" ],
+            [ :nav, "Return to <a href=\"#{url}\">index</a>" ],
           ]
         }
       else
         {
           title: "Index of help pages",
           template: :help_index,
-          topics: help.topics
+          topics: local_topics
         }
       end
     end

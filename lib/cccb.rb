@@ -31,6 +31,8 @@ require 'cccb/core/packages'
 require 'cccb/core/yarn'
 require 'cccb/core/pom'
 require 'cccb/core/auto-reconnect'
+require 'cccb/core/treasure'
+
 
 class String
   include String::Keyreplace
