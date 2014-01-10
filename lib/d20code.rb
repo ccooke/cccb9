@@ -566,8 +566,9 @@ module Dice
           end
           count_subexpression = if term[:con_subexpression]
             sub = Dice::Parser.new(term[:con_subexpression])
-            @subexpression << sub
+            @subexpressions << sub
             sub.roll
+            p "Found a constant subexpression: ", sub
             sub.value
           end
           options = {
