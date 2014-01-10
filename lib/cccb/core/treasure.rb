@@ -63,6 +63,38 @@ class DND5eTreasure
         (30..32) => [ "very rare magic item", 1, 1 ],
         (33..100) => [ "legendary magic item", 1, 1 ]
       }
+    },
+    "hoard" => {
+      copper: {
+        (8..100) => [ "copper piece", 2, 10, 100 ]
+      },
+      silver_electrum: {
+        (7..16) => [ "silver piece", 2, 10, 10 ],
+        (17..100) => [ "electrum piece", 1, 10, 100 ]
+      },
+      gold: {
+        (12..100) => [ "gold piece", 1, 10, 10 ]
+      },
+      platinum: {
+        (16..100) => [ "platinum piece", 2, 10 ]
+      },
+      gems: {
+        (13..22) => [ "ornamental gem", 2, 10 ],
+        (23..26) => [ "semiprecious gem", 2, 10 ],
+        (27..100) => [ "precious gem", 2, 10 ],
+      },
+      art: {
+        (23..26) => [ "decorative art object", 2, 10 ],
+        (27..100) => [ "fine art object", 2, 8 ],
+      },
+      magic_items: {
+        (16..21) => [ "Common potion", 2, 4 ],
+        (22..24) => [ "uncommon magic item", 1, 3 ],
+        (25..27) => [ "rare magic item", 1, 2 ],
+        (28..30) => [ "very rare magic item", 1, 1 ],
+        (31..35) => [ "legendary magic item", 1, 1 ],
+        (36..100) => [ "artifact", 1, 1 ]
+      },
     }
   }
 
@@ -169,17 +201,17 @@ class DND5eTreasure
           "Carved ivory statuette",
           "Finely-wrought small gold bracelet",
           "Cloth-of-gold vestment",
-          "Black velvet mask with numerous citrines",
-          "Silver chalice with lapis lazuli gem"
+          "Black velvet mask% with numerous citrines",
+          "Silver chalice% with lapis lazuli gem"
         ]
       },
       (13..20) => {
         value: [ 3, 6, 10 ],
         names: [
           "Large well-done wool tapestry",
-          "Brass mug with jade inlay",
-          "Silver comb with moonstone",
-          "Silver-plated steel longsword with jet jewel in hilt"
+          "Brass mug% with jade inlay",
+          "Silver comb% with moonstone",
+          "Silver-plated steel longsword% with jet jewel in hilt"
         ]
       }
     },
@@ -187,42 +219,41 @@ class DND5eTreasure
       (1..9) => {
         value: [ 1, 6, 100 ],
         names: [
-          "Carved harp of exotic wood with ivory inlay and zircon gem",
-          "Solid gold idol (10lb)",
-          "Gold dragon comb with red garnet eye",
+          "Carved harp% of exotic wood with ivory inlay and zircon gem",
+          "Solid gold idol% (10lb)",
+          "Gold dragon comb% with red garnet eye%",
           "Gold and topaz bottle stopper cork",
-          "Ceremonial electrum dagger with a star ruby in the pommel"
+          "Ceremonial electrum dagger% with a star ruby in the pommel"
         ]
       },
       (10..16) => {
         value: [ 1, 10, 100 ],
         names: [
-          "Eye patch with mock eye of sapphire and moonstone",
-          "Fire opal pendant on a fine gold chain",
+          "Eye patch&% with mock eye of sapphire and moonstone",
+          "Fire opal pendant% on a fine gold chain",
           "Old masterpiece painting",
-          "Embroidered silk and velvet mantel with numerous moonstones",
-          "Sapphire pendant on a gold chain",
+          "Embroidered silk and velvet mantel% with numerous moonstones",
+          "Sapphire pendant% on a gold chain",
           "Embroidered and bejeweled glove",
           "Jeweled anklet",
-          "Gold music box"
+          "Gold music box&%"
         ]
       },
       (17..20) => {
         value: [ 2, 6, 100 ],
         names: [
-          "Golden circlet with four aquamarines",
-          "A string of small pink pearls",
-          "Jeweled gold crown",
-          "Jeweled electrum ring",
-          "Gold and ruby ring",
-          "Gold cup set with emeralds"
+          "Golden circlet% with four aquamarines",
+          "String% of small pink pearls",
+          "Jeweled gold crown%",
+          "Jeweled electrum ring%",
+          "Gold and ruby ring%",
+          "Gold cup% set with emeralds"
         ]
       }
     }
   }
 
-  def self.generate_treasure(hash, level, modifier)
-    treasure = {}
+  def self.generate_treasure(hash, level, modifier, treasure = {})
     hash.each do |item_type, ranges|
       puts "Calculating for #{item_type}" if $VERBOSE
       type_roll = roll(1,20) + level + modifier
@@ -261,9 +292,19 @@ class DND5eTreasure
 
   def self.generate(type, level)
     treasure = DND5eTreasure.generate_treasure( DND5eTreasure::TREASURE_TABLES[type], level, 0 )
+    if type == "hoard" 
+      treasure = DND5eTreasure.generate_treasure( DND5eTreasure::TREASURE_TABLES[type], level, 0, treasure )
+    end
     p treasure if $VERBOSE
     output = []
     treasure.sort_by { |(t,c)| c[:type] }.each do |t,c|
+      plural = if t.match /\%/
+        tmp = t.gsub /\%/, 's'
+        tmp.gsub /\&/, 'e'
+      else
+        t + 's'
+      end
+      single = t.gsub /[%&]/, ''
       if treasure.count { |(_t,_c)| _c[:type] == c[:type] } > 1
         if type != c[:type]
           total_value = treasure.select { |_t,_c| _c[:type] == c[:type] }.inject(0) { |memo,(_t,_c)| memo += _c[:special].inject(:+) }
@@ -276,14 +317,14 @@ class DND5eTreasure
       type = c[:type]
 
       if c[:special].count > 1
-        output << "#{ "  " * indent}#{c[:number]} #{t}#{c[:number] > 1 ? 's' : ''} (worth #{c[:special].inject(:+)} gold pieces)"
+        output << "#{ "  " * indent}#{c[:number]} #{c[:number] > 1 ? plural : single} (worth #{c[:special].inject(:+)} gp)"
         c[:special].each_with_object(Hash.new(0)) { |v,h| h[v] += 1 }.sort_by { |(k,v)| v }.each do |v,count|
           output << "#{"  " * (indent + 1)}#{count} x #{v} gp"
         end
       elsif c[:special].count == 1
-        output << "#{"  " * (indent)}#{c[:number]} #{t}#{c[:number] > 1 ? 's' : ''} (worth #{c[:special].first} gold pieces)"
+        output << "#{"  " * (indent)}#{c[:number]} #{c[:number] > 1 ? plural : single} (worth #{c[:special].first} gp)"
       else
-        output << "#{"  " * indent}#{c[:number]} #{t}#{c[:number] > 1 ? 's' : ''}"
+        output << "#{"  " * indent}#{c[:number]} #{c[:number] > 1 ? plural : single}"
       end
     end
     output
@@ -298,7 +339,7 @@ module CCCB::Core::Treasure
 
   def module_load
 
-    add_request :treasure, /^\s*treasure(?:\s+(?<type>pouch|chest)(?:\s+(?<level>\d+)))\s*$/i do |match, message|
+    add_request :treasure, /^\s*treasure(?:\s+(?<type>\w+)(?:\s+(?<level>\d+)))\s*$/i do |match, message|
       type = match[:type] || 'pouch'
       level = match[:level].to_i || 1
       
