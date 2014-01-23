@@ -4,6 +4,24 @@
 basedir="${basedir%/*}"
 cd "$basedir"
 
+if [ ! -d conf ]; then
+  mkdir -p conf/state conf/profiles
+  cat <<EOF > conf/profiles/default
+---
+:nick: cccb9example
+:servers:
+  servername:
+    :host: irc.server.org
+    :channels:
+    - ! '#somechannel'
+:superuser_password: Set this to something. Really
+EOF
+fi
+
+if [ ! -d logs ]; then
+  mkdir -p logs
+fi
+
 profile="${1:-default}"
 RUBY_BIN="${RUBY:-ruby2.0}"
 
