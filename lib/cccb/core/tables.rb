@@ -52,6 +52,22 @@ module CCCB::Core::Tables
       end
     end
 
+    add_request :tables, /^(?<command>add|remove|show) table expression(?: (?<expression>.*))?/ do |match, message|
+      table = message.user.get_setting( "session", "__user_current_table" )
+      raise "Open a table first" unless table
+
+      
+      case match[:command]
+      when "add"
+        Dice::Parser.new( match[:expression], default: "1d20" )
+        table[:expression] = match[:expression]
+      when "show"
+        "Current expression: #{table[:expression] || "(auto-generated)"}"
+      when "remove"
+        table.delete :expression
+      end
+    end
+
     add_request :tables, /^(?<command>add|remove|show) table entry (?<from>\d+)(?:-(?<to>\d+))?(?: (?<data>.*?))?\s*$/ do |match, message|
       table = message.user.get_setting( "session", "__user_current_table" )
       raise "Open a table first" unless table
@@ -72,10 +88,10 @@ module CCCB::Core::Tables
       when "remove"
         count = 0
         table[:entries].keys.select { |k| k.all? { |kv| range.include? kv } }.each do |key|
-          table.delete(key)
+          table[:entries].delete(key)
           count += 1
         end
-        "Deleted #{count} entried"
+        "Deleted #{count} entries"
       end
     end
 
@@ -87,7 +103,7 @@ module CCCB::Core::Tables
       raise "Empty table" unless table[:entries].count > 0
 
       value = if table.include? :expression
-        parser = Dice::Parser.new(match[:expression], default: "1d20")
+        parser = Dice::Parser.new(table[:expression], default: "1d20")
         parser.roll
         parser.value
       else

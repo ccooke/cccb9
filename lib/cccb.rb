@@ -32,6 +32,7 @@ require 'cccb/core/yarn'
 require 'cccb/core/pom'
 require 'cccb/core/auto-reconnect'
 require 'cccb/core/treasure'
+require 'cccb/core/tables'
 
 
 class String
