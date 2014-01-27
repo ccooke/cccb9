@@ -3,6 +3,46 @@ module CCCB::Core::Tables
 
   needs :bot, :dice
 
+  def gen_table_result(message, table_name, modifier=0)
+    table = message.user.get_setting("tables", table_name) || if message.to_channel?
+      message.channel.get_setting("tables", table_name)
+    end
+    raise "No such table: #{table_name}" if table.nil?
+    raise "Empty table" unless table[:entries].count > 0 
+
+    value = if table.include? :expression
+      parser = Dice::Parser.new(table[:expression], default: "1d20")
+      parser.roll
+      parser.value
+    else
+      max_entry = table[:entries].max_by { |(r,d)| r.max }
+      max_num = max_entry[0].max
+      SecureRandom.random_number( max_num ) + 1
+    end
+
+    value += modifier || 0
+    
+    table[:entries].select { |(r,d)| r.include? value }.map { |r,d| gen_table_entry( message, d ) }.each do |result|
+      message.reply result
+    end
+    nil
+  end
+
+  def gen_table_entry( message, entries )
+    unless entries.respond_to? :count
+      entries = [ [ entries, "entry" ] ]
+    end
+
+    entries.map do |entry, type, modifier|
+      case type
+      when "entry"
+        entry
+      when "link"
+        gen_table_result( message, entry, modifier )
+      end
+    end
+  end
+
   def module_load
     add_setting :user, "tables"
     add_setting :channel, "tables"
@@ -11,7 +51,6 @@ module CCCB::Core::Tables
 
     add_request :tables, /^\s*table\s+(?<table>\w+)\s*$/ do |match, message|
       table = match[:table]
-      
     end
 
     add_request :tables, /^\s*(?<command>create|destroy|open|close)\s+(?:(?<target>core|network|channel|user)\s+)?table\s+(?<table>\w+)\s*$/ do |match, message|
@@ -68,7 +107,7 @@ module CCCB::Core::Tables
       end
     end
 
-    add_request :tables, /^(?<command>add|remove|show) table entry (?<from>\d+)(?:-(?<to>\d+))?(?: (?<data>.*?))?\s*$/ do |match, message|
+    add_request :tables, /^(?<command>add|remove|show) table (?<type>entry|link) (?<from>\d+)(?:-(?<to>\d+))?(?: (?<data>.*?))?\s*$/ do |match, message|
       table = message.user.get_setting( "session", "__user_current_table" )
       raise "Open a table first" unless table
 
@@ -77,42 +116,30 @@ module CCCB::Core::Tables
       raise "Invalid range" if to < from
 
       range = (from..to)
-      table[:entries] ||= {}
+
+      target = :entries
+
+      table[target] ||= {}
       case match[:command]
       when "add"
-        table[:entries][range] = match[:data]
+        table[target][range] ||= []
+        table[target][range] << [ match[:data], match[:type] ]
       when "show"
-        table[:entries].map do |r,d|
+        table[target].map do |r,d|
           "#{r}: #{d}"
         end
       when "remove"
         count = 0
-        table[:entries].keys.select { |k| k.all? { |kv| range.include? kv } }.each do |key|
-          table[:entries].delete(key)
+        table[target].keys.select { |k| k.all? { |kv| range.include? kv } }.each do |key|
+          table[target].delete(key)
           count += 1
         end
-        "Deleted #{count} entries"
+        "Deleted #{count} #{match[:type]}s"
       end
     end
 
     add_request :tables, /^gen (?<table>\w+)(?:\s+(?<modifier>\d+))?$/ do |match, message|
-      table = message.user.get_setting("tables", match[:table]) || if message.to_channel?
-        message.channel.get_setting("tables", match[:table])
-      end
-      raise "No such table: #{match[:table]}" if table.nil?
-      raise "Empty table" unless table[:entries].count > 0
-
-      value = if table.include? :expression
-        parser = Dice::Parser.new(table[:expression], default: "1d20")
-        parser.roll
-        parser.value
-      else
-        max_entry = table[:entries].max_by { |(r,d)| r.max }
-        max_num = max_entry[0].max
-        SecureRandom.random_number( max_num ) + 1
-      end
-
-      table[:entries].select { |(r,d)| r.include? value }.map { |r,d| d }
+      gen_table_result message, match[:table], match[:modifier].to_i 
     end
   end
 end
