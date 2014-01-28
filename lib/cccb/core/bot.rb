@@ -1,6 +1,8 @@
 require 'json'
 
 module CCCB::Core::Bot
+  class SettingError < Exception; end
+
   extend Module::Requirements
   needs :hooks, :reload, :call_module_methods, :managed_threading, :events, :persist, :settings, :networking
   
@@ -95,12 +97,13 @@ module CCCB::Core::Bot
     end
   end
 
-  def user_setting message, type, name, key, value_string = nil
+  def user_setting_value message, type, name, key, value_string = nil
+    verbose [ type, name, key ].inspect
     object = resolve_object_type( message, type )
     setting_name = [ object, name, key ].compact.join('::')
-
-    return "Unable to find #{setting_name} in #{object}::#{name}" if object.nil?
-    return "Denied: #{object.auth_reject_reason}" unless object.auth_setting( message, name)
+    
+    raise SettingError.new("Unable to find #{setting_name} in #{object}::#{name}") if object.nil?
+    raise SettingError.new("Denied: #{object.auth_reject_reason}") unless object.auth_setting( message, name)
 
     translation = if value_string
       begin
@@ -120,7 +123,7 @@ module CCCB::Core::Bot
         object.set_setting(value, name, key)
       rescue Exception => e
         verbose "EXCEPTION: #{e} #{e.backtrace}"
-        return "Sorry, there's something wrong with the value '#{value_string}' (#{e})"
+        raise SettingError.new("Sorry, there's something wrong with the value '#{value_string}' (#{e})")
       end
     end
 
@@ -130,27 +133,55 @@ module CCCB::Core::Bot
       key = translation[key]
     end
 
-    value = if object.setting_option(name, :secret) and message.to_channel?
-      "<secret>"
+    value = if key
+      { key => object.get_setting(name,key) }
     else
-      copy = if key
-        { key => object.get_setting(name,key) }
-      else
-        object.get_setting(name).dup
-      end
-
-      object.setting_option(name,:hide_keys).each do |k|
-        if copy.delete(k) and key and k == key
-          copy[k] = "<secret>"
-        end
-      end
-
-      if key
-        copy = copy[key]
-      end
-      copy.to_json
+      object.get_setting(name).dup
     end
-    "Setting #{setting_name} is set to #{value}"
+
+    return setting_name, value, key, object
+  end
+
+  def copy_user_setting message, type, name, key, dest_type, dest_name, dest_key
+    setting_name, value, key, object = user_setting_value( message, type, name, key )
+    if key and ! dest_key
+      dest_key = key
+    end
+    dest_setting_name, dest_value, dest_key, dest_object = user_setting_value( message, dest_type, dest_name, dest_key )
+
+    value = if key
+      value[key]
+    else
+      value
+    end
+
+    dest_object.set_setting( value, dest_name, dest_key )
+    "Ok"
+  end
+
+  def user_setting message, type, name, key, value_string = nil
+    begin 
+      setting_name, copy, key, object = user_setting_value( message, type, name, key, value_string )
+
+      value = if object.setting_option(name, :secret) and message.to_channel?
+        "<secret>"
+      else
+        object.setting_option(name,:hide_keys).each do |k|
+          if copy.delete(k) and key and k == key
+            copy[k] = "<secret>"
+          end
+        end
+
+        if key
+          copy = copy[key]
+        end
+        copy.to_json
+      end
+
+      return "Setting #{setting_name} is set to #{value}"
+    rescue SettingError => e
+      return e.message
+    end
   end
 
   def write_to_log string, target = nil
@@ -299,6 +330,30 @@ module CCCB::Core::Bot
     
     add_request :debug, /^test (.*)$/ do |match, message|
       "Test ok: #{match[1]}"
+    end
+
+    add_request :core, /^
+      \s*
+      copy
+      \s+ 
+      (?<type> [^:]+ )
+      ::
+      (?<setting> [-\w+]+)
+      (?:
+        ::
+        (?<key> [^\s=]+ )
+      )?
+      \s+
+      (?<dest_type> [^:]+ )
+      ::
+      (?<dest_setting> [-\w+]+)
+      (?:
+        ::
+        (?<dest_key> [^\s=]+ )
+      )?
+      $
+    /xi do |match, message|
+      copy_user_setting( message, match[:type], match[:setting], match[:key], match[:dest_type], match[:dest_setting], match[:dest_key] )
     end
 
     add_request :core, /^
