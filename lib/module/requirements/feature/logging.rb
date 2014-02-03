@@ -54,7 +54,7 @@ module Module::Requirements::Feature::Logging
 
   def module_load
   
-    logging.loglevel = INFO
+    logging.loglevel = self.class.const_get( self.log_level.upcase ) || VERBOSE
     if have_feature? :managed_threading
       logging.log_queue ||= Queue.new
     else

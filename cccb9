@@ -9,6 +9,7 @@ if [ ! -d conf ]; then
   cat <<EOF > conf/profiles/default
 ---
 :nick: cccb9example
+:logfile: /dev/stdout
 :servers:
   servername:
     :host: irc.server.org
@@ -23,6 +24,12 @@ if [ ! -d logs ]; then
 fi
 
 profile="${1:-default}"
-RUBY_BIN="${RUBY:-ruby2.0}"
+if [ "$RUBY" ]; then
+  RUBY_BIN="$RUBY"
+elif which ruby2.0 >/dev/null 2>&1; then
+  RUBY_BIN="ruby2.0"
+else
+  RUBY_BIN="ruby"
+fi
 
 $RUBY_BIN -I "$basedir/lib" "$basedir/lib/cccb/init.rb" "$basedir" "$profile"

@@ -23,7 +23,12 @@ require 'cccb/core/help'
 require 'cccb/core/choice'
 require 'cccb/core/dice'
 require 'cccb/core/hugs'
-require 'cccb/core/links'
+begin
+  require 'cccb/core/links'
+rescue LoadError => e
+  # Needs dbi, but that shouldn't be fatal
+  raise e unless e.message =~ /dbi/ 
+end
 require 'cccb/core/public_logs'
 require 'cccb/core/session'
 require 'cccb/core/ops'
@@ -65,8 +70,7 @@ class CCCB
     logging.tag = args[:logfile_tag]
 
     {
-      log_to_file: args[:log_to_file] || true,
-      log_to_stdout: args[:log_to_stdout] || true,
+      log_level: args[:log_level] || "VERBOSE",
       user: args[:user] || Etc.getlogin,
       nick: args[:nick] || Etc.getlogin,
       servers: args[:servers],
