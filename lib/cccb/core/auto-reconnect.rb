@@ -4,6 +4,7 @@ module CCCB::Core::AutoReconnect
 
   def module_load
     auto_reconnect.networks ||= {}
+    auto_reconnect.disconnected ||= {}
     set_setting 1, "options", "nick_reconnect_threshold"
     set_setting 60, "options", "nick_reconnect_throttle"
 
@@ -12,6 +13,16 @@ module CCCB::Core::AutoReconnect
         sleep 10
         CCCB.instance.networking.networks.each do |netname, network|
           auto_reconnect.networks[netname] ||= {}
+          unless network.connected?
+            debug "Skipping reconnection checks on #{netname}: It is not connected"
+            auto_reconnect.disconnected[netname] = true
+            next
+          end
+          if auto_reconnect.disconnected[netname]
+            debug "Allowing #{netname} time to finish connecting"
+            auto_reconnect.disconnected.delete netname
+            next
+          end
           debug "Checking for reconnections on #{netname}"
           network.channels.each do |name, channel|
             auto_reconnect.networks[netname][name] ||= Time.now - 86400

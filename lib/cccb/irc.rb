@@ -797,6 +797,10 @@ class CCCB::Network
     raise e
   end
 
+  def connected?
+    self.state == :connected
+  end
+
   def write(data)
     @queue << data
   end
