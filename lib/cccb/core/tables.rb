@@ -3,7 +3,8 @@ module CCCB::Core::Tables
 
   needs :bot, :dice
 
-  def gen_table_result(message, table_name, modifier=0)
+  def gen_table_result(message, table_name, modifier=0, recursion=0)
+    raise "Too many nested tables detected at #{table_name}" if recursion > 20
     table = message.user.get_setting("tables", table_name) || if message.to_channel?
       message.channel.get_setting("tables", table_name)
     end
@@ -22,13 +23,13 @@ module CCCB::Core::Tables
 
     value += modifier || 0
     
-    table[:entries].select { |(r,d)| r.include? value }.map { |r,d| gen_table_entry( message, d ) }.each do |result|
+    table[:entries].select { |(r,d)| r.include? value }.map { |r,d| gen_table_entry( message, d, recursion + 1 ) }.each do |result|
       message.reply result
     end
     nil
   end
 
-  def gen_table_entry( message, entries )
+  def gen_table_entry( message, entries, recursion )
     unless entries.respond_to? :count
       entries = [ [ entries, "entry" ] ]
     end
@@ -38,7 +39,7 @@ module CCCB::Core::Tables
       when "entry"
         entry
       when "link"
-        gen_table_result( message, entry, modifier )
+        gen_table_result( message, entry, modifier, recursion )
       end
     end
   end
