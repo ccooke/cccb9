@@ -24,6 +24,20 @@ module CCCB::Core::Tables
     value += modifier || 0
     
     table[:entries].select { |(r,d)| r.include? value }.map { |r,d| gen_table_entry( message, d, recursion + 1 ) }.each do |result|
+      result.map! do |string|
+        if string.respond_to? :gsub
+          string.gsub /(%(?<char>.))/ do |match|
+            case match
+            when '%r'
+              value
+            when '%%'
+              '%'
+            end
+          end
+        else
+          string
+        end
+      end
       message.reply result
     end
     nil
@@ -37,7 +51,7 @@ module CCCB::Core::Tables
     entries.map do |entry, type, modifier|
       case type
       when "entry"
-        entry
+        entry 
       when "link"
         gen_table_result( message, entry, modifier, recursion )
       end
@@ -55,21 +69,19 @@ module CCCB::Core::Tables
     end
 
     add_request :tables, /^\s*(?<command>create|destroy|open|close)\s+(?:(?<target>core|network|channel|user)\s+)?table\s+(?<table>\w+)\s*$/ do |match, message|
-      target = if message.user.superuser? and match[:target]
+      target = if match[:target]
         match[:target]
-      elsif [ :user, :channel ].any? { |t| match[:target] == t }
-        match[:target]
-      elsif match[:target].nil?
+      else 
         if message.to_channel?
           :channel
         else
           :user
         end
-      else
-        raise "Denied: You are not allowed to modify tables in the #{match[:target]} class"
       end
 
       container = message.send(target)
+      raise "Denied: You are not allowed to modify tables in the #{target} class" unless container.auth_setting( message, "tables" )
+
       case match[:command]
       when "create","open"
         table = container.get_setting("tables", match[:table]) || {
@@ -126,7 +138,7 @@ module CCCB::Core::Tables
         table[target][range] ||= []
         table[target][range] << [ match[:data], match[:type] ]
       when "show"
-        table[target].map do |r,d|
+        table[target].select { |r,d| range.to_a.any? { |i| r.include? i } }.map do |r,d|
           "#{r}: #{d}"
         end
       when "remove"
