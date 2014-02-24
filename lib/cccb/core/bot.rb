@@ -155,7 +155,7 @@ module CCCB::Core::Bot
       value
     end
 
-    dest_object.set_setting( value, dest_name, dest_key )
+    dest_object.set_setting( Marshal.load( Marshal.dump( value ) ), dest_name, dest_key )
     "Ok"
   end
 
