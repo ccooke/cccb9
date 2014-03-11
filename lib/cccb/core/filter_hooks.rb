@@ -16,7 +16,8 @@ module CCCB::Core::FilterHooks
   FILTER_CLASSES = [
     CCCB::User,
     CCCB::ChannelUser,
-    CCCB::Network
+    CCCB::Network,
+    CCCB::Message
   ]
 
   def module_load

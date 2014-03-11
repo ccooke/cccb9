@@ -6,18 +6,20 @@ module Module::Requirements::Feature::Hooks
   extend Module::Requirements
   needs :logging, :managed_threading
   
-  def add_hook feature, hook, filter = {}, &block
-    spam "ADD hook #{hook}" 
-    hooks.db[ hook ] ||= []
-    call = caller_locations(1,1).first
-    hooks.features[feature] = true
-    hooks.db[ hook ].push(
-      :feature => feature,
-      :filter => filter,
-      :source_file => call.absolute_path,
-      :container => call.base_label,
-      :code => block
-    )
+  def add_hook(feature, hooklist, filter = {}, &block)
+    Array(hooklist).each do |hook|
+      spam "ADD hook #{hook}" 
+      hooks.db[ hook ] ||= []
+      call = caller_locations(1,1).first
+      hooks.features[feature] = true
+      hooks.db[ hook ].push(
+        :feature => feature,
+        :filter => filter,
+        :source_file => call.absolute_path,
+        :container => call.base_label,
+        :code => block
+      )
+    end
   end
 
   def remove_hooks source, key = :source_file
@@ -51,10 +53,27 @@ module Module::Requirements::Feature::Hooks
     spam "hooks: #{hook}->(#{args.join(", ")})"
     hook_debug = []
     hook_stat :hooks_visited, hook_debug
+    feature_cache = {}
     while hook_list.count > 0
       item = hook_list.shift
+
+      next if feature_cache.include? item[:feature] and feature_cache[item[:feature]] == false
+
       next if args.any? { |a|
-        a.respond_to? :select_hook_feature? and ! a.select_hook_feature?(item[:feature])
+        begin
+          if a.respond_to? :select_hook_feature? 
+            feature_cache[item[:feature]] = a.select_hook_feature?(item[:feature])
+            if feature_cache[item[:feature]]
+              spam "Hook #{hook}: ALLOW #{item[:feature]}"
+              false
+            else
+              spam "Hook #{hook}: DENY #{item[:feature]}"
+              true
+            end
+          end
+        rescue Exception => e
+          verbose "Exception while filtering features: #{e.message}"
+        end
       }
       spam "RUN: #{ item[:feature] }:#{ hook }->( #{args} )"
       hook_debug << [ Time.now, item ]

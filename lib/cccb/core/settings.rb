@@ -139,6 +139,27 @@ module CCCB::Settings
 
 end
 
+class CCCB::Message
+  def __setting_target()
+    if self.to_channel?
+      self.channel
+    elsif ! self.user.nil?
+      self.user
+    else 
+      self.network
+    end
+  end
+  private :__setting_target
+
+  def get_setting(*args)
+    __setting_target.get_setting(*args)
+  end
+
+  def set_setting(*args)
+    __setting_target.set_setting(*args)
+  end
+end
+
 module CCCB::Core::Settings
   extend Module::Requirements
   
