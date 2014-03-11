@@ -13,31 +13,18 @@ require 'module/requirements/feature/persist'
 require 'cccb/config'
 require 'cccb/core'
 require 'cccb/irc'
-require 'cccb/core/filter_hooks'
-require 'cccb/core/usercode'
-require 'cccb/core/bot'
-require 'cccb/core/networking'
-require 'cccb/core/settings'
-require 'cccb/core/httpserver'
-require 'cccb/core/help'
-require 'cccb/core/choice'
-require 'cccb/core/dice'
-require 'cccb/core/hugs'
-begin
-  require 'cccb/core/links'
-rescue LoadError => e
-  # Needs dbi, but that shouldn't be fatal
-  raise e unless e.message =~ /dbi/ 
+
+print_loading = $VERBOSE || $DEBUG;
+
+Dir.new("lib/cccb/core").select { |f| f.end_with? '.rb' }.each do |file|
+  begin
+    Kernel.load("lib/cccb/core/#{file}")
+  rescue LoadError => e
+    puts "Failed to load #{file}: #{e.message}"
+    next
+  end
+  puts "Loaded #{file}..." if print_loading
 end
-require 'cccb/core/public_logs'
-require 'cccb/core/session'
-require 'cccb/core/ops'
-require 'cccb/core/packages'
-require 'cccb/core/yarn'
-require 'cccb/core/pom'
-require 'cccb/core/auto-reconnect'
-require 'cccb/core/treasure'
-require 'cccb/core/tables'
 
 
 class String
@@ -79,7 +66,6 @@ class CCCB
       superuser_password: args[:superuser_password] || nil,
       basedir: args[:basedir],
       statedir: statedir,
-      codedir: args[:codedir] || args[:basedir] + '/lib/cccb/usercode',
       logfile_tag: args[:logfile_tag], 
       logfile: args[:logfile] || args[:basedir] + '/logs/cccb.log',
       botpattern: args[:botpattern] || /^cccb/,
