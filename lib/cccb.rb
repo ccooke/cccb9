@@ -62,13 +62,11 @@ class CCCB
       nick: args[:nick] || Etc.getlogin,
       servers: args[:servers],
       userstring: args[:userstring] || "An extendable ruby bot",
-      debug_privmsg: args[:debug_privmsg] || "#cccb-debug}",
       superuser_password: args[:superuser_password] || nil,
       basedir: args[:basedir],
       statedir: statedir,
       logfile_tag: args[:logfile_tag], 
       logfile: args[:logfile] || args[:basedir] + '/logs/cccb.log',
-      botpattern: args[:botpattern] || /^cccb/,
     }
   end
 
