@@ -20,21 +20,15 @@ module CCCB::Core::PublicLogs
       object.network.msg object.name, "Public logging #{word}. Logs are viewable at #{url}"
     end
 
-    add_hook :public_log, :server_message do |message|
-      next unless message.to_channel? and message.channel.get_setting("options", "logging")
-      file = "logs/#{ message.channel }.log"
+    add_hook :public_log, :log_message do |string, target|
+      next unless target.is_a? CCCB::Channel
+      p [ string, target ]
+      message = string.gsub /^\w+ \[[^\]]*\] /, ""
+      file = "logs/#{target}.log"
+      p "Writing logs to #{file}"
       open( file, 'a' ) do |f|
-        format = "[%(time)] "
-        format += if message.command == :PRIVMSG
-          if message.ctcp?
-            "%(ctcp) %(nick) %(ctcp_text)"
-          else
-            "<%(nick_with_mode)> %(text)"
-          end
-        else
-          "%(command) %(params) %(text)"
-        end
-        f.puts message.format( format )
+        format = "[#{Time.now}] #{message}"
+        f.puts format
       end
     end
 
@@ -60,7 +54,7 @@ module CCCB::Core::PublicLogs
       string = "[%(time)] #{toggle.upcase} %(from) #{session}"
       open( file, 'a' ) { |f| f.puts message.format(string) }
 
-      url = message.format( message.channel.get_setting("options", "log_url_format") )
+      url = message.format( message.channel.get_setting("options", "log_url_format"), uri_escape: true )
       tag = URI.escape( session, "&?/=#" )
       url += "&tag=#{tag}"
       message.reply "Ok, logged session #{toggle} for #{session}. You can see this session at #{url}"
