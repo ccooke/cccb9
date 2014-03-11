@@ -86,6 +86,7 @@ module CCCB::Core::Session
     add_setting :core, "session", persist: false
     add_setting :network, "session", auth: :superuser, persist: false
     add_setting :user, "session", auth: :superuser, persist: false
+    add_setting :user, "privs", auth: :network
 
     set_setting false, "session", "authenticated"
 
