@@ -81,3 +81,41 @@ Dictionaries are stored in a tree structure:
   * users
     * Each user has their own set of dictionaries. When using commands in a channel, they may inherit defaults from the channel (depending on the command), but will always inherit from the network.
     * By default, each user has the ability to modify their own dictionaries freely, with the exceeption of a few security-related dictionaries.
+
+Manipulating Dictionaries
+========
+
+The basic command to edit the dictionaries is "setting":
+
+    18:47 <ccooke> !setting network::allowed_features
+    18:47 <d20> ccooke: Setting freenode::allowed_features is set to 
+    {"dice":true,"session":true,"public_log":true,"debug":true,"dice_set":true,"tables":true,"pom":true}
+
+The setting command is used to both view and alter dictionaries. Generally, it uses a two or three part identifier for a dictionary or dictionary/key combination respectively. Some examples:
+
+  * core::allowed_features - The entire set of all features loaded in the bot, along with their default enable or disable status. 
+  * core::allowed_features::dice - The key that controls whether the dicebot code is enabled by default for all networks
+  * network::allowed_features::dice - The key that controls whether the dicebot code is enabled for the current network
+  * channel::allowed_features::dice - The same, but for the current channel (This form only works if used publicly, within a channel). There is no allowed_features dictionary on Users.
+  * c(#cccb9test)::allowed_features::dice - The same, but referring to a specific channel by name
+  * n(freenode)::allowed_features::dice - Referring to a specific network by name
+  * u(ccooke)::options::timzeone - The timezone setting for the User 'ccooke'. 
+
+To set a key, you send the request "setting <identifier> = <value>". For instance:
+
+    18:54 <ccooke> !setting network::allowed_features::public_log = false
+    18:54 <d20> ccooke: Setting freenode::allowed_features::public_log is set to false
+
+To unset a key, assign either nil or an empty value to it.
+
+Useful Dictionaries
+=======
+
+  * allowed_features
+    * Enables and disables bot features in a specific context
+  * options
+    * Exists on core, network, channel and user objects
+    * Stores toggles and values relevant to each object. Useful keys include:
+      * bang_commands_enabled - enable and disable ! as a prefix for requests in channel
+      * join_on_invite - whether the bot will automatically join a channel it is invited to. Set to false in a channel to prevent the bot joining that channel.
+      * timezone - used to control the output of time values
