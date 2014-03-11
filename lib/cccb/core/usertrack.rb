@@ -6,16 +6,14 @@ module CCCB::Core::UserTrack
 
   needs :bot, :session
 
-  def usertime(user, time = nil)
+  def usertime(user, use_time = nil)
     use_time ||= Time.now
     if timezone_name = user.get_setting("options", "timezone")
       timezone = ::TZInfo::Timezone.get(timezone_name)
       offset = timezone.current_period.offset.utc_offset
       hours = offset / 3600
-      minutes = offset % 3600
+      minutes = ( offset % 3600 ) / 60
       usable_offset = format("%+03d:%02d", hours, minutes)
-      puts "OFFSET: #{usable_offset}"
-
       use_time.localtime(usable_offset)
     else
       use_time
@@ -56,7 +54,7 @@ module CCCB::Core::UserTrack
           if message.to_channel? and user.channel_history.include? message.channel.name
             saved_message = user.channel_history[message.channel.name]
             text = if saved_message.ctcp?
-              saved_message.format("* %(nick_with_mode) %(ctcp_text")
+              saved_message.format("* %(nick_with_mode) %(ctcp_text)")
             else
               saved_message.format("<%(nick_with_mode)> %(text)")
             end
