@@ -72,8 +72,6 @@ module Module::Requirements::Feature::Reload
 
     self.start if self.respond_to? :start
 
-    #load_hooks config(:codedir)
-    
     run_hooks :ready
   end
 
