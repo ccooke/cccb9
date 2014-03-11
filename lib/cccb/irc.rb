@@ -10,9 +10,14 @@ module Array::Printable
 end
 
 module CCCB::Formattable
-  def format(format_string)
+  def format(format_string, uri_escape: false)
     format_string.keyreplace { |key|
-      self.send(key).to_s || ""
+      str = self.send(key).to_s || ""
+      if uri_escape
+        URI.escape(str, "&?/=#")
+      else
+        str
+      end
     }
   end
 end
@@ -86,6 +91,9 @@ class CCCB::Message
       end
 
       super
+      if @channel_name
+        self.user.channel_history[@channel_name] = self
+      end
     end
 
     def ctcp?
@@ -223,6 +231,10 @@ class CCCB::Message
         value = old_user.transient_storage.delete(k)
         next if k == 'authenticated'
         user.transient_storage[k] = value
+      end
+      old_user.channels.each do |channel|
+        channel.remove_user(old_user)
+        channel.add_user(user)
       end
     end
   end
@@ -410,7 +422,7 @@ class CCCB::User
     $
   }x
 
-  attr_reader :nick, :username, :flag, :host, :id, :network, :history, :from
+  attr_reader :nick, :username, :flag, :host, :id, :network, :history, :from, :channel_history
 
   def self.new(message, restore_from_archive = false)
     if match = FROM_REGEX.match( message.from )
@@ -438,6 +450,7 @@ class CCCB::User
     @flag = match[:flag]
     @username = match[:user]
     @hostname = match[:host]
+    @channel_history ||= {}
     @history << message
     if @history.length > 10
       @history.shift
@@ -612,6 +625,10 @@ class CCCB::Channel
     @users.values.find { |u| 
       u.id == id 
     }
+  end
+
+  def nick_with_mode
+    user_by_name( network.nick ).nick_with_mode
   end
 
   def add_user(user)
