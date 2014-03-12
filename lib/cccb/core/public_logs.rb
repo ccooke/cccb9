@@ -22,10 +22,9 @@ module CCCB::Core::PublicLogs
 
     add_hook :public_log, :log_message do |string, target|
       next unless target.is_a? CCCB::Channel
-      p [ string, target ]
+      next unless target.get_setting( "options", "logging" )
       message = string.gsub /^\w+ \[[^\]]*\] /, ""
       file = "logs/#{target}.log"
-      p "Writing logs to #{file}"
       open( file, 'a' ) do |f|
         format = "[#{Time.now}] #{message}"
         f.puts format
