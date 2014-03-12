@@ -31,5 +31,5 @@ elif which ruby2.0 >/dev/null 2>&1; then
 else
   RUBY_BIN="ruby"
 fi
-
+export RUBY_BIN
 $RUBY_BIN -I "$basedir/lib" "$basedir/lib/cccb/init.rb" "$basedir" "$profile"

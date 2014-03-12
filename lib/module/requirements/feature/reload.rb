@@ -41,7 +41,7 @@ module Module::Requirements::Feature::Reload
         b.count <=> a.count
       }.map { |f| f.join('/') }.each do |code_file|
         begin 
-          if (errors = %x{#{ENV['RUBY'] || "ruby2.0" } -c #{code_file} 2>&1 }) =~ /Syntax OK/
+          if (errors = %x{#{ENV['RUBY_BIN'] || "ruby2.0" } -c #{code_file} 2>&1 }) =~ /Syntax OK/
             debug "Reloading #{code_file}"
             $".delete( code_file )
             require code_file

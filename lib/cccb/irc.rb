@@ -1,6 +1,4 @@
-require 'delegate'
 require 'thread'
-require 'tzinfo'
 
 module Array::Printable
   attr_accessor :join_string
