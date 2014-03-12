@@ -60,10 +60,15 @@ module CCCB::Settings
   def setting?(name,key=nil)
     data = get_setting(name)
     if key
-      !!get_setting(name)[key]
+      get_setting(name)[key].nil?
     else
-      !!get_setting(name) 
+      get_setting(name).nil?
     end
+  end
+
+  def default_setting(value, name, key)
+    hash = get_setting(name)
+    hash[key] = value unless hash.include? key
   end
 
   def set_setting(value, name, key=nil)

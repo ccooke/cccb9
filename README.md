@@ -117,3 +117,61 @@ Useful Dictionaries
       * bang_commands_enabled - enable and disable ! as a prefix for requests in channel
       * join_on_invite - whether the bot will automatically join a channel it is invited to. Set to false in a channel to prevent the bot joining that channel.
       * timezone - used to control the output of time values
+
+Writing Modules
+=======
+
+The bot will autoload all modules added to lib/cccb/core/. All such modules need to be in the CCCB::Core namespace. Here's a simple example that prints the title of youtube videos:
+
+    require 'mechanize'
+
+    module CCCB::Core::URIVideoTitle
+      # This is mandatory. Loads in the dependency resolution code
+      extend Module::Requirements
+
+      VIDEO_URI_REGEX = /(youtube.com\/watch.*v=|youtu.be\/|vimeo.com\/)(.*?)(&|$)/i
+
+      # The list of dependencies. Almost anything that you are likely
+      # to write will depend on :bot. This module depends on :links 
+      # because it will process uri events
+      needs :bot, :links
+
+      # Every module defines a module_load. These methods will be called
+      # in dependency-resolution order (so the CCCB::Core::Bot and 
+      # CCCB::Core::Links module_load methods will have been called before
+      # this
+      def module_load
+        # Set the core dictionary "options" key "log_video_title" to true
+        # but only if it is not yet set.
+        default_setting true, "options", "log_video_title"
+
+        add_hook :uri_video_title, :uri_found do |message, uri_data|
+          # uri_data is a hash with :uri, :protocol, :before and :after keys
+
+          # next in this block acts as a return would in a method
+          next unless message.to_channel?
+          next unless match = VIDEO_URI_REGEX.match(uri_data[:uri])
+          # If the option isn't set on the user, the code will check the
+          # channel, then the network and finally the core for it.
+          next unless message.user.get_setting("options", "log_video_title")
+
+          source = match[1]
+          id = match[2]
+          title = Mechanize.new.get( uri_data[:uri] ).title.strip.lines.first.chomp
+          if /youtu(\.be|be\.com)/.match source
+            source = "Youtube"
+          elsif /vimeo/.match source
+            source = "Vimeo"
+          end
+
+          message.reply "#{source} video: #{title}"
+        end
+      end
+
+      # Other methods that can be defined are module_start (called in order
+      # after all the module_load methods are called but before the bot
+      # considers itself reads, module_stop (called in reverse order while 
+      # shutting down modules prior to a bot reload) and module_unload 
+      # (called in reverse order, but after module_stop)
+    end
+
