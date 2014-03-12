@@ -1,5 +1,6 @@
 require 'delegate'
 require 'thread'
+require 'tzinfo'
 
 module Array::Printable
   attr_accessor :join_string
@@ -10,7 +11,8 @@ module Array::Printable
 end
 
 module CCCB::Formattable
-  def format(format_string, uri_escape: false)
+  def format(format_string, args)
+    uri_escape = args[:uri_escape]
     format_string.keyreplace { |key|
       str = self.send(key).to_s || ""
       if uri_escape
