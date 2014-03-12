@@ -1,4 +1,3 @@
-require 'delegate'
 require 'thread'
 
 module Array::Printable
@@ -10,8 +9,8 @@ module Array::Printable
 end
 
 module CCCB::Formattable
-  def format(format_string, args)
-    uri_escape = args[:uri_escape]
+  def format(format_string, args = {})
+    uri_escape = (!!args[:uri_escape]) || false
     format_string.keyreplace { |key|
       str = self.send(key).to_s || ""
       if uri_escape
