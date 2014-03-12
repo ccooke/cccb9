@@ -8,7 +8,13 @@ class String
   end
 
   def snake_case
-    self.scan(/[[:upper:]]+[[:lower:]]*/).map(&:downcase).join('_')
+    self.scan( /
+      [[:upper:]]+$
+      |
+      [[:upper:]]{2,} (?=[[:upper:]])
+      |
+      [[:upper:]][[:lower:]]*
+    /x).map(&:downcase).join('_')
   end
 end
 

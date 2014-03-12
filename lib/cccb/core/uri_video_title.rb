@@ -21,6 +21,17 @@ module CCCB::Core::URIVideoTitle
     # but only if it is not yet set.
     default_setting true, "options", "log_video_title"
 
+    # Every module has its own storage area. This is named after the 
+    # module (converted to snake_case). Data saved to it will be
+    # automatically saved and loaded from the bot's state directory
+    # module_load should default any values in case the state is cleared
+    uri_video_title.history ||= []
+
+    # AVOID USING @instance VARIABLES. Your module will be loaded into
+    # the CCCB core object instance; two modules using the same @instance
+    # variable name would be very easy. Use the namespaced OpenStruct
+    # instead.
+
     add_hook :uri_video_title, :uri_found do |message, uri_data|
       # uri_data is a hash with :uri, :protocol, :before and :after keys
 
@@ -32,17 +43,34 @@ module CCCB::Core::URIVideoTitle
       next unless message.user.get_setting("options", "log_video_title")
 
       source = match[1]
-      id = match[2]
-      verbose "Fetching title of #{uri_data[:uri]}"
       title = Mechanize.new.get( uri_data[:uri] ).title.strip.lines.first.chomp
-      verbose "And done"
       if /youtu(\.be|be\.com)/.match source
         source = "youtube"
       elsif /vimeo/.match source
         source = "vimeo"
       end
 
+      # Send a reply to the message...
       message.reply "#{source} video: #{title}"
+      # And store the uri in our history
+      uri_video_title.history << [ message.nick, source, uri_data[:uri], title ]
+      uri_video_title.history.shift if uri_video_title.history.count > 1024
+    end
+
+    add_request :uri_video_title, /^link search (?<pattern>.*?)\s*$/ do |match, message|
+      pattern = Regexp.escape(match[:pattern])
+      pattern.gsub! /%/, '.*'
+      regex = Regexp.new(pattern)
+      seen = {}
+      uri_video_title.history.select { |(n,s,u,title)| 
+        regex.match title 
+      }.each do |(nick, source, uri, title)|
+        next if seen.include? uri
+        message.reply "from #{nick} [#{title}]: #{uri}"
+        seen[uri] = true
+      end
+      nil # requests automatically respond with whatever the block returns
+          # ending with nil prevents this
     end
   end
 end
