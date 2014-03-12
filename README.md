@@ -4,8 +4,6 @@ cccb9
 A multiserver IRC bot
 =======
 
-(updates in progress as of 2014-03-11. Saving a partial version here because some help is better than none)
-
 Getting Started
 =======
 
