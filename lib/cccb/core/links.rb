@@ -5,85 +5,88 @@ require 'mechanize'
 module CCCB::Core::Links
   extend Module::Requirements
 
-  def links_process_line (message)
-    return nil unless message.user.get_setting( "options", "log_links" )
-    urlre = /(\b((?:https?|ftp):\/\/|www\.)[-a-zA-Z0-9~`\!@#\$%^&*\(\)-_=+|\\\[\]\{\};:'",<.>\/\?]+)(.*)/i
+  URL_REGEX = /((([A-Za-z]{3,9}:(?:\/\/)?)(?:[\-;:&=\+\$,\w]+@)?[A-Za-z0-9\.\-]+|(?:www\.|[\-;:&=\+\$,\w]+@)[A-Za-z0-9\.\-]+)((?:\/[\+~%\/\.\w\-_]*)?\??(?:[\-\+=&;%@\.\w_]*)#?(?:[\.\!\/\\\w]*))?)/
+
+  def links_process_line (message, uri_data)
     imgre = /(jpe?g|bmp|png|gif)$/i
     vidre = /(youtube.com\/watch.*v=|youtu.be\/|vimeo.com\/)(.*?)(&|$)/i
 
-    if message.to_channel?
-      nick = message.nick
-      channel = message.replyto
-          
-      if (m = urlre.match(message.text))
-        url = m[1]
-        proto = m[2]
-        comment = m[3]
-        unless /:/.match (proto)
-          url = "http://"+url
-        end
-
-
-        begin
-          info "Connect to DB"
-          dbh = DBI.connect(
-            CCCB.instance.get_setting( "secure", "midnight_db_dbi" ),
-            CCCB.instance.get_setting( "secure", "midnight_db_user" ),
-            CCCB.instance.get_setting( "secure", "midnight_db_password" ),
-          )
-          info "Connected to DB"
-          q_pic = dbh.prepare("INSERT INTO image (link,poster,channel,NSFW,comment,date) VALUES (?,?,?,?,?,NOW())")
-          q_lnk = dbh.prepare("INSERT INTO link (link,poster,channel,comment,date) VALUES (?,?,?,?,NOW())")
-          q_vid = dbh.prepare("INSERT INTO video (id,source,poster,channel,comment,title,date) VALUES (?,?,?,?,?,?,NOW())")
-        rescue DBI::DatabaseError => e
-          warning "Unable to connect to database: #{e}"
-          return nil
-        end
-
-
-        if (imgre.match(url)) && message.user.get_setting( "options", "log_links" )
-          if /nsfw/i.match (comment)
-            nsfw = 1
-          else
-            nsfw = 0
-          end
-          q_pic.execute(url,nick,channel,nsfw,comment)
-        elsif (m = vidre.match(url))
-          source = m[1]
-          id = m[2]
-          title = Mechanize.new.get( url ).title.strip.lines.first.chomp
-          if /youtu(\.be|be\.com)/.match source
-            source = "youtube"
-          elsif /vimeo/.match source
-            source = "vimeo"
-          end
-          if message.user.get_setting( "options", "log_links" )
-            q_vid.execute(id,source,nick,channel,comment,title)
-          end
-          if message.user.get_setting( "options", "videotitle" )
-            message.reply "Video title: #{title}"
-          end
-        elsif message.user.get_setting( "options", "log_links" )
-          q_lnk.execute(url,nick,channel,comment)
-        end
-        dbh.disconnect
-      end
+    nick = message.nick
+    channel = message.replyto
+        
+    begin
+      info "Connect to DB"
+      dbh = DBI.connect(
+        CCCB.instance.get_setting( "secure", "midnight_db_dbi" ),
+        CCCB.instance.get_setting( "secure", "midnight_db_user" ),
+        CCCB.instance.get_setting( "secure", "midnight_db_password" ),
+      )
+      info "Connected to DB"
+      q_pic = dbh.prepare("INSERT INTO image (link,poster,channel,NSFW,comment,date) VALUES (?,?,?,?,?,NOW())")
+      q_lnk = dbh.prepare("INSERT INTO link (link,poster,channel,comment,date) VALUES (?,?,?,?,NOW())")
+      q_vid = dbh.prepare("INSERT INTO video (id,source,poster,channel,comment,title,date) VALUES (?,?,?,?,?,?,NOW())")
+    rescue DBI::DatabaseError => e
+      warning "Unable to connect to database: #{e}"
+      return nil
     end
+
+    if (imgre.match(uri_data[:uri]))
+      if [:before,:after].any? { |t| uri_data[t].match /nsfw/i }
+        nsfw = 1
+      else
+        nsfw = 0
+      end
+      q_pic.execute(uri_data[:uri],nick,channel,nsfw,uri_data[:after])
+    elsif (m = vidre.match(uri_data[:uri]))
+      source = m[1]
+      id = m[2]
+      title = Mechanize.new.get( uri_data[:uri] ).title.strip.lines.first.chomp
+      if /youtu(\.be|be\.com)/.match source
+        source = "youtube"
+      elsif /vimeo/.match source
+        source = "vimeo"
+      end
+      q_vid.execute(id,source,nick,channel,uri_data[:after],title)
+      if message.user.get_setting( "options", "videotitle" )
+        message.reply "Video title: #{title}"
+      end
+    else 
+      q_lnk.execute(uri_data[:uri],nick,channel,uri_data[:after])
+    end
+    dbh.disconnect
   end
 
   def module_load
     add_setting :core, "secure", secret: true
     # set on the core object, defaults everyone to on. Users
     # and channels can override
-    set_setting true, "options", "log_links"
-    set_setting true, "options", "videotitle"
+    options = get_setting("options")
+    options["uri_events"] = true unless options.include? "uri_events"
+    options["log_links"] = true unless options.include? "log_links"
+    options["videotitle"] = true unless options.include? "videotitle"
 
     add_request :links, /^what.*url.*logging.*\s*\?\s*$/ do |message|
       "If you're asking about the URL logging site, it's at http://midnight.blue-infinity.net/f5.php"
     end
 
     add_hook :links, :message do |message|
-      links_process_line message
+      next unless message.user.get_setting( "options", "uri_events" )
+      text = message.text
+      while match = URL_REGEX.match( text )
+        schedule_hook :uri_found, message, {
+          uri: match[1],
+          protocol: match[3] || "http://",
+          before: match.pre_match,
+          after: match.post_match
+        }
+        text = match.post_match
+      end
+    end
+
+    add_hook :links, :uri_found do |message, uri_data|
+      next unless message.to_channel?
+      next unless message.user.get_setting( "options", "log_links" )
+      links_process_line message, uri_data
     end
 
     add_help(
