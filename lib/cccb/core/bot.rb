@@ -226,7 +226,7 @@ module CCCB::Core::Bot
     hide_irc_commands :PING unless $DEBUG
 
     add_hook :core, :server_send do |network, string|
-      write_to_log ">>> " + string, network
+      spam ">>> " + string, network
     end
 
     add_hook :core, :server_message do |message|

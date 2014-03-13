@@ -86,7 +86,7 @@ class CCCB
     logging.tag = args[:logfile_tag]
 
     {
-      log_level: args[:log_level] || "SPAM",
+      log_level: args[:log_level] || "VERBOSE",
       user: args[:user] || Etc.getlogin,
       nick: args[:nick] || Etc.getlogin,
       servers: args[:servers],
