@@ -50,7 +50,7 @@ module Module::Requirements::Feature::Hooks
         true
       end
     end
-    spam "hooks: #{hook}->(#{args.join(", ")})"
+    debug "hooks: #{hook}->(#{args.join(", ")})"
     hook_debug = []
     hook_stat :hooks_visited, hook_debug
     feature_cache = {}
@@ -64,10 +64,10 @@ module Module::Requirements::Feature::Hooks
           if a.respond_to? :select_hook_feature? 
             feature_cache[item[:feature]] = a.select_hook_feature?(item[:feature])
             if feature_cache[item[:feature]]
-              spam "Hook #{hook}: ALLOW #{item[:feature]}"
+              debug "Hook #{hook}: ALLOW #{item[:feature]}"
               false
             else
-              spam "Hook #{hook}: DENY #{item[:feature]}"
+              debug "Hook #{hook}: DENY #{item[:feature]}"
               true
             end
           end
@@ -77,7 +77,11 @@ module Module::Requirements::Feature::Hooks
       }
       spam "RUN: #{ item[:feature] }:#{ hook }->( #{args} )"
       hook_debug << [ Time.now, item ]
-      item[:code].call( *args )
+      begin
+        item[:code].call( *args )
+      rescue Exception => e
+        schedule_hook :exception, e, hook, item
+      end
     end
   end
 

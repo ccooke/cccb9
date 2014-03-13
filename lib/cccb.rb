@@ -1,33 +1,4 @@
 
-unless Kernel.respond_to? :caller_locations
-  class Kernel::CallerLocationShim
-    attr_reader :absolute_path, :line, :lineno, :label, :base_label, :path
-
-    def initialize(line)
-      match = line.match( /^(?<path>[^:]+):(?<line>\d+):in\s+`(?<method>[^']+)'$/ )
-      @line = line
-      @absolute_path = match[:path]
-      @lineno = match[:line].to_i
-      @label = match[:method]
-      @base_label = @label
-      @path = @absolute_path.gsub( /^.*?\//, '' )
-    end
-
-    def to_s
-      @line
-    end
-  end
-
-  module Kernel
-    def caller_locations(start=1,length=nil)
-      # This is not pretty. Oh well.
-      locations = caller
-      length ||= locations.count - start
-      locations[start,length].map { |l| ::Kernel::CallerLocationShim.new(l) }
-    end
-  end
-end
-
 require 'etc'
 require 'managedthreads'
 require 'string_format'
@@ -44,6 +15,8 @@ require 'cccb/config'
 require 'cccb/core'
 require 'cccb/irc'
 
+$load_time = Time.now
+$load_errors = []
 print_loading = $VERBOSE || $DEBUG;
 
 Dir.new("lib/cccb/core").select { |f| f.end_with? '.rb' }.each do |file|
@@ -51,6 +24,7 @@ Dir.new("lib/cccb/core").select { |f| f.end_with? '.rb' }.each do |file|
     Kernel.load("lib/cccb/core/#{file}")
   rescue LoadError => e
     puts "Failed to load #{file}: #{e.message}"
+    $load_errors << "#{file}: #{e.message}"
     next
   end
   puts "Loaded #{file}..." if print_loading

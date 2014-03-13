@@ -332,6 +332,12 @@ module CCCB::Core::Bot
       "Test ok: #{match[1]}"
     end
 
+    add_request :debug, /^show load errors$/ do |match, message|
+      message.reply "Last (re)load at #{$load_time}"
+      message.reply $load_errors
+      nil
+    end
+
     add_request :core, /^
       \s*
       copy
