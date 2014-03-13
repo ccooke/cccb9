@@ -1,3 +1,33 @@
+
+unless Kernel.respond_to? :caller_locations
+  class Kernel::CallerLocationShim
+    attr_reader :absolute_path, :line, :lineno, :label, :base_label, :path
+
+    def initialize(line)
+      match = line.match( /^(?<path>[^:]+):(?<line>\d+):in\s+`(?<method>[^']+)'$/ )
+      @line = line
+      @absolute_path = match[:path]
+      @lineno = match[:line].to_i
+      @label = match[:method]
+      @base_label = @label
+      @path = @absolute_path.gsub( /^.*?\//, '' )
+    end
+
+    def to_s
+      @line
+    end
+  end
+
+  module Kernel
+    def caller_locations(start=1,length=nil)
+      # This is not pretty. Oh well.
+      locations = caller
+      length ||= locations.count - start
+      locations[start,length].map { |l| ::Kernel::CallerLocationShim.new(l) }
+    end
+  end
+end
+
 require 'etc'
 require 'managedthreads'
 require 'string_format'
@@ -25,7 +55,6 @@ Dir.new("lib/cccb/core").select { |f| f.end_with? '.rb' }.each do |file|
   end
   puts "Loaded #{file}..." if print_loading
 end
-
 
 class String
   include String::Keyreplace
@@ -57,7 +86,7 @@ class CCCB
     logging.tag = args[:logfile_tag]
 
     {
-      log_level: args[:log_level] || "VERBOSE",
+      log_level: args[:log_level] || "SPAM",
       user: args[:user] || Etc.getlogin,
       nick: args[:nick] || Etc.getlogin,
       servers: args[:servers],
