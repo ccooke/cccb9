@@ -7,7 +7,7 @@ A multiserver IRC bot
 Getting Started
 =======
 
-cccb9 is a flexible multi-server IRC bot written in Ruby (1.9 or 2.0). To try it out, check out the code and run "./cccb9" from the root of the repo. This will generate a default profile and create some state directories. 
+cccb9 is a flexible multi-server IRC bot written in Ruby (requires 2.0 or higher). To try it out, check out the code and run "./cccb9" from the root of the repo. This will generate a default profile and create some state directories. 
 
 The bot is laid out as:
  
