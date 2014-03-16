@@ -157,9 +157,9 @@ module CCCB::Core::HTTPServer
     add_setting :core, "web"
     add_setting :network, "web"
     add_setting :core, "web_sessions", persist: false
-    set_setting( 9000, "http_server", "port" ) unless get_setting( "http_server", "port" )
-    set_setting( "http://localhost:9000", "http_server", "url" ) unless get_setting( "http_server", "url" )
-    set_setting( 15, "web", "session_expire" ) unless get_setting( "http_server", "session_expire" )
+    default_setting 9000, "http_server", "port"
+    default_setting "http://localhost:9000", "http_server", "url"
+    default_setting 15, "web", "session_expire"
 
     begin
       CCCB::ContentServer.restart
