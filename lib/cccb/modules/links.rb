@@ -5,7 +5,7 @@ require 'mechanize'
 module CCCB::Core::Links
   extend Module::Requirements
 
-  URL_REGEX = /((([A-Za-z]{3,9}:(?:\/\/)?)(?:[\-;:&=\+\$,\w]+@)?[A-Za-z0-9\.\-]+|(?:www\.|[\-;:&=\+\$,\w]+@)[A-Za-z0-9\.\-]+)((?:\/[\+~%\/\.\w\-_]*)?\??(?:[\-\+=&;%@\.\w_]*)#?(?:[\.\!\/\\\w]*))?)/
+  needs :bot, :uri_detection
 
   def links_process_line (message, uri_data)
     imgre = /(jpe?g|bmp|png|gif)$/i
@@ -67,20 +67,6 @@ module CCCB::Core::Links
 
     add_request :links, /^what.*url.*logging.*\s*\?\s*$/ do |message|
       "If you're asking about the URL logging site, it's at http://midnight.blue-infinity.net/f5.php"
-    end
-
-    add_hook :links, :message do |message|
-      next unless message.user.get_setting( "options", "uri_events" )
-      text = message.text
-      while match = URL_REGEX.match( text )
-        schedule_hook :uri_found, message, {
-          uri: match[1],
-          protocol: match[3] || "http://",
-          before: match.pre_match,
-          after: match.post_match
-        }
-        text = match.post_match
-      end
     end
 
     add_hook :links, :uri_found do |message, uri_data|
