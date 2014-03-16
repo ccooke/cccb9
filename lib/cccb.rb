@@ -19,15 +19,17 @@ $load_time = Time.now
 $load_errors = []
 print_loading = $VERBOSE || $DEBUG;
 
-Dir.new("lib/cccb/core").select { |f| f.end_with? '.rb' }.each do |file|
-  begin
-    Kernel.load("lib/cccb/core/#{file}")
-  rescue LoadError => e
-    puts "Failed to load #{file}: #{e.message}"
-    $load_errors << "#{file}: #{e.message}"
-    next
+[ "lib/cccb/core", "lib/cccb/modules" ].each do |dir|
+  Dir.new(dir).select { |f| f.end_with? '.rb' }.each do |file|
+    begin
+      Kernel.load("#{dir}/#{file}")
+    rescue LoadError => e
+      puts "Failed to load #{dir}/#{file}: #{e.message}"
+      $load_errors << "#{dir}/#{file}: #{e.message}"
+      next
+    end
+    puts "Loaded #{dir}/#{file}..." if print_loading
   end
-  puts "Loaded #{file}..." if print_loading
 end
 
 class String

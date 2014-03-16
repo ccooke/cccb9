@@ -121,7 +121,7 @@ Useful Dictionaries
 Writing Modules
 =======
 
-The bot will autoload all modules added to lib/cccb/core/. All such modules need to be in the CCCB::Core namespace. Here's a simple example that prints the title of youtube videos:
+The bot will autoload all modules added to lib/cccb/modules/. All such modules need to be in the CCCB::Core namespace. Here's a simple example that prints the title of youtube videos:
 
 ```ruby
 require 'mechanize'
@@ -135,7 +135,7 @@ module CCCB::Core::URIVideoTitle
   # The list of dependencies. Almost anything that you are likely
   # to write will depend on :bot. This module depends on :links 
   # because it will process uri events
-  needs :bot, :links
+  needs :bot, :uri_detection
 
   # Every module defines a module_load. These methods will be called
   # in dependency-resolution order (so the CCCB::Core::Bot and 
