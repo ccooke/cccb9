@@ -44,8 +44,11 @@ module CCCB::Core::UserTrack
     end
 
     add_request :user_tracking, /^\s*seen\s+(?<user>\S+)\s*$/i do |match, message|
-      user = message.network.get_user(match[:user].downcase)
-      if user == message.user
+      user = message.network.get_user(match[:user].downcase, autovivify: false)
+      info user.inspect
+      if user.nil?
+        "I have no record of that user. Sorry."
+      elsif user == message.user
         "I don't know. Have you seen yourself?"
       elsif user.name == message.network.nick
         "Yes."

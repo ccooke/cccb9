@@ -724,13 +724,15 @@ class CCCB::Network
     get_user(self.nick)
   end
 
-  def get_user(name)
+  def get_user(name, autovivify: true)
     id = name.downcase
     if users.include? id
       users[id]
-    else
+    elsif autovivify
       # autovivify!
       CCCB::Message.new( self, ":#{name}!nil@nil NOOP", true ).user
+    else
+      nil
     end
   end
 
