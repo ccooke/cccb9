@@ -15,6 +15,7 @@ module Module::Requirements::Feature::Logging
     end
 
     def pop(*args)
+      sleep 1
     end
   end
 
