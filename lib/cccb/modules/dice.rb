@@ -597,11 +597,21 @@ module CCCB::Core::Dice
       end
     end
 
-    add_request :dice, /^\s*(?<keyword>set|preset)\s+(?!my|channel|#)(?<preset>\w+)(?!\s+\S+\s+to)(?:\s+(?<value>.*?))?\s*$/ do |match, message|
-      if match[:keyword] == 'set'
-        message.reply "Please use 'preset' instead of 'set' to define dice expression presets in future: this usage of 'set' is deprecated and will be removed later"
+    add_command :dice, "preset" do |message,args|
+      target = case args[0]
+      when "my"
+        :user
+        args.shift
+      when "channel"
+        :channel
+        args.shift
+      else
+        :user
       end
-      user_setting( message, :user, "roll_presets", match[:preset], match[:value] || "" )
+
+      name = args.shift
+      preset = args.join(" ")
+      message.reply user_setting( message, target, "roll_presets", name, preset || "" )
     end
 
     add_request :dice, /^\s*forget\s+(?<name>\w+)/i do |match, message|

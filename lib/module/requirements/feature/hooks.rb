@@ -10,22 +10,28 @@ module Module::Requirements::Feature::Hooks
     Array(hooklist).each do |hook|
       spam "ADD hook #{hook}" 
       hooks.db[ hook ] ||= []
-      call = caller_locations(1,1).first
+      call = caller_locations(2,1).first
       hooks.features[feature] = true
       hooks.db[ hook ].push(
         :feature => feature,
         :filter => filter,
-        :source_file => call.absolute_path,
+        :source_file => block.source_location[0],
+        :source_line => block.source_location[1],
         :container => call.base_label,
         :code => block
       )
     end
   end
 
-  def remove_hooks source, key = :source_file
-    hooks.db.each do |content|
-      content.delete_if { |item| item[key] == source }
+  def remove_hook(feature, hook, source_file, source_line)
+    hooks.lock.synchronize do
+      match = { feature: feature, source_file: source_file, source_line: source_line }
+      hooks.db[hook].delete_if { |h| match.all? { |k,v| h[k] == v } }
     end
+  end
+
+  def get_hooks(feature, hook)
+    hooks.db[ hook ].select { |h| h[:feature] == feature }
   end
 
   def schedule_hook hook, *args
@@ -34,20 +40,20 @@ module Module::Requirements::Feature::Hooks
 
   def run_hooks hook, *args
     hook_stat :run_hooks, hook, args
-    unless hooks.db.include? hook
-      hooks.db[ hook ] = []
-    end
-    hook_list = hooks.db[ hook ].select do |i|
-      if i.include? :filter and i[:filter].respond_to? :all?
-        begin 
-          i[:filter].all? do |k,v|
-            args[0].send( k ) == v
+    return unless hooks.db.include? hook and hooks.db[hook].count > 0
+    hook_list = hooks.lock.synchronize do
+      hooks.db[ hook ].select do |i|
+        if i.include? :filter and i[:filter].respond_to? :all?
+          begin 
+            i[:filter].all? do |k,v|
+              args[0].send( k ) == v
+            end
+          rescue Exception => e
+            false
           end
-        rescue Exception => e
-          false
+        else
+          true
         end
-      else
-        true
       end
     end
     debug "hooks: #{hook}->(#{args.join(", ")})"
@@ -77,6 +83,9 @@ module Module::Requirements::Feature::Hooks
       }
       spam "RUN: #{ item[:feature] }:#{ hook }->( #{args} )"
       hook_debug << [ Time.now, item ]
+      if hook != :hook_debug_hook
+        schedule_hook :hook_debug_hook, hook, [args]
+      end
       begin
         item[:code].call( *args )
       rescue Exception => e

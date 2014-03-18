@@ -793,7 +793,7 @@ class CCCB::Network
             spam "RAW #{line}"
             schedule_hook :server_message, CCCB::Message.new(self, line )
           rescue Exception => e
-            error "Unable to parse line: #{line}\nException: #{e}\n#{e.backtrace.inspect}"
+            error "Unable to parse line: #{line}\nException: #{e.message}\n#{e.backtrace.inspect}"
           end
         else
           verbose "Disconnected from server #{host}:#{port}"

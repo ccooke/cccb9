@@ -35,15 +35,7 @@ module CCCB::Core::Commands
 
   def module_load
     commands.registry = {
-      words: {
-        command: {
-          words: Hash.new { |h,k|
-            if k == ":hook"
-              h[k] = :command_not_found
-            end
-          }
-        }
-      }
+      words: {}
     }
 
     add_request :commands, /^(.*)$/ do |match, message|
@@ -56,10 +48,12 @@ module CCCB::Core::Commands
       spam "Looking for command #{words.inspect}"
       cursor = commands.registry
       args = words.map &:dup
+      pre = []
       hook = :empty_command
       words.each do |word|
+        spam "CURSOR: #{cursor} WORD: #{word}"
         if cursor[:words].include? word
-          args.shift
+          pre << args.shift
           cursor = cursor[:words][word]
           hook = cursor[:hook] || hook
           spam "Command word #{word}, hook #{hook}"
@@ -68,15 +62,21 @@ module CCCB::Core::Commands
         end
       end
       debug "Scheduling hook for command: #{hook}->(#{args.inspect})"
-      schedule_hook hook, message, *args
+      schedule_hook hook, message, args, pre, cursor
       nil
     end
 
-    add_command :commands, "show commands" do |message, *args|
+    add_hook :commands, :empty_command do |message, args, pre, cursor|
+      pre.shift
+      next unless pre.count > 0
+      message.reply "Ambiguous command '#{pre.join " "}'. Possible commands from this base: #{cursor[:words].keys.join(", ")}"
+    end
+
+    add_command :commands, "show commands" do |message, args|
       message.reply commands.registry.inspect
     end
 
-    add_command :commands, "show hook" do |message, *args|
+    add_command :commands, "show hook" do |message, args|
       if args.count == 0
         message.reply hooks.db.keys.map(&:to_s).inspect
       else

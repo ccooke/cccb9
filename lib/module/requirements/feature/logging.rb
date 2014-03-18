@@ -13,6 +13,9 @@ module Module::Requirements::Feature::Logging
     define_method :<< do |(level,*message)|
       debug_print level, *message
     end
+
+    def pop(*args)
+    end
   end
 
   needs :static_methods
