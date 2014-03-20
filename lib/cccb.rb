@@ -1,4 +1,21 @@
 
+# Early logging
+class Module
+  module Requirements
+    module Feature
+      module Logging
+        @@logging_queue ||= Queue.new
+      end
+    end
+  end
+
+  %i{ critical error warning info verbose debug spam }.each_with_index do |sym,i|
+    define_method sym do |*message|
+      Module::Requirements::Feature::Logging.class_variable_get(:@@logging_queue) << [i,*message]
+    end
+  end
+end
+
 require 'etc'
 require 'managedthreads'
 require 'string_format'
