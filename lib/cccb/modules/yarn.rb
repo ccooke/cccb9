@@ -17,7 +17,7 @@ module CCCB::Core::Yarn
     ]
     add_setting :network, "yarnballs", default: yarns
   
-    add_hook :yarn, :message, { ctcp: :ACTION } do |message|
+    add_hook :yarn, :message, filter: { ctcp: :ACTION } do |message|
       regex = /\syarn\s.*\s#{ message.network.nick }(?:[\s.]|$)/i
 
       next unless match = message.ctcp_text =~ regex

@@ -13,6 +13,7 @@ module Module::Requirements::Feature::CallModuleMethods
       #puts "Call #{a}.#{method}(#{args.join(", ")})" if $DEBUG
       begin
         #cp1 = Time.now.to_f
+        debug("call #{a}.#{method}->(#{args.map(&:inspect).join(", ")})")
         a.instance_method(method).bind(self).(*args)
         #cp2 = Time.now.to_f
         #puts("c_sm_m #{method} in #{a} took #{cp2 - cp1}s")

@@ -49,7 +49,7 @@ module CCCB::Core::Bot
   end
 
   def add_request feature, regex, &block
-    add_hook feature, :request do |request, message|
+    add_hook feature, :request, generator: true do |request, message|
       if match = regex.match( request )
         debug "REQ: Matched #{regex}"
         begin 

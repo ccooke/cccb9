@@ -6,17 +6,21 @@ module Module::Requirements::Feature::Hooks
   extend Module::Requirements
   needs :logging, :managed_threading
   
-  def add_hook(feature, hooklist, filter = {}, &block)
+  def add_hook(feature, hooklist, filter: {}, generator: false, &block)
     Array(hooklist).each do |hook|
       spam "ADD hook #{hook}" 
       hooks.db[ hook ] ||= []
-      call = caller_locations(2,1).first
+      call = if generator
+        caller_locations(4,1).first
+      else
+        caller_locations(3,1).first
+      end
       hooks.features[feature] = true
       hooks.db[ hook ].push(
         :feature => feature,
         :filter => filter,
-        :source_file => block.source_location[0],
-        :source_line => block.source_location[1],
+        :source_file => call.path,
+        :source_line => call.lineno,
         :container => call.base_label,
         :code => block
       )
