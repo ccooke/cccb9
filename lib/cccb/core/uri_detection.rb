@@ -2,6 +2,8 @@
 module CCCB::Core::URIDetection
   extend Module::Requirements
 
+  needs :bot
+
   URL_REGEX = /
     (?<uri>
       (?<protocol>
@@ -44,7 +46,12 @@ module CCCB::Core::URIDetection
   /x
 
   def module_load
-    default_setting(true, "options", "uri_events")
+    begin
+      default_setting(true, "options", "uri_events")
+    rescue Exception => e
+      verbose e
+      verbose e.backtrace
+    end
 
     add_hook :uri_detection, :message do |message|
       debug("In uri detection")
