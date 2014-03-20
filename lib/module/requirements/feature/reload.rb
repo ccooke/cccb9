@@ -5,8 +5,11 @@ module Module::Requirements::Feature::Reload
   needs :hooks, :call_module_methods
 
   def shutdown
+    verbose "Hook reload_pre"
     run_hooks :reload_pre
+    verbose "c_sm module_unload"
     call_submodules :module_unload
+    verbose "c_sm module_unload done"
 
     #save
 
@@ -121,17 +124,20 @@ module Module::Requirements::Feature::Reload
 
   def reload_loop    
     startup
-    clean_reload
     reload.queue = Queue.new
     reload_body
   end
 
   def clean_reload
     Thread.pass
+    verbose "Obtaining reload lock"
     reload.lock.synchronize do
+      verbose "Reload locked"
       debug "Reloading client"
       shutdown
+      verbose "Shutdown done"
       redefine
+      verbose "redefine done"
       startup
       critical "Client reloaded"
     end
