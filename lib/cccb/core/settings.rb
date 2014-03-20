@@ -17,7 +17,7 @@ module CCCB::Settings
       spam "Get #{self}.#{name} is transient"
       transient_storage
     end
-    spam "Getting setting #{self}.#{name} got #{settings.inspect}"
+    spam "Getting setting #{self}.#{name}"
     db = CCCB.instance.settings.db
 
     parent = if CCCB::SETTING_CASCADE.include? self.class
@@ -67,8 +67,9 @@ module CCCB::Settings
   end
 
   def default_setting(value, name, key)
-    hash = get_setting(name)
-    hash[key] = value unless hash.include? key
+    if get_setting(name,key).nil?
+      set_setting(value,name,key)
+    end
   end
 
   def set_setting(value, name, key=nil)
@@ -110,8 +111,17 @@ module CCCB::Settings
 
   def setting_option(setting,option)
     spam "Get option #{self}.#{setting}.#{option}"
-    if CCCB.instance.settings.db[self.class].include? setting
-      CCCB.instance.settings.db[self.class][setting][option]
+    begin
+      if CCCB.instance.settings.db[self.class].include? setting
+        CCCB.instance.settings.db[self.class][setting][option]
+      end
+    rescue Exception => e
+      pp "CLASS: #{self.class} ", CCCB.instance.settings.db
+      sleep 1
+      pp e
+      pp e.backtrace
+      STDOUT.flush
+      raise e
     end
   end
 
