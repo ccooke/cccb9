@@ -38,6 +38,7 @@ class CCCB::ContentServer
         Port: CCCB.instance.get_setting( "http_server", "port" ),
         DoNotReverseLookup: true,
         SSLEnable: true,
+        Logger: WEBrick::Log.new(nil,WEBrick::Log::WARN),
         AccessLog: [
           [ 
             CCCB::Logger,
@@ -58,7 +59,16 @@ class CCCB::ContentServer
       end
         
       @@server = WEBrick::HTTPServer.new options
-      break if @@server
+      if @@server
+        unless options.include? :SSLCertificate and options.include? :SSLPrivateKey
+          Dir.mkdir("conf/ssl") unless Dir.exists?("conf/ssl")
+          File.write("conf/ssl/auto_generated.cert", @@server.ssl_context.cert.to_s)
+          File.write("conf/ssl/auto_generated.key", @@server.ssl_context.key.to_s)
+          CCCB.instance.set_setting("conf/ssl/auto_generated.cert","http_server","cert_file")
+          CCCB.instance.set_setting("conf/ssl/auto_generated.key","http_server","cert_key")
+        end
+        break
+      end
       error "HTTP server did not start - sleeping a few seconds before retrying"
       sleep delay
       delay *= 2
