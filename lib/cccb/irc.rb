@@ -254,7 +254,7 @@ class CCCB::Message
           when 'o'
             channel.user_by_name(nick).set_mode op: !!(mode=='+')
           when 'v'
-            channel.user_by_name(nuck).set_mode voice: !!(mode=='+')
+            channel.user_by_name(nick).set_mode voice: !!(mode=='+')
           end
         end
       end
