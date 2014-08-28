@@ -600,11 +600,11 @@ module CCCB::Core::Dice
     add_command :dice, "preset" do |message,args|
       target = case args[0]
       when "my"
+        args.shift
         :user
-        args.shift
       when "channel"
-        :channel
         args.shift
+        :channel
       else
         :user
       end
