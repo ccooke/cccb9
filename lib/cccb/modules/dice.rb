@@ -744,5 +744,27 @@ module CCCB::Core::Dice
       ],
       :info
     )
+
+
+    CCCB::ContentServer.add_keyword_path('dice') do |network,session,match|
+      expression = match[:call].split('/').join(';')
+      expression.gsub(/;\s*$/,'')
+      message = CCCB::Message.new( network, "PRIVMSG d20 :roll #{expression}", true )
+      p message
+      message.instance_variable_set(:@content_server_strings, [])
+      def message.reply(reply)
+        puts "M: #{reply}"
+        @content_server_strings << reply
+      end
+      roller = CCCB::DieRoller.new( message )
+      rolls = roller.roll(expression, "1d20", "roll")
+      roller.message_die_roll("system", rolls, "roll")
+      { 
+        template: :plain_text,
+        text: message.instance_variable_get(:@content_server_strings).join("\n").gsub(/\x03..(.*?)\x0F/,'\1'),
+        title: "D&D 5e treasure table",
+      }
+    end
+
   end
 end

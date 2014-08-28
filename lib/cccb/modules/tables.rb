@@ -1,3 +1,4 @@
+# encoding: utf-8
 module CCCB::Core::Tables
   extend Module::Requirements
 
@@ -88,7 +89,7 @@ module CCCB::Core::Tables
           entries: {}
         }
         message.user.set_setting table, "session", "__user_current_table"
-        unless container.setting?("tables", match[:table])
+        if container.get_setting("tables", match[:table]).nil?
           container.set_setting( table, "tables", match[:table] )
           "Created #{match[:table]}"
         else
@@ -120,7 +121,7 @@ module CCCB::Core::Tables
       end
     end
 
-    add_request :tables, /^(?<command>add|remove|show) table (?<type>entry|link) (?<from>\d+)(?:-(?<to>\d+))?(?: (?<data>.*?))?\s*$/ do |match, message|
+    add_request :tables, /^(?<command>add|remove|list) table (?<type>entry|link) (?<from>\d+)(?:-(?<to>\d+))?(?: (?<data>.*?))?\s*$/ do |match, message|
       table = message.user.get_setting( "session", "__user_current_table" )
       raise "Open a table first" unless table
 
@@ -137,7 +138,7 @@ module CCCB::Core::Tables
       when "add"
         table[target][range] ||= []
         table[target][range] << [ match[:data], match[:type] ]
-      when "show"
+      when "list"
         table[target].select { |r,d| range.to_a.any? { |i| r.include? i } }.map do |r,d|
           "#{r}: #{d}"
         end

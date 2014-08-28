@@ -354,6 +354,17 @@ module CCCB::Core::Treasure
       ]
     )
 
+    CCCB::ContentServer.add_keyword_path('treasure') do |network,session,match|
+      type, level = match[:call].split('/')
+      { 
+        template: :plain_text,
+        text: DND5eTreasure.generate(type || "pouch", level.to_i || 1).join("\n"),
+        title: "D&D 5e treasure table",
+      }
+    end
+
   end
 
 end
+
+
