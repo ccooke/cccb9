@@ -1,3 +1,4 @@
+# encoding: utf-8
 require 'json'
 
 module CCCB::Core::Bot
@@ -53,6 +54,28 @@ module CCCB::Core::Bot
       if match = regex.match( request )
         debug "REQ: Matched #{regex}"
         begin 
+          if message.to_channel? 
+            rate_limit = message.channel.get_setting("rate_limit",feature.to_s)
+            p rate_limit
+            unless rate_limit.nil?
+              timestamp = Time.now
+              current = message.channel.get_setting("rate_limit_current")
+              current[feature.to_s] ||= {
+                bucket: rate_limit[:bucketsize],
+                last_fill: timestamp,
+                lock: Mutex.new
+              }
+              current = current[feature.to_s]
+              p current
+              current[:lock].synchronize do
+                current[:bucket] += rate_limit[:fillrate] * ( timestamp - current[:last_fill] )
+                current[:bucket] = rate_limit[:bucketsize] if current[:bucket] > rate_limit[:bucketsize]
+                current[:last_fill] = timestamp
+              end
+              raise "Rate limited: try again in #{( 1 - current[:bucket] ) / rate_limit[:fillrate]} seconds" if current[:bucket] < 1
+              current[:bucket] -= 1
+            end
+          end
           result = block.call( match, message  )
           if message.to_channel? 
             result = Array(result).map { |l| "#{message.nick}: #{l}" }
@@ -203,8 +226,26 @@ module CCCB::Core::Bot
     add_setting :channel, "options" 
     add_setting :network, "options"
     add_setting :core, "options"
+    add_setting :core, "rate_limit"
+    add_setting :network, "rate_limit"
+    add_setting :channel, "rate_limit"
+    add_setting :channel, "rate_limit_current", auth: :superuser, persist: false
     set_setting true, "options", "join_on_invite"
     set_setting true, "options", "bang_commands_enabled"
+
+    add_hook :core, :pre_setting_set do |obj, setting, hash|
+      next unless setting == 'rate_limit' and hash.respond_to? :to_hash
+      hash.each do |key, value|
+        unless match = value.match(/^ \s* (?<bucket> \d+(?:\.\d+)? ) \s* \+ \s* (?<fillrate> \d+(?:\.\d+)?) \s*$/x)
+          raise "Invalid setting for rate_limit::#{key} '#{value}' should be of the form '<bucketsize> + <fillrate>' (e.g.: 40+0.5)"
+        else
+          hash[key] = { 
+            bucketsize: match[:bucket].to_f,
+            fillrate: match[:fillrate].to_f
+          }
+        end
+      end
+    end
 
     ( networking.networks.count * 2 + 1 ).times do
       add_hook_runner
