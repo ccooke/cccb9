@@ -30,5 +30,12 @@ module CCCB::Core::Debugging
         end
       end
     end
+
+    add_command :debug, "admin channel leave" do |message,channels|
+      raise "Denied" unless message.user.superuser?
+      channels.each do |channel|
+        message.network.puts "PART #{channel}"
+      end
+    end
   end
 end
