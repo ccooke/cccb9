@@ -23,15 +23,17 @@ module Module::Requirements::Feature::Logging
 
   needs :static_methods
 
+  @@logging_number_to_const = {}
   %i( CRITICAL ERROR WARNING INFO VERBOSE DEBUG SPAM ).each_with_index do |const,index|
     method = const.to_s.downcase.to_sym
     const_set( const, index )
+    @@logging_number_to_const[index] = const
     define_method method do |*message|
       level = self.class.const_get( const )
       Module::Requirements::Feature::Logging.class_variable_get(:@@logging_queue) << [level,*message]
     end
   end
-  
+
   def log( *strings )
     begin
       strings.each do |string|
@@ -57,6 +59,10 @@ module Module::Requirements::Feature::Logging
     logging.log_queue = ThreadLessLog.new
     logging.logfile = File.open( self.logfile, 'a' ) || STDOUT
     global_methods :critical, :error, :warning, :info, :verbose, :debug, :spam, :debug_print
+    logging.number_to_const = {}
+    @@logging_number_to_const.each do |k,v|
+      logging.number_to_const[k] = v
+    end
   end
 
   def module_start
