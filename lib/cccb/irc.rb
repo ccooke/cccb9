@@ -369,7 +369,11 @@ class CCCB::Message
       end
       self.send(sym,*args)
     else
-      super
+      begin
+        super
+      rescue Exception => e
+        p e, e.backtrace
+      end
     end
   end
 
@@ -500,6 +504,10 @@ class CCCB::User
   def encode_with(coder)
     coder.tag = "tag:cccb9:user"
     coder.scalar = "#{network.name}: #{nick}"
+  end
+
+  def msg(data)
+    network.msg(self.nick,data)
   end
 
   YAML.add_domain_type( "cccb9", "user" ) do |tag, data|
