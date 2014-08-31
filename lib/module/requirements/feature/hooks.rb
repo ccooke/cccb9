@@ -6,7 +6,7 @@ module Module::Requirements::Feature::Hooks
   extend Module::Requirements
   needs :logging, :managed_threading
   
-  def add_hook(feature, hooklist, filter: {}, generator: false, &block)
+  def add_hook(feature, hooklist, filter: {}, generator: false, top: false, &block)
     Array(hooklist).each do |hook|
       spam "ADD hook #{hook}" 
       hooks.db[ hook ] ||= []
@@ -16,7 +16,8 @@ module Module::Requirements::Feature::Hooks
         caller_locations(3,1).first
       end
       hooks.features[feature] = true
-      hooks.db[ hook ].push(
+      method = top ? :unshift : :push
+      hooks.db[ hook ].send(method,
         :feature => feature,
         :filter => filter,
         :source_file => call.path,
@@ -42,9 +43,8 @@ module Module::Requirements::Feature::Hooks
     hooks.queue << [ hook, args ]
   end
 
-  def run_hooks hook, *args
-    hook_stat :run_hooks, hook, args
-    return unless hooks.db.include? hook and hooks.db[hook].count > 0
+  def get_blocks_for hook, *args
+    return [] unless hooks.db.include? hook and hooks.db[hook].count > 0
     hook_list = hooks.lock.synchronize do
       hooks.db[ hook ].select do |i|
         if i.include? :filter and i[:filter].respond_to? :all?
@@ -60,15 +60,64 @@ module Module::Requirements::Feature::Hooks
         end
       end
     end
+  end
+
+  def hook_runnable? hook, *args
+    count = 0
+    info "Runnable #{hook}?"
+    yield_hooks(hook,*args) { count += 1 }
+    info "Count: #{count}"
+    count > 0
+  end
+
+  def run_hooks hook, *args
+    hook_stat :run_hooks, hook, args
     debug "hooks: #{hook}->(#{args.join(", ")})"
     hook_debug = []
     hook_stat :hooks_visited, hook_debug
+    yield_hooks(hook,*args) do |item|
+      spam "RUN: #{ item[:feature] }:#{ hook }->( #{args} )"
+      hook_debug << [ Time.now, item ]
+      if hook != :hook_debug_hook
+        schedule_hook :hook_debug_hook, hook, [args]
+      end
+      begin
+        if item[:code].call( *args ) == :end_hook_run
+          return item      
+        end
+      rescue Exception => e
+        if args.last.respond_to? :to_hash and args.last[:throw_exceptions]
+          raise e
+        else
+          schedule_hook :exception, e, hook, item, args
+          if hooks.db.include? :backtrace
+            current_dir = Dir.pwd
+            short_names = {}
+            minimised_backtrace = e.backtrace.map do |l|
+              match = l.match %r{^(?:#{current_dir})?(/?lib/)?(?<file>.*?/(?<short_name>[^/]+?).rb):(?<line_number>\d+):in.*$}
+              unless short_names.include? match[:file]
+                i = 1
+                while short_names.values.include?( short_name = match[:short_name] + i.to_s )
+                  i += 1
+                end
+                short_name = match[:short_name] + i.to_s
+                short_names[match[:file]] = short_name
+              end
+              "#{short_names[match[:file]]}:#{match[:line_number]}"
+            end
+            schedule_hook :backtrace, e, short_names, minimised_backtrace, hook, item, args 
+          end
+        end
+      end
+    end
+  end
+
+  def yield_hooks hook, *args
+    hook_list = get_blocks_for(hook, *args)
     feature_cache = {}
     while hook_list.count > 0
       item = hook_list.shift
-
       next if feature_cache.include? item[:feature] and feature_cache[item[:feature]] == false
-
       next if args.any? { |a|
         begin
           if a.respond_to? :select_hook_feature? 
@@ -84,17 +133,10 @@ module Module::Requirements::Feature::Hooks
         rescue Exception => e
           verbose "Exception while filtering features: #{e.message}"
         end
+
       }
-      spam "RUN: #{ item[:feature] }:#{ hook }->( #{args} )"
-      hook_debug << [ Time.now, item ]
-      if hook != :hook_debug_hook
-        schedule_hook :hook_debug_hook, hook, [args]
-      end
-      begin
-        item[:code].call( *args )
-      rescue Exception => e
-        schedule_hook :exception, e, hook, item
-      end
+
+      yield item
     end
   end
 
