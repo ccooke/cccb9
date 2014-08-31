@@ -1,3 +1,4 @@
+require 'thread'
 
 # Early logging
 class Module
@@ -40,7 +41,7 @@ print_loading = $VERBOSE || $DEBUG;
   Dir.new(dir).select { |f| f.end_with? '.rb' }.each do |file|
     begin
       Kernel.load("#{dir}/#{file}")
-    rescue LoadError => e
+    rescue Exception => e
       puts "Failed to load #{dir}/#{file}: #{e.message}"
       $load_errors << "#{dir}/#{file}: #{e.message}"
       next
