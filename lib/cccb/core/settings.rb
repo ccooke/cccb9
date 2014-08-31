@@ -234,13 +234,16 @@ module CCCB::Core::Settings
   def module_load
     settings.db ||= {}
     settings.default ||= Hash.new { {} }
+
+    add_hook :core, :pre_setting_set do |obj, setting, hash|
+      raise "Breaking the bot is not allowed" unless hash.respond_to? :to_hash
+    end
     
     SETTING_TARGET.values.each do |klass|
       klass.instance_exec do
         include CCCB::Settings
       end
     end
-
     
   end
 end
