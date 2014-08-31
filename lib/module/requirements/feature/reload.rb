@@ -55,7 +55,7 @@ module Module::Requirements::Feature::Reload
           #  reload.errors << err
           #end
         rescue Exception => e
-          puts "RELOAD EXCEPTION"
+          puts "MARK RELOAD EXCEPTION"
           puts e
           pp e.backtrace
         end
