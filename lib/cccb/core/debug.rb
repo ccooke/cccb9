@@ -53,5 +53,13 @@ module CCCB::Core::Debugging
       end )
     end
 
+    add_command :debug, "admin hook runnable" do |message, (hook)|
+      if hook_runnable? hook.to_sym, message
+        message.reply "true"
+      else
+        message.reply "false"
+      end
+    end
+
   end
 end
