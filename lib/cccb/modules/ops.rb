@@ -54,7 +54,7 @@ module CCCB::Core::Ops
       end
     end
 
-    add_request :ops, /^op me$/ do |match, message|
+    add_command :ops, "op me" do |message|
       next unless message.to_channel?
       user_id = if message.user.delegated? 
         message.user.delegated.id
@@ -64,9 +64,9 @@ module CCCB::Core::Ops
         
       if message.user.authenticated? and message.network.get_setting("ops", user_id)
         message.network.puts "MODE #{message.channel} +o #{message.nick}"
-        "OK"
+        message.reply "OK"
       else
-        "Possibly if you registered"
+        message.reply "Possibly if you registered"
       end
     end
 
