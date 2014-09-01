@@ -22,12 +22,14 @@ module CCCB::Core::TwitterMessage
       # Return the given twitter link, then load the meta_refresh 
       # (mobile) page.
       agent = Mechanize.new
-      mobile_url = agent.get(uri_data[:uri]).meta_refresh[0].href
-      mobile_page = agent.get(mobile_url)
+      agent.user_agent_alias = 'Linux Firefox'
+      uri = uri_data[:uri].gsub(/mobile\.twitter\.com/,'twitter.com')
 
-      name = match[:name]
-      tweet = mobile_page.search('.main-tweet .tweet-content .tweet-text div').text
-      date = mobile_page.search('.main-tweet .tweet-content .metadata a').text
+      page = agent.get(uri)
+
+      tweet = page.search('.tweet-text').first.text
+      date = page.search('.client-and-actions .metadata span').first.text
+      name = page.search('.js-action-profile-name b').first.text
 
       message_reply = "twitter \x0311|\x0F #{tweet} \x0311|\x0F tweeted by @#{name} at #{date}"
       message.reply message_reply
@@ -38,8 +40,8 @@ module CCCB::Core::TwitterMessage
       twitter_message.history.shift if twitter_message.history.count > 1024
     end
 
-    add_request :twitter_message, /^link search (?<pattern>.*?)\s*$/ do |match, message|
-      pattern = Regexp.escape(match[:pattern])
+    add_command :twitter_message, "link search" do |message, args|
+      pattern = Regexp.escape(args.join(' '))
       pattern.gsub! /%/, '.*'
       regex = Regexp.new(pattern, true)
       seen = {}
@@ -50,8 +52,6 @@ module CCCB::Core::TwitterMessage
         message.reply "from #{nick} \x0311|\x0F #{uri} \x0311|\x0F @#{name} \x0311|\x0F @#{date} \x0311|\x0F @#{tweet}"
         seen[uri] = true
       end
-      nil # requests automatically respond with whatever the block returns
-          # ending with nil prevents this
     end
   end
 end
