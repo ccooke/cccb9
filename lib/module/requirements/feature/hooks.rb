@@ -117,7 +117,10 @@ module Module::Requirements::Feature::Hooks
     feature_cache = {}
     while hook_list.count > 0
       item = hook_list.shift
-      next if feature_cache.include? item[:feature] and feature_cache[item[:feature]] == false
+      if feature_cache.include? item[:feature] and feature_cache[item[:feature]] == false
+        schedule_hook :"debug_deny_#{item[:feature]}", hook, item
+        next 
+      end
       next if args.any? { |a|
         begin
           if a.respond_to? :select_hook_feature? 
@@ -126,6 +129,7 @@ module Module::Requirements::Feature::Hooks
               debug "Hook #{hook}: ALLOW #{item[:feature]}"
               false
             else
+              schedule_hook :"debug_deny_#{item[:feature]}", hook, item
               debug "Hook #{hook}: DENY #{item[:feature]}"
               true
             end
