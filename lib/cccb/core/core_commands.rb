@@ -16,17 +16,16 @@ module CCCB::Core::CoreCommands
       message.reply copy_user_setting( message, args[0], args[1] )
     end
 
-    add_command :core, [ ["set","setting"], ["my","channel",""] ] do |message, args, word|
+    add_command :core, [ ["set","setting"], ["my","channel",""] ] do |message, args, words|
       setting = args.shift
       args.shift if args[0] == '='
       value = args.join(' ') unless args.empty?
-      default = {}
-      if message.to_channel? and word == "channel"
-        default[:type] = message.channel
-      elsif word == "my"
-        default[:type] = "user"
+      default_type = if message.to_channel? and words.last == "channel"
+        "channel"
+      elsif words.last == "my"
+        "user"
       end
-      setting = default.merge( parse_setting( setting, message ) )
+      setting = parse_setting( setting, message, default_type )
       message.reply user_setting( message, setting, value )
     end
 

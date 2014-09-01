@@ -35,7 +35,7 @@ module CCCB::Core::Bot
     MODE:         "#{LOG_CONVERSATION} MODE [%(arg1toN)] by %(nick_with_mode)"
   }
 
-  def parse_setting(setting,message)
+  def parse_setting(setting,message,default_type = nil)
     if setting.respond_to? :to_hash
       if setting.include? :name or setting.include? :key
         return setting
@@ -43,7 +43,7 @@ module CCCB::Core::Bot
     end
     match = SETTING.match(setting) or raise "Invalid setting: #{setting}"
     data = %i{ type name key }.each_with_object({}) { |k,o| o[k] = match[k] }
-    data[:type] ||= message.to_channel? ? "channel" : "user"
+    data[:type] ||= default_type || (message.to_channel? ? "channel" : "user")
     data[:name] ||= "options"
     data
   end
