@@ -13,21 +13,7 @@ module CCCB::Core::Help
   def module_load
     help.topics = {}
 
-    add_request( :debug, /^loglevel (?<level>\w+)/i ) do |match, message|
-      if message.user.superuser?
-        level = match[:level].to_s.upcase.to_sym
-        if self.class.constants.include? level
-          logging.loglevel = self.class.const_get( level )
-          "Okay, logging is now set to #{level}"
-        else
-          "No such log level #{level}"
-        end
-      else
-        "Denied"
-      end
-    end
-
-    add_request( :help, /^h[ae]lp!?(?:\s+(?<topic>\w+))?$/i ) do |match, message|
+    add_command :help, "help" do |message, args|
       "See #{CCCB.instance.get_setting("http_server","url")}/network/#{message.network}/help/#{match[:topic]}"
     end
 
@@ -41,6 +27,7 @@ module CCCB::Core::Help
       ],
       :info
     )
+
     add_help(
       :help,
       "requests",
