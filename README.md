@@ -101,7 +101,7 @@ The setting command is used to both view and alter dictionaries. Generally, it u
 
 To set a key, you send the request "setting <identifier> = <value>". For instance:
 
-    18:54 <ccooke> !setting network::allowed_features::public_log = false
+    18:54 <ccooke> !set network::allowed_features::public_log false
     18:54 <d20> ccooke: Setting freenode::allowed_features::public_log is set to false
 
 To unset a key, assign either nil or an empty value to it.
@@ -135,7 +135,7 @@ module CCCB::Core::URIVideoTitle
   # The list of dependencies. Almost anything that you are likely
   # to write will depend on :bot. This module depends on :links 
   # because it will process uri events
-  needs :bot, :uri_detection
+  needs :bot, :links
 
   # Every module defines a module_load. These methods will be called
   # in dependency-resolution order (so the CCCB::Core::Bot and 
@@ -183,8 +183,8 @@ module CCCB::Core::URIVideoTitle
       uri_video_title.history.shift if uri_video_title.history.count > 1024
     end
 
-    add_request :uri_video_title, /^link search (?<pattern>.*?)\s*$/ do |match, message|
-      pattern = Regexp.escape(match[:pattern])
+    add_command :uri_video_title, "link search" do |message, args|
+      pattern = Regexp.escape(args.join(' '))
       pattern.gsub! /%/, '.*'
       regex = Regexp.new(pattern)
       seen = {}
@@ -195,8 +195,6 @@ module CCCB::Core::URIVideoTitle
         message.reply "from #{nick} [#{title}]: #{uri}"
         seen[uri] = true
       end
-      nil # requests automatically respond with whatever the block returns
-          # ending with nil prevents this
     end
   end
 end
