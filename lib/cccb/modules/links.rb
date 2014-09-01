@@ -65,10 +65,6 @@ module CCCB::Core::Links
     options["log_links"] = true unless options.include? "log_links"
     options["videotitle"] = true unless options.include? "videotitle"
 
-    add_request :links, /^what.*url.*logging.*\s*\?\s*$/ do |message|
-      "If you're asking about the URL logging site, it's at http://midnight.blue-infinity.net/f5.php"
-    end
-
     add_hook :links, :uri_found do |message, uri_data|
       next unless message.to_channel?
       next unless message.user.get_setting( "options", "log_links" )
