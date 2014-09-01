@@ -1,7 +1,7 @@
 module CCCB::Core::Commands
   extend Module::Requirements
 
-  needs :bot
+  needs :bot, :filter_hooks
 
   COMMAND_WORD_REGEX = /
     (?:
@@ -28,16 +28,36 @@ module CCCB::Core::Commands
     return [ "  " * indent + "# #{banner || "From #{file}:#{line}"}" ] + lines[line-1,length+2]
   end
 
-  def add_command(feature, hook_name, &block)
-    hook_name = (["command"] + (hook_name.to_s.split)).join('/').to_sym
-    debug "Adding command #{hook_name}"
-    cursor = commands.registry
-    hook_name.to_s.split(%r{/}).each do |w|
-      cursor[:words][w] ||= { words: {} }
-      cursor = cursor[:words][w]
+  def expand_words(list)
+    list = Array(list)
+    arrays,non_arrays = list.partition { |i| i.respond_to? :each }
+    if arrays.empty?
+      [ non_arrays.join(' ') ]
+    else
+      first_array,*arrays = arrays
+      products = first_array.product(*arrays)
+      products.each_with_object([]) { |i,expand_wordsinations| 
+        expand_wordsinations << list.map { |j| 
+          j.respond_to?(:each) ? i.shift : j } 
+        }.map { |i| i.join(' ') 
+      }
     end
-    cursor[:hook] = hook_name
-    add_hook feature, hook_name, generator: true, &block
+  end
+
+  def add_command(feature, hook_names, &block)
+    debug "WORDS: #{expand_words(hook_names)}"
+    expand_words(hook_names).each do |hook_name|
+      real_hook_name = (["command"] + (hook_name.to_s.split)).join('/').to_sym
+      debug "Adding command #{real_hook_name}"
+      cursor = commands.registry
+      real_hook_name.to_s.split(%r{/}).each do |w|
+        cursor[:words][w] ||= { words: {}, hooks: [] }
+        cursor = cursor[:words][w]
+        cursor[:hooks] += [ real_hook_name ]
+      end
+      cursor[:hook] = real_hook_name
+      add_hook feature, real_hook_name, generator: true, &block
+    end
   end
 
   def auth_command(auth_class, message)
@@ -59,11 +79,19 @@ module CCCB::Core::Commands
   end
 
   def module_load
+    default_setting true, "allowed_features", "commands"
+
     commands.registry = {
       words: {}
     }
 
-    add_request :commands, /^(.*)$/ do |match, message|
+    add_hook :core, :exception, top: true do |e, hook, item, args|
+      next unless hook =~ /^command\//
+      args.first.reply "Error: #{e.message}"
+      :end_hook_run
+    end
+
+    add_request :core, /^(.*)$/ do |match, message|
       string = match[1]
       verbose "In words, parsing #{string}"
       words = string.scan(COMMAND_WORD_REGEX).map do |(_, quoted_word, _, _, simple_word)|
@@ -86,19 +114,28 @@ module CCCB::Core::Commands
           break
         end
       end
-      debug "Scheduling hook for command: #{hook}->(#{args.inspect})"
-      schedule_hook hook, message, args, pre, cursor
+      debug "Scheduling hook for command: #{hook}->(#{args.inspect} [PRE:#{pre}] [CURSOR:#{cursor}])"
+      schedule_hook hook, message, args, pre, cursor, hook
       nil
     end
 
-    add_hook :commands, :empty_command do |message, args, pre, cursor|
+    add_hook :core, :empty_command do |message, args, pre, cursor|
       pre.shift
       next unless pre.count > 0
-      message.reply "Ambiguous command '#{pre.join " "}'. Possible commands from this base: #{cursor[:words].keys.join(", ")}"
+      enabled = cursor[:words].select { |k,v| 
+        v[:hooks].any? { |h| 
+          hook_runnable? h, message
+        } 
+      }.map(&:first).join(", ")
+      message.reply "Ambiguous command '#{pre.join " "}'. Possible commands from this base: #{enabled}"
     end
 
     add_command :commands, "show commands" do |message, args|
       message.reply commands.registry.inspect
+    end
+
+    add_command :commands, "show features" do |message, args|
+      message.reply hooks.features.keys.map(&:to_s).inspect
     end
 
     add_command :commands, "show hook" do |message, args|
