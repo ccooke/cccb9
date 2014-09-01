@@ -339,11 +339,10 @@ module CCCB::Core::Treasure
 
   def module_load
 
-    add_request :treasure, /^\s*treasure(?:\s+(?<type>\w+)(?:\s+(?<level>\d+)))\s*$/i do |match, message|
-      type = match[:type] || 'pouch'
-      level = match[:level].to_i || 1
-      
-      DND5eTreasure.generate( type, level )
+    add_command :treasure, "treasure" do |message, (type, level)|
+      type ||= 'pouch'
+      level = level.nil? ? 1 : level.to_i
+      message.reply DND5eTreasure.generate( type, level )
     end
 
     add_help(
