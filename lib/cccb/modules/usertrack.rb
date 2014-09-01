@@ -43,10 +43,11 @@ module CCCB::Core::UserTrack
       end
     end
 
-    add_request :user_tracking, /^\s*seen\s+(?<user>\S+)\s*$/i do |match, message|
-      user = message.network.get_user(match[:user].downcase, autovivify: false)
+    add_command :user_tracking, "seen" do |message, (username)|
+      raise "Who?" if username.nil?
+      user = message.network.get_user(username.downcase, autovivify: false)
       info user.inspect
-      if user.nil?
+      message.reply (if user.nil?
         "I have no record of that user. Sorry."
       elsif user == message.user
         "I don't know. Have you seen yourself?"
@@ -72,29 +73,28 @@ module CCCB::Core::UserTrack
             "You can't see them online at the moment, though."
           end
         }"
-      end
+      end )
     end
 
-    add_request :user_tracking, /^\s*tell\s+(?<user>\S+)\s+(?<note>.*?)\s*$/i do |match, message|
-      user = message.network.get_user(match[:user].downcase)
+    add_command :user_tracking, "tell" do |message, args|
+      raise "Who?" if args[0].nil?
+      username = args.shift
+      raise "Tell #{username} what?" if args[0].nil?
+      note = args.join(' ')
+      user = message.network.get_user(username.downcase)
       tells = user.get_setting("user_tracking", "tells")
       if tells.nil?
         tells = []
         user.set_setting( tells, "user_tracking", "tells")
       end      
 
-      if user.channels.count == 0
-        tells << [ message.user, message.time, match[:note] ]
+      message.reply( if user.channels.count == 0
+        tells << [ message.user, message.time, note ]
         "Ok"
       else
         "They appear to still be online. Try sending that to them directly."
-      end
+      end )
     end
-
-#    add_request :user_tracking, /^\s*channels\s+(?<user>\S+)\s*$/ do |match, message|
-#      user = message.network.get_user(match[:user].downcase)
-#      user.channels
-#    end
 
   end
 end
