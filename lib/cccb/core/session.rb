@@ -149,9 +149,9 @@ module CCCB::Core::Session
       end
     end
 
-    add_request :session, /^register\s+(?<password>.*?)\s*$/i do |match, message|
-      if message.to_channel?
-        if message.user.registered? and message.user.verify_password(match[:password])
+    add_command :session, "register" do |messaeg, args|
+      message.reply( if message.to_channel?
+        if message.user.registered? and message.user.verify_password(args[0].join(" "))
           message.user.set_setting(SecureRandom.random_bytes(32), "identity", "password")
         end
         "Denied. Hope that password you just invalidated wasn't yours"
@@ -159,9 +159,9 @@ module CCCB::Core::Session
         if match[:password].to_s == ""
           "You need a password to register"
         else
-          message.user.register(match[:password])
+          message.user.register(args.join(" "))
         end
-      end
+      end )
     end
   end
 end
