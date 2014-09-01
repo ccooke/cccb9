@@ -31,11 +31,10 @@ module CCCB::Core::PublicLogs
       end
     end
 
-    add_request( :public_log, /\s*(?<toggle>start|stop) session\s+(?<session>.*?)\s*$/i ) do |match, message|
+    add_command :public_log, [ %w{start stop}, 'session' ] do |message, (session), words|
       next unless message.to_channel?
-
-      toggle = match[:toggle].downcase
-      session = match[:session]
+      toggle = words[1].downcase
+      session ||= 'default'
 
       if toggle == 'start'
         unless message.channel.get_setting("options", "logging")
@@ -44,7 +43,7 @@ module CCCB::Core::PublicLogs
             url = message.channel.get_setting("options", "log_url_format")
             message.channel.set_setting(:auto, "log_sessions", session)
           else
-            next "You are not authorised to enable logging"
+            next message.reply "You are not authorised to enable logging"
           end
         end
       end
@@ -66,13 +65,10 @@ module CCCB::Core::PublicLogs
 
       if message.channel.auth_setting(message, "logging")
         message.channel.set_setting(false, "options", "logging")
-        url = message.channel.get_setting("options", "log_url_format")
+        message.reply  message.channel.get_setting("options", "log_url_format")
       else
-        next "You are not authorised to disable logging"
+        message.reply "You are not authorised to disable logging"
       end
-
-      nil
-
     end
   end
 end
