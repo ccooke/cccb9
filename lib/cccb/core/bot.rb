@@ -76,9 +76,14 @@ module CCCB::Core::Bot
     end
   end
 
-  def rate_limit_by_feature( message, feature )
+  def rate_limit_by_feature( message, feature, hook )
     if message.to_channel? 
-      rate_limit = message.channel.get_setting("rate_limit",feature.to_s)
+      rate_limit = if hook_limit = message.channel.get_setting("rate_limit", "!#{hook}")
+        feature = "!#{hook}"
+        hook_limit
+      else
+        message.channel.get_setting("rate_limit",feature.to_s)
+      end
       unless rate_limit.nil?
         timestamp = Time.now
         current = message.channel.get_setting("rate_limit_current")
@@ -104,7 +109,7 @@ module CCCB::Core::Bot
       if match = regex.match( request )
         debug "REQ: Matched #{regex}"
         begin 
-          rate_limit_by_feature( message, feature )
+          rate_limit_by_feature( message, feature, :request )
           result = block.call( match, message  )
           if message.to_channel? 
             result = Array(result).map { |l| "#{message.nick}: #{l}" }
@@ -271,6 +276,7 @@ module CCCB::Core::Bot
     add_hook :core, :pre_setting_set do |obj, setting, hash|
       next unless setting == 'rate_limit' and hash.respond_to? :to_hash
       hash.each do |key, value|
+        next if value.nil?
         unless match = value.match(/^ \s* (?<bucket> \d+(?:\.\d+)? ) \s* \+ \s* (?<fillrate> \d+(?:\.\d+)?) \s*$/x)
           raise "Invalid setting for rate_limit::#{key} '#{value}' should be of the form '<bucketsize> + <fillrate>' (e.g.: 40+0.5)"
         else

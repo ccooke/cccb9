@@ -117,7 +117,7 @@ module CCCB::Core::Commands
           break
         end
       end
-      rate_limit_by_feature( message, commands.feature_lookup[hook] )
+      rate_limit_by_feature( message, commands.feature_lookup[hook], hook )
       debug "Scheduling hook for command: #{hook}->(#{args.inspect}"
       schedule_hook hook, message, args, pre, cursor, hook
       nil
