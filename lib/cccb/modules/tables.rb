@@ -65,55 +65,53 @@ module CCCB::Core::Tables
     add_setting :network, "tables"
     add_setting :core, "tables"
 
-    add_request :tables, /^\s*table\s+(?<table>\w+)\s*$/ do |match, message|
-      table = match[:table]
-    end
-
-    add_request :tables, /^\s*(?<command>create|destroy|open|close)\s+(?:(?<target>core|network|channel|user)\s+)?table\s+(?<table>\w+)\s*$/ do |match, message|
-      target = if match[:target]
-        match[:target]
-      else 
+    add_command :tables, [ %w{ create destroy open close }, [ 'core', 'network', 'channel', 'user', '' ], "table" ] do |message, args, words|
+      command = words[1]
+      target = if words[2] == 'table'
         if message.to_channel?
           :channel
         else
           :user
         end
-      end
-
+      else
+        words[2]
+      end.to_sym
+      table_name = args[0]
+      
       container = message.send(target)
       raise "Denied: You are not allowed to modify tables in the #{target} class" unless container.auth_setting( message, "tables" )
 
-      case match[:command]
+      message.reply case command
       when "create","open"
-        table = container.get_setting("tables", match[:table]) || {
+        table = container.get_setting("tables", table_name) || {
           entries: {}
         }
         message.user.set_setting table, "session", "__user_current_table"
-        if container.get_setting("tables", match[:table]).nil?
-          container.set_setting( table, "tables", match[:table] )
-          "Created #{match[:table]}"
+        if container.get_setting("tables", table_name).nil?
+          container.set_setting( table, "tables", table_name )
+          "Created #{table_name}"
         else
-          "Opened #{match[:table]}"
+          "Opened #{table_name}"
         end
       when "destroy"
-        container.set_setting( nil, "tables", match[:table] )
+        container.set_setting( nil, "tables", table_name )
         message.user.set_setting nil, "session", "__user_current_table"
-        "Deleted #{match[:table]}"
+        "Deleted #{table_name}"
       when "close"
         message.user.set_setting nil, "session", "__user_current_table"
         "Ok"
       end
     end
 
-    add_request :tables, /^(?<command>add|remove|show) table expression(?: (?<expression>.*))?/ do |match, message|
+    add_command :tables, [ %w{add remove show}, 'table', 'expression' ] do |message, args, (ignored, command_name)|
       table = message.user.get_setting( "session", "__user_current_table" )
       raise "Open a table first" unless table
-
+      expression = args.join(' ')
       
-      case match[:command]
+      message.reply case command_name
       when "add"
-        Dice::Parser.new( match[:expression], default: "1d20" )
-        table[:expression] = match[:expression]
+        Dice::Parser.new( expression, default: "1d20" )
+        table[:expression] = expression
       when "show"
         "Current expression: #{table[:expression] || "(auto-generated)"}"
       when "remove"
@@ -121,9 +119,12 @@ module CCCB::Core::Tables
       end
     end
 
-    add_request :tables, /^(?<command>add|remove|list) table (?<type>entry|link) (?<from>\d+)(?:-(?<to>\d+))?(?: (?<data>.*?))?\s*$/ do |match, message|
+    add_command :tables, [ %w{add remove list}, 'table', %w{entry link} ] do |message, args, (ignored, command_name, _table, type)|
       table = message.user.get_setting( "session", "__user_current_table" )
       raise "Open a table first" unless table
+      match = args[0].match( /(?<from>\d+)(?:-(?<to>\d+))?/ ) or raise "Invalid range: #{args[0]}"
+      args.shift
+      data = args.join(' ')
 
       from = match[:from].to_i
       to = (match[:to] || match[:from]).to_i
@@ -134,10 +135,10 @@ module CCCB::Core::Tables
       target = :entries
 
       table[target] ||= {}
-      case match[:command]
+      message.reply case command_name
       when "add"
         table[target][range] ||= []
-        table[target][range] << [ match[:data], match[:type] ]
+        table[target][range] << [ data, type ]
       when "list"
         table[target].select { |r,d| range.to_a.any? { |i| r.include? i } }.map do |r,d|
           "#{r}: #{d}"
@@ -148,12 +149,12 @@ module CCCB::Core::Tables
           table[target].delete(key)
           count += 1
         end
-        "Deleted #{count} #{match[:type]}s"
+        "Deleted #{count} #{type}s"
       end
     end
 
-    add_request :tables, /^gen (?<table>\w+)(?:\s+(?<modifier>\d+))?$/ do |match, message|
-      gen_table_result message, match[:table], match[:modifier].to_i 
+    add_command :tables, [ %w{gen generate} ] do |message, (table,modifier)|
+      message.reply gen_table_result message, table, modifier.to_i 
     end
   end
 end
