@@ -6,13 +6,13 @@ module CCCB::Core::Choice
   needs :help
   
   def module_load
-    add_request :choice, /^choose\s+(.*)\?/i do |match, message|
-      choices = match[1].split( /(?:\s+(?:\s*(?:x?or(?=\W))\s*)+\s*|,)+\s*/ )
-      if message.user.get_setting("options", "tease_me") and rand <= (get_setting("options", "tease_frequency")||0.1)
+    add_command :choice, "choose" do |message, args|
+      choices = args.join(' ').split( /(?:\s+(?:\s*(?:x?or(?=\W))\s*)+\s*|,)+\s*/ )
+      message.reply( if message.user.get_setting("options", "tease_me") and rand <= (get_setting("options", "tease_frequency")||0.1)
         "Whichever one makes you happy, okay?!"
       else
         choices[ SecureRandom.random_number( choices.length ) ]
-      end
+      end )
     end
 
     add_help(
