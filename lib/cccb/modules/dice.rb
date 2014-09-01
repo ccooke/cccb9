@@ -373,6 +373,18 @@ end
 module CCCB::Core::Dice
   extend Module::Requirements
 
+  ADVANTAGE_REGEX = /
+    w (?:ith)?
+    \s*
+    (?: 
+      (?<advantage> a (?: dv (?: antage )? )? )
+    |
+      (?<disadvantage> d (?: is (?: adv (?: antage )? )? )? )
+    )
+    \s*
+    $
+  /x
+
   def module_load
     add_setting :user, "roll_presets"
     add_setting :channel, "roll_presets"
@@ -380,54 +392,73 @@ module CCCB::Core::Dice
     add_setting :core, "roll_presets"
 
     set_setting( "d20", "options", "default_die")
+  
+    #add_request :dice, /^\s*list\s+(?:(?:my|(\S+?)(?:'s))?\s+)?memories/i do |match,message| 
+    #  if message.user.persist[:dice_memory_saved]
+    #    memories = message.user.persist[:dice_memory_saved].sort { |(n1,r1),(n2,r2)| 
+    #      r1[:access] <=> r2[:access] 
+    #    }.map { |n,r| n }.join( ", " )
+#
+#        "I found: #{memories}"
+#      else
+#        "None."
+#      end
+#    end
 
-    add_request :dice, /^\s*jinx\s+(\S)+\s*$/i do |match, message|
-      message.user.persist[:dice_jinx] ||= true
-      match[1].downcase == "me" ? "Ok" : "Ok, #{nick} has been jinxed"
-    end
-
-    add_request :dice, /^\s*am\s+I\s+jinxed\s*\??\s*$/i do |m, s|
-      if message.user.persist[:dice_jinx]
-        "Yes"
-      else
-        "No. Any bad luck is your own"
-      end
-    end
-
-    add_request :dice, /^\s*list\s+(?:(?:my|(\S+?)(?:'s))?\s+)?memories/i do |match,message| 
-      if message.user.persist[:dice_memory_saved]
-        memories = message.user.persist[:dice_memory_saved].sort { |(n1,r1),(n2,r2)| 
-          r1[:access] <=> r2[:access] 
-        }.map { |n,r| n }.join( ", " )
-
-        "I found: #{memories}"
-      else
-        "None."
-      end
-    end
-
-    add_request :dice, /^
-      \s*
-      prob(?:ability)?
-      \s+
-      (?<expression1> .*? )
-      \s+
-      (?<symbol> gt | eq | lt | le | ge )
-      \s*
-      (?<expression2> .*? )
-      \s*
-      $
-    /ix do |match, message|
-      p match
+    add_command :dice, "prob" do |message, (exp1, symbol, exp2)|
+      raise "Of what?" if exp1.nil?
+        
       default = if message.to_channel?
         message.replyto.get_setting( "roll_presets", "default_die" )
       else
-        user.get_setting( "roll_presets", "default_die" )
+        message.user.get_setting( "roll_presets", "default_die" )
       end
-      parser1 = Dice::Parser.new( match[:expression1], default: default )
-      parser2 = Dice::Parser.new( match[:expression2], default: "+0" )
+      parser1 = Dice::Parser.new( exp1, default: default )
+
+      if symbol.nil?
+        density = parser1.density
+        q = ""
+        max_prob = density.map(&:last).max
+        output = (1..4).map {|i|
+          q += "    "
+          sprintf("% 6.2f%%|",(max_prob * 100 * i/4.0)) + density.map { |n,p|
+            x = p * (1/max_prob) * 4
+            q += "| #{x} |"
+            if x >= i
+              '#'
+            elsif x >= i - 0.33
+              '-'
+            elsif x >= i - 0.66
+              '_'
+            else
+              ' '
+            end
+          }.join
+        }
+        rows = 0
+        row = 0
+        legend = []
+        nums = density.map(&:first).map(&:to_s)
+        until row > rows
+          legend << [ "       |" ] + nums.map { |n|
+            if n.end_with? '0'
+              rows = [ rows, n.length ].max - 1
+              n[row]
+            elsif row == 0
+              n[-1]
+            else 
+              ' '
+            end
+          }
+          row += 1
+        end
+        
+        message.reply output.reverse.reject { |r| r.match /^\s+$/ }
+        message.reply legend.map(&:join)
+        next
+      end
       
-      sym = case match[:symbol]
+      sym = case symbol
       when 'gt'
         :>
       when 'eq'
@@ -438,142 +469,128 @@ module CCCB::Core::Dice
         :<=
       when 'ge'
         :>=
+      else
+        raise "Unknown comparison symbol: #{symbol}"
       end
-
+      
+      parser2 = Dice::Parser.new( exp2, default: "+0" )
       density = parser1.density - parser2.density
       rational = density.send(sym, 0)
 
-      if density.exact
+      message.reply( if density.exact
         "Probability: %s (%.2f%%)" % [ rational.to_s, rational.to_f * 100 ]
       else
         "Probability: ~%.2f%% (exact results unavailable)" % [ rational.to_f * 100 ]
-      end
+      end )
     end
 
-    add_request :dice, /^
-        (?<command>toss|qroll|roll|dmroll)
-        (?:\s+
-          (?<expression>.*?)
-        )?
-        (?:
-          \s+w(?:ith|\/)\s*
-          (?:
-            (?<advantage>a(?:dv(?:antage)?)?)
-            |
-            (?<disadvantage>d(?:is(?:adv(?:antage)?)?)?)
-          )
-        )?
-        \s*
-      $
-    /ix do |match, message|
-      # m, s, mode, nick, expression, modifier|
-      #p [ m, s, mode, nick, expression, modifier ]
+    add_command :dice, [%w{toss qroll roll dmroll}] do |message, args, words|
+      mode = words.last == 'toss' ? 'qroll' : words.last
+      expression = args.join(" ")
 
-      mode = match[:command]
-      mode = 'qroll' if mode == 'toss'
-
+      match = ADVANTAGE_REGEX.match(expression)
       default_die = message.user.get_setting("options", "default_die")
-      default = if match[:advantage]
-        "2#{default_die} dl"
-      elsif match[:disadvantage]
-        "2#{default_die} dh"
+      default = if match
+        if match[:advantage]
+          "2#{default_die}dl"
+        elsif match[:disadvantage]
+          "2#{default_die}dh"
+        end
       else
         "1#{default_die}"
       end
 
       roller = CCCB::DieRoller.new(message)
-      rolls = roller.roll( match[:expression], default , mode)
-      roller.message_die_roll(message.nick, rolls, mode)
-
-      nil
+      rolls = roller.roll( expression, default , mode)
+      message.reply roller.message_die_roll(message.nick, rolls, mode)
     end
 
-    add_request :dice, /^\s*
-      
-      (?:
-        (?:
-          (?<user> my | \S+? ) (?: 's)? \s+ 
-        )?
-        (?<index>\d+ (?:th|st|rd|nd)|last|first) \s+ roll
-      |
-        recall \s+ 
-        (?: 
-          (?<user> \S+? )(?:'s)? \s+
-        )? 
-        (?<memory> \w+)
-      )
-      (?<detail> \s+ in \s+ detail)?
-      \s*$
-    /ix do |match, message| 
-      # |m, s, by_user, n, recall_user, recall, detail|
-      user = nil
-      selected = if match[:index]
-        list = message.network.persist[:dice_memory].dup
-        if match[:user]
-          user = if match[:user] == 'my'
-            message.user
-          else
-            message.network.users[match[:user].downcase]
-          end
-          spam "Selecting on #{user}"
-
-          list.select! { |l| l[:msg].user.id == user.id }
-        elsif message.to_channel?
-          list.select! { |l| l[:msg].replyto.to_s.downcase == message.replyto.id }
-        end
-        index = if match[:index] == 'last'
-          0
-        elsif match[:index] == 'first'
-          list.count - 1
-        elsif match[:index] == "0th"
-          list.count + 10
-        else
-          match[:index].gsub(/[^\d]/,'').to_i - 1
-        end
-        
-        next "No such roll" if list.empty?
-        user ||= list[index][:msg].user
-        list[index]
-      elsif match[:memory]
-        user = if match[:user]
-          message.network.users[match[:user].downcase]
-        else
-          message.user
-        end
-
-        if user.persist[:dice_memory_saved] and user.persist[:dice_memory_saved].include? match[:memory]
-          user.persist[:dice_memory_saved][match[:memory]]
-        end
-      end
-
-      if selected
-        mode = if match[:detail]
-          "roll"
-        else
-          'qroll'
-        end
-
-        (user.persist[:dice_memory_saved] ||= {})["current"] = selected
-
-        jinx = if selected[:jinx]
-          "While jinxed, "
-        else 
-          ""
-        end
-
-        location = if selected[:msg].to_channel?
-          selected[:msg].replyto
-        else
-          "query"
-        end
-
-        message.reply "#{ jinx }#{selected[:msg].nick} rolled #{selected[:expression].join("; ")} in #{location} on #{selected[:msg].time} and got: (m:#{mode})"
-        CCCB::DieRoller.new(message).message_die_roll( message.nick, selected[:rolls], mode )
-        nil
-      else
-        "I can't find that."
-      end
-    end
+#    add_request :dice, /^\s*
+#      
+#      (?:
+#        (?:
+#          (?<user> my | \S+? ) (?: 's)? \s+ 
+#        )?
+#        (?<index>\d+ (?:th|st|rd|nd)|last|first) \s+ roll
+#      |
+#        recall \s+ 
+#        (?: 
+#          (?<user> \S+? )(?:'s)? \s+
+#        )? 
+#        (?<memory> \w+)
+#      )
+#      (?<detail> \s+ in \s+ detail)?
+#      \s*$
+#    /ix do |match, message| 
+#      # |m, s, by_user, n, recall_user, recall, detail|
+#      user = nil
+#      selected = if match[:index]
+#        list = message.network.persist[:dice_memory].dup
+#        if match[:user]
+#          user = if match[:user] == 'my'
+#            message.user
+#          else
+#            message.network.users[match[:user].downcase]
+#          end
+#          spam "Selecting on #{user}"
+#
+#          list.select! { |l| l[:msg].user.id == user.id }
+#        elsif message.to_channel?
+#          list.select! { |l| l[:msg].replyto.to_s.downcase == message.replyto.id }
+#        end
+#        index = if match[:index] == 'last'
+#          0
+#        elsif match[:index] == 'first'
+#          list.count - 1
+#        elsif match[:index] == "0th"
+#          list.count + 10
+#        else
+#          match[:index].gsub(/[^\d]/,'').to_i - 1
+#        end
+#        
+#        next "No such roll" if list.empty?
+#        user ||= list[index][:msg].user
+#        list[index]
+#      elsif match[:memory]
+#        user = if match[:user]
+#          message.network.users[match[:user].downcase]
+#        else
+#          message.user
+#        end
+#
+#        if user.persist[:dice_memory_saved] and user.persist[:dice_memory_saved].include? match[:memory]
+#          user.persist[:dice_memory_saved][match[:memory]]
+#        end
+#      end
+#
+#      if selected
+#        mode = if match[:detail]
+#          "roll"
+#        else
+#          'qroll'
+#        end
+#
+#        (user.persist[:dice_memory_saved] ||= {})["current"] = selected
+#
+#        jinx = if selected[:jinx]
+#          "While jinxed, "
+#        else 
+#          ""
+#        end
+#
+#        location = if selected[:msg].to_channel?
+#          selected[:msg].replyto
+#        else
+#          "query"
+#        end
+#
+#        message.reply "#{ jinx }#{selected[:msg].nick} rolled #{selected[:expression].join("; ")} in #{location} on #{selected[:msg].time} and got: (m:#{mode})"
+#        CCCB::DieRoller.new(message).message_die_roll( message.nick, selected[:rolls], mode )
+#        nil
+#      else
+#        "I can't find that."
+#      end
+#    end
 
     add_hook :dice, :pre_setting_set do |object, setting, hash|
       next unless setting == "roll_presets"
@@ -614,40 +631,40 @@ module CCCB::Core::Dice
       message.reply user_setting( message, target, "roll_presets", name, preset || "" )
     end
 
-    add_request :dice, /^\s*forget\s+(?<name>\w+)/i do |match, message|
-      if message.user.persist[:dice_memory_saved]
-        if message.user.persist[:dice_memory_saved][match[:name]]
-          message.user.persist[:dice_memory_saved].delete match[:name]
-          "Done."
-        else
-          "It seems already to have been done."
-        end
-      else
-        "That would require you to have rolled dice."
-      end
-    end
-
-    add_request :dice, /^\s*remember\s+that\s+as\s+(?<name>\w+)/i do |match, message|
-      preset = match[:name]
-      if message.user.persist[:dice_memory_saved]
-        if message.user.persist[:dice_memory_saved]["current"]
-          lru = message.user.persist[:dice_memory_saved].sort { |(n1,r1),(n2,r2)| r1[:access] <=> r2[:access] }
-          if message.user.persist[:dice_memory_saved].count > 9
-            message.user.persist[:dice_memory_saved].delete(lru.first[0])
-            message.reply "Deleted #{lru.first[0]}. #{lru[1][0]} will be deleted next"
-          elsif message.user.persist[:dice_memory_saved].count == 9
-            message.network.msg message.replyto, "#{lru.first[0]} will be deleted if you store one more"
-          end
-          (message.user.persist[:dice_memory_saved] ||= {})[preset] = message.user.persist[:dice_memory_saved]["current"]
-          "Done."
-        else
-          "Sorry, I don't remember your roll"
-        end
-      else
-        "I can't recall you ever rolling dice"
-      end
-    end
-
+#    add_request :dice, /^\s*forget\s+(?<name>\w+)/i do |match, message|
+#      if message.user.persist[:dice_memory_saved]
+#        if message.user.persist[:dice_memory_saved][match[:name]]
+#          message.user.persist[:dice_memory_saved].delete match[:name]
+#          "Done."
+#        else
+#          "It seems already to have been done."
+#        end
+#      else
+#        "That would require you to have rolled dice."
+#      end
+#    end
+#
+#    add_request :dice, /^\s*remember\s+that\s+as\s+(?<name>\w+)/i do |match, message|
+#      preset = match[:name]
+#      if message.user.persist[:dice_memory_saved]
+#        if message.user.persist[:dice_memory_saved]["current"]
+#          lru = message.user.persist[:dice_memory_saved].sort { |(n1,r1),(n2,r2)| r1[:access] <=> r2[:access] }
+#          if message.user.persist[:dice_memory_saved].count > 9
+#            message.user.persist[:dice_memory_saved].delete(lru.first[0])
+#            message.reply "Deleted #{lru.first[0]}. #{lru[1][0]} will be deleted next"
+#          elsif message.user.persist[:dice_memory_saved].count == 9
+#            message.network.msg message.replyto, "#{lru.first[0]} will be deleted if you store one more"
+#          end
+#          (message.user.persist[:dice_memory_saved] ||= {})[preset] = message.user.persist[:dice_memory_saved]["current"]
+#          "Done."
+#        else
+#          "Sorry, I don't remember your roll"
+#        end
+#      else
+#        "I can't recall you ever rolling dice"
+#      end
+#    end
+#
     add_help(
       :dice, 
       "dice",
