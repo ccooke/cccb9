@@ -7,6 +7,20 @@ module CCCB::Core::Bot
   extend Module::Requirements
   needs :hooks, :reload, :call_module_methods, :managed_threading, :events, :persist, :settings, :networking
   
+  SETTING             = /
+    (?<type> core | network | channel | user | [nuc]\([^\)]+\) ){0}
+    (?<name> [-\w+]+ ){0}
+    (?<key>  \S+     ){0}
+
+    (?: 
+      \g<type> :: \g<name> (?: :: \g<key>)? 
+    |
+      \g<name> :: \g<key>?
+    |
+      \g<key>
+    )
+  /x
+
   LOG_CONVERSATION    = "%(network) [%(replyto)]"
   LOG_GENERIC         = "%(network) %(raw)"
   LOG_SERVER          = "%(network) ***%(command)*** %(text)"
@@ -20,6 +34,19 @@ module CCCB::Core::Bot
     JOIN:         "#{LOG_CONVERSATION} >>> %(nick) [%(from)] has joined %(channel)",
     MODE:         "#{LOG_CONVERSATION} MODE [%(arg1toN)] by %(nick_with_mode)"
   }
+
+  def parse_setting(setting,message)
+    if setting.respond_to? :to_hash
+      if setting.include? :name or setting.include? :key
+        return setting
+      end
+    end
+    match = SETTING.match(setting) or raise "Invalid setting: #{setting}"
+    data = %i{ type name key }.each_with_object({}) { |k,o| o[k] = match[k] }
+    data[:type] ||= message.to_channel? ? "channel" : "user"
+    data[:name] ||= "options"
+    data
+  end
 
   def add_irc_command(command, &block)
     raise Exception.new("Use hooks instead") if bot.command_lock.locked?
@@ -165,12 +192,17 @@ module CCCB::Core::Bot
     return setting_name, value, key, object
   end
 
-  def copy_user_setting message, type, name, key, dest_type, dest_name, dest_key
-    setting_name, value, key, object = user_setting_value( message, type, name, key )
-    if key and ! dest_key
-      dest_key = key
+  def copy_user_setting message, source, destination
+    source = parse_setting(source,message)
+    destination = parse_setting(destination,source)
+
+    setting_name, value, key, object = user_setting_value( message, source[:type], source[:name], source[:key] )
+    destination_key = if key and ! destination[:dest_key]
+      key
+    else
+      destination[:key]
     end
-    dest_setting_name, dest_value, dest_key, dest_object = user_setting_value( message, dest_type, dest_name, dest_key )
+    dest_setting_name, dest_value, dest_key, dest_object = user_setting_value( message, destination[:type], destination[:name], destination_key )
 
     value = if key
       value[key]
@@ -178,18 +210,19 @@ module CCCB::Core::Bot
       value
     end
 
-    dest_object.set_setting( Marshal.load( Marshal.dump( value ) ), dest_name, dest_key )
+    dest_object.set_setting( Marshal.load( Marshal.dump( value ) ), destination[:name], dest_key )
     "Ok"
   end
 
-  def user_setting message, type, name, key, value_string = nil
+  def user_setting message, setting, value_string = nil
     begin 
-      setting_name, copy, key, object = user_setting_value( message, type, name, key, value_string )
+      setting = parse_setting(setting,message)
+      setting_name, copy, key, object = user_setting_value( message, setting[:type], setting[:name], setting[:key], value_string )
 
-      value = if object.setting_option(name, :secret) and message.to_channel?
+      value = if object.setting_option(setting[:name], :secret) and message.to_channel?
         "<secret>"
       else
-        object.setting_option(name,:hide_keys).each do |k|
+        object.setting_option(setting[:name],:hide_keys).each do |k|
           if copy.delete(k) and key and k == key
             copy[k] = "<secret>"
           end
@@ -369,104 +402,6 @@ module CCCB::Core::Bot
       end
     end
     
-    add_request :debug, /^test (.*)$/ do |match, message|
-      "Test ok: #{match[1]}"
-    end
-
-    add_request :debug, /^show load errors$/ do |match, message|
-      message.reply "Last (re)load at #{$load_time}"
-      message.reply $load_errors
-      nil
-    end
-
-    add_request :core, /^
-      \s*
-      copy
-      \s+ 
-      (?<type> [^:]+ )
-      ::
-      (?<setting> [-\w+]+)
-      (?:
-        ::
-        (?<key> [^\s=]+ )
-      )?
-      \s+
-      (?<dest_type> [^:]+ )
-      ::
-      (?<dest_setting> [-\w+]+)
-      (?:
-        ::
-        (?<dest_key> [^\s=]+ )
-      )?
-      $
-    /xi do |match, message|
-      copy_user_setting( message, match[:type], match[:setting], match[:key], match[:dest_type], match[:dest_setting], match[:dest_key] )
-    end
-
-    add_request :core, /^
-      \s* setting \s+
-      (?:
-        (?<type>core|channel|network|user|channeluser|[^:]+?)
-        ::
-      |
-        ::
-      )?
-      (?<setting> [-\w]+)
-      (?:
-        ::
-        (?<key> [^\s=]+)
-      )?
-      (?:
-        \s+
-        =
-        \s*
-        (?<value>.*?)
-      )?
-      \s*$
-    /xi do |match, message|
-      name = match[:setting]
-        
-      key = match[:key]
-      user_setting( message, match[:type], name, key, match[:value] )
-    end
-
-    add_request :core, /^
-      \s* set \s+
-      (?:
-        (?<object> my | channel )
-      | 
-        (?<object> \#\S+ ) 's
-      )
-      (?:
-        \s+
-        (?<key> \S+)
-        (?: 
-          \s+
-          to
-          \s+
-          (?<value> .*? )
-        )?
-      )?
-      \s*$
-    /xi do |match, message|
-      user_setting( message, match[:object], "options", match[:key], match[:value] )
-    end
-
-    add_request :core, /^\s*reload\s*$/i do |match, message|
-      if message.user.superuser?
-        reload_then(message) do |message|
-          if reload.errors.count == 0
-            message.reply "Ok"
-          else
-            message.reply reload.errors
-          end
-        end
-        nil
-      else
-        "Denied"
-      end
-    end
-
     add_hook :core, :ctcp_ACTION do |message|
       message.hide = true
       run_hooks :message, message
@@ -478,42 +413,6 @@ module CCCB::Core::Bot
 
     add_hook :core, :ctcp_VERSION do |message|
       message.reply "CCCB v#{CCCB::VERSION}"
-    end
-
-    add_request :core, /^\s*superuser\s+override\s*(?<password>.*?)\s*$/ do |match, message|
-      password_valid = (match[:password] == CCCB.instance.superuser_password)
-      if message.to_channel?
-        if password_valid
-          CCCB.instance.superuser_password = (1..32).map { (rand(64) + 32).chr }.join
-        end
-        "Denied. And don't try to use that password again."
-      else
-        if password_valid
-          get_setting("superusers") << message.from.downcase.to_s
-          "Okay, you are now a superuser"
-        else
-          "Denied"
-        end
-      end
-    end
-
-    add_request :core, /^\s*superuser\s+resign\s*$/ do |match, message|
-      if message.user.superuser?
-        get_setting("superusers").delete message.from.downcase.to_s
-        "Removed you from the superuser list."
-      else
-        "You weren't a superuser in the first place."
-      end
-    end
-
-    add_request :core, /^reconnect(?:\s+(?<network>\w+))?\s*$/ do |match, message|
-      next "Denied" unless message.user.superuser?
-      network = if match[:network]
-        CCCB.instance.networking.networks[match[:network]]
-      else
-        message.network
-      end
-      network.puts "QUIT Reconnecting"
     end
   end
 
