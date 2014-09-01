@@ -1,5 +1,6 @@
 module CCCB::Core::Help
   extend Module::Requirements
+  needs :commands
  
   def add_help feature, topic, summary, text, special = :none
     help.topics[ topic ] = {
@@ -13,8 +14,8 @@ module CCCB::Core::Help
   def module_load
     help.topics = {}
 
-    add_command :help, "help" do |message, args|
-      "See #{CCCB.instance.get_setting("http_server","url")}/network/#{message.network}/help/#{match[:topic]}"
+    add_command :help, "help" do |message, (topic)|
+      message.reply "See #{CCCB.instance.get_setting("http_server","url")}/network/#{message.network}/help/#{topic}"
     end
 
     add_help(
