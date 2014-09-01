@@ -388,7 +388,7 @@ class ModifiedDieDensity < Density
         i=0
         while (i<num*factor)
           keys=Array.new(number).map! { |i| density.roll }
-          newkeys=mods.inject(keys) { |i,m| m.fun(i) }
+          newkeys=mods.inject(keys) { |i,m| m.process(i) }
           if newkeys.size==0
             @d[0]+=values.inject(:*)
           else
@@ -405,7 +405,7 @@ class ModifiedDieDensity < Density
           keys=comb.map {|a,b| a }
           # number of permutations of these given keys
           permutation_number=Rational((1..(keys.size)).reduce(1,:*),keys.uniq.map {|e| (1..(keys.count(e))).reduce(1,:*)}.inject(:*))
-          newkeys=mods.inject(keys) { |i,m| m.fun(i) }
+          newkeys=mods.inject(keys) { |i,m| m.process(i) }
           if newkeys.size==0
             @d[0]+=values.inject(:*)*permutation_number
           else
