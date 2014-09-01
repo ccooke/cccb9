@@ -1,4 +1,4 @@
-#!/usr/bin/ruby -Ilib
+#!/usr/bin/ruby -Ilib -I../
 
 require  'd20code'
 
