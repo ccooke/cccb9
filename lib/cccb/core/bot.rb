@@ -76,33 +76,35 @@ module CCCB::Core::Bot
     end
   end
 
+  def rate_limit_by_feature( message, feature )
+    if message.to_channel? 
+      rate_limit = message.channel.get_setting("rate_limit",feature.to_s)
+      unless rate_limit.nil?
+        timestamp = Time.now
+        current = message.channel.get_setting("rate_limit_current")
+        current[feature.to_s] ||= {
+          bucket: rate_limit[:bucketsize],
+          last_fill: timestamp,
+          lock: Mutex.new
+        }
+        current = current[feature.to_s]
+        current[:lock].synchronize do
+          current[:bucket] += rate_limit[:fillrate] * ( timestamp - current[:last_fill] )
+          current[:bucket] = rate_limit[:bucketsize] if current[:bucket] > rate_limit[:bucketsize]
+          current[:last_fill] = timestamp
+        end
+        raise "Rate limited: try again in #{( 1 - current[:bucket] ) / rate_limit[:fillrate]} seconds" if current[:bucket] < 1
+        current[:bucket] -= 1
+      end
+    end
+  end
+
   def add_request feature, regex, &block
     add_hook feature, :request, generator: true do |request, message|
       if match = regex.match( request )
         debug "REQ: Matched #{regex}"
         begin 
-          if message.to_channel? 
-            rate_limit = message.channel.get_setting("rate_limit",feature.to_s)
-            p rate_limit
-            unless rate_limit.nil?
-              timestamp = Time.now
-              current = message.channel.get_setting("rate_limit_current")
-              current[feature.to_s] ||= {
-                bucket: rate_limit[:bucketsize],
-                last_fill: timestamp,
-                lock: Mutex.new
-              }
-              current = current[feature.to_s]
-              p current
-              current[:lock].synchronize do
-                current[:bucket] += rate_limit[:fillrate] * ( timestamp - current[:last_fill] )
-                current[:bucket] = rate_limit[:bucketsize] if current[:bucket] > rate_limit[:bucketsize]
-                current[:last_fill] = timestamp
-              end
-              raise "Rate limited: try again in #{( 1 - current[:bucket] ) / rate_limit[:fillrate]} seconds" if current[:bucket] < 1
-              current[:bucket] -= 1
-            end
-          end
+          rate_limit_by_feature( message, feature )
           result = block.call( match, message  )
           if message.to_channel? 
             result = Array(result).map { |l| "#{message.nick}: #{l}" }

@@ -56,6 +56,7 @@ module CCCB::Core::Commands
         cursor[:hooks] += [ real_hook_name ]
       end
       cursor[:hook] = real_hook_name
+      commands.feature_lookup[real_hook_name] = feature
       add_hook feature, real_hook_name, generator: true, &block
     end
   end
@@ -84,6 +85,7 @@ module CCCB::Core::Commands
     commands.registry = {
       words: {}
     }
+    commands.feature_lookup = {}
 
     add_hook :core, :exception, top: true do |e, hook, item, args|
       next unless hook =~ /^command\//
@@ -115,6 +117,7 @@ module CCCB::Core::Commands
           break
         end
       end
+      rate_limit_by_feature( message, commands.feature_lookup[hook] )
       debug "Scheduling hook for command: #{hook}->(#{args.inspect}"
       schedule_hook hook, message, args, pre, cursor, hook
       nil
