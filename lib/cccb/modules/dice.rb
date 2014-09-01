@@ -393,17 +393,17 @@ module CCCB::Core::Dice
 
     set_setting( "d20", "options", "default_die")
   
-    #add_request :dice, /^\s*list\s+(?:(?:my|(\S+?)(?:'s))?\s+)?memories/i do |match,message| 
-    #  if message.user.persist[:dice_memory_saved]
-    #    memories = message.user.persist[:dice_memory_saved].sort { |(n1,r1),(n2,r2)| 
-    #      r1[:access] <=> r2[:access] 
-    #    }.map { |n,r| n }.join( ", " )
-#
-#        "I found: #{memories}"
-#      else
-#        "None."
-#      end
-#    end
+    add_command :dice, "dice memory show" do |message, (user)|
+      message.reply( if message.user.persist[:dice_memory_saved]
+        memories = message.user.persist[:dice_memory_saved].sort { |(n1,r1),(n2,r2)| 
+          r1[:access] <=> r2[:access] 
+        }.map { |n,r| n }.join( ", " )
+
+        "I found: #{memories}"
+      else
+        "None."
+      end )
+    end
 
     add_command :dice, "prob" do |message, (exp1, symbol, exp2)|
       raise "Of what?" if exp1.nil?
@@ -505,92 +505,91 @@ module CCCB::Core::Dice
       message.reply roller.message_die_roll(message.nick, rolls, mode)
     end
 
-#    add_request :dice, /^\s*
-#      
-#      (?:
-#        (?:
-#          (?<user> my | \S+? ) (?: 's)? \s+ 
-#        )?
-#        (?<index>\d+ (?:th|st|rd|nd)|last|first) \s+ roll
-#      |
-#        recall \s+ 
-#        (?: 
-#          (?<user> \S+? )(?:'s)? \s+
-#        )? 
-#        (?<memory> \w+)
-#      )
-#      (?<detail> \s+ in \s+ detail)?
-#      \s*$
-#    /ix do |match, message| 
-#      # |m, s, by_user, n, recall_user, recall, detail|
-#      user = nil
-#      selected = if match[:index]
-#        list = message.network.persist[:dice_memory].dup
-#        if match[:user]
-#          user = if match[:user] == 'my'
-#            message.user
-#          else
-#            message.network.users[match[:user].downcase]
-#          end
-#          spam "Selecting on #{user}"
-#
-#          list.select! { |l| l[:msg].user.id == user.id }
-#        elsif message.to_channel?
-#          list.select! { |l| l[:msg].replyto.to_s.downcase == message.replyto.id }
-#        end
-#        index = if match[:index] == 'last'
-#          0
-#        elsif match[:index] == 'first'
-#          list.count - 1
-#        elsif match[:index] == "0th"
-#          list.count + 10
-#        else
-#          match[:index].gsub(/[^\d]/,'').to_i - 1
-#        end
-#        
-#        next "No such roll" if list.empty?
-#        user ||= list[index][:msg].user
-#        list[index]
-#      elsif match[:memory]
-#        user = if match[:user]
-#          message.network.users[match[:user].downcase]
-#        else
-#          message.user
-#        end
-#
-#        if user.persist[:dice_memory_saved] and user.persist[:dice_memory_saved].include? match[:memory]
-#          user.persist[:dice_memory_saved][match[:memory]]
-#        end
-#      end
-#
-#      if selected
-#        mode = if match[:detail]
-#          "roll"
-#        else
-#          'qroll'
-#        end
-#
-#        (user.persist[:dice_memory_saved] ||= {})["current"] = selected
-#
-#        jinx = if selected[:jinx]
-#          "While jinxed, "
-#        else 
-#          ""
-#        end
-#
-#        location = if selected[:msg].to_channel?
-#          selected[:msg].replyto
-#        else
-#          "query"
-#        end
-#
-#        message.reply "#{ jinx }#{selected[:msg].nick} rolled #{selected[:expression].join("; ")} in #{location} on #{selected[:msg].time} and got: (m:#{mode})"
-#        CCCB::DieRoller.new(message).message_die_roll( message.nick, selected[:rolls], mode )
-#        nil
-#      else
-#        "I can't find that."
-#      end
-#    end
+    add_command :dice, "history show" do |message, args|
+      match = /^\s*
+        (?:
+          (?:
+            (?<user> my | \S+? ) (?: 's)? \s+ 
+          )?
+          (?<index>\d+ (?:th|st|rd|nd)|last|first)
+        |
+          stored \s+ 
+          (?: 
+            (?<user> \S+? )(?:'s)? \s+
+          )? 
+          (?<memory> \w+)
+        )
+        (?<detail> \s+ in \s+ detail)?
+        \s*$
+      /ix.match( args.empty? ? "my last" : args.join(' ') )
+      user = nil
+      selected = if match[:index]
+        list = message.network.persist[:dice_memory].dup
+        if match[:user]
+          user = if match[:user] == 'my'
+            message.user
+          else
+            message.network.users[match[:user].downcase]
+          end
+          spam "Selecting on #{user}"
+
+          list.select! { |l| l[:msg].user.id == user.id }
+        elsif message.to_channel?
+          list.select! { |l| l[:msg].replyto.to_s.downcase == message.replyto.id }
+        end
+        index = if match[:index] == 'last'
+          0
+        elsif match[:index] == 'first'
+          list.count - 1
+        elsif match[:index] == "0th"
+          list.count + 10
+        else
+          match[:index].gsub(/[^\d]/,'').to_i - 1
+        end
+        
+        next "No such roll" if list.empty?
+        user ||= list[index][:msg].user
+        list[index]
+      elsif match[:memory]
+        user = if match[:user]
+          message.network.users[match[:user].downcase]
+        else
+          message.user
+        end
+
+        if user.persist[:dice_memory_saved] and user.persist[:dice_memory_saved].include? match[:memory]
+          user.persist[:dice_memory_saved][match[:memory]]
+        end
+      end
+
+      if selected
+        mode = if match[:detail]
+          "roll"
+        else
+          'qroll'
+        end
+
+        (user.persist[:dice_memory_saved] ||= {})["current"] = selected
+
+        jinx = if selected[:jinx]
+          "While jinxed, "
+        else 
+          ""
+        end
+
+        location = if selected[:msg].to_channel?
+          selected[:msg].replyto
+        else
+          "query"
+        end
+
+        message.reply "#{ jinx }#{selected[:msg].nick} rolled #{selected[:expression].join("; ")} in #{location} on #{selected[:msg].time} and got: (m:#{mode})"
+        CCCB::DieRoller.new(message).message_die_roll( message.nick, selected[:rolls], mode )
+        nil
+      else
+        "I can't find that."
+      end
+    end
 
     add_hook :dice, :pre_setting_set do |object, setting, hash|
       next unless setting == "roll_presets"
@@ -631,40 +630,40 @@ module CCCB::Core::Dice
       message.reply user_setting( message, target, "roll_presets", name, preset || "" )
     end
 
-#    add_request :dice, /^\s*forget\s+(?<name>\w+)/i do |match, message|
-#      if message.user.persist[:dice_memory_saved]
-#        if message.user.persist[:dice_memory_saved][match[:name]]
-#          message.user.persist[:dice_memory_saved].delete match[:name]
-#          "Done."
-#        else
-#          "It seems already to have been done."
-#        end
-#      else
-#        "That would require you to have rolled dice."
-#      end
-#    end
-#
-#    add_request :dice, /^\s*remember\s+that\s+as\s+(?<name>\w+)/i do |match, message|
-#      preset = match[:name]
-#      if message.user.persist[:dice_memory_saved]
-#        if message.user.persist[:dice_memory_saved]["current"]
-#          lru = message.user.persist[:dice_memory_saved].sort { |(n1,r1),(n2,r2)| r1[:access] <=> r2[:access] }
-#          if message.user.persist[:dice_memory_saved].count > 9
-#            message.user.persist[:dice_memory_saved].delete(lru.first[0])
-#            message.reply "Deleted #{lru.first[0]}. #{lru[1][0]} will be deleted next"
-#          elsif message.user.persist[:dice_memory_saved].count == 9
-#            message.network.msg message.replyto, "#{lru.first[0]} will be deleted if you store one more"
-#          end
-#          (message.user.persist[:dice_memory_saved] ||= {})[preset] = message.user.persist[:dice_memory_saved]["current"]
-#          "Done."
-#        else
-#          "Sorry, I don't remember your roll"
-#        end
-#      else
-#        "I can't recall you ever rolling dice"
-#      end
-#    end
-#
+    add_command :dice, "history forget" do |message, (name)|
+      message.reply( if message.user.persist[:dice_memory_saved]
+        if message.user.persist[:dice_memory_saved][name]
+          message.user.persist[:dice_memory_saved].delete name
+          "Done."
+        else
+          "It seems already to have been done."
+        end
+      else
+        "That would require you to have rolled dice."
+      end )
+    end
+
+    add_command :dice, "history store" do |message, (name)|
+      preset = name
+      message.reply( if message.user.persist[:dice_memory_saved]
+        if message.user.persist[:dice_memory_saved]["current"]
+          lru = message.user.persist[:dice_memory_saved].sort { |(n1,r1),(n2,r2)| r1[:access] <=> r2[:access] }
+          if message.user.persist[:dice_memory_saved].count > 9
+            message.user.persist[:dice_memory_saved].delete(lru.first[0])
+            message.reply "Deleted #{lru.first[0]}. #{lru[1][0]} will be deleted next"
+          elsif message.user.persist[:dice_memory_saved].count == 9
+            message.network.msg message.replyto, "#{lru.first[0]} will be deleted if you store one more"
+          end
+          (message.user.persist[:dice_memory_saved] ||= {})[preset] = message.user.persist[:dice_memory_saved]["current"]
+          "Done."
+        else
+          "Sorry, I don't remember your roll"
+        end
+      else
+        "I can't recall you ever rolling dice"
+      end )
+    end
+
     add_help(
       :dice, 
       "dice",
