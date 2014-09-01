@@ -40,7 +40,7 @@ module CCCB::Core::TwitterMessage
       twitter_message.history.shift if twitter_message.history.count > 1024
     end
 
-    add_command :twitter_message, "link search" do |message, args|
+    add_command :twitter_message, "tweet search" do |message, args|
       pattern = Regexp.escape(args.join(' '))
       pattern.gsub! /%/, '.*'
       regex = Regexp.new(pattern, true)
