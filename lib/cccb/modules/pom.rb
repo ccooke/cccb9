@@ -3,17 +3,17 @@ module CCCB::Core::Pom
   needs :bot
 
   def module_load
-    add_request :pom, /^pom$/i do |m, s|
-      %x{pom}
+    add_command :pom, "pom" do |message|
+      message.reply %x{pom}
     end
 
-    add_request :ebook, /^add fanfic (?<url>.*)/i do |match,message|
+    add_command :ebook, "ebook add" do |message, args|
       if message.user.get_setting( "privs", "allow_fanfic" )
-        %x{fanfic-fetch #{match[:url]}}.each_line do |line|
+        %x{fanfic-fetch #{args[0]}}.each_line do |line|
           message.reply line
         end
       else
-        "You need the allow_fanfic privilege"
+        message.reply "You need the allow_fanfic privilege"
       end
     end
   end
