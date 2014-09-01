@@ -104,6 +104,7 @@ module CCCB::Core::Commands
       pre = []
       hook = :empty_command
       words.each do |word|
+        schedule_hook :debug_command_selection, words, cursor[:words].keys
         spam "CURSOR: #{cursor} WORD: #{word}"
         if cursor[:words].include? word
           pre << args.shift
@@ -114,14 +115,14 @@ module CCCB::Core::Commands
           break
         end
       end
-      debug "Scheduling hook for command: #{hook}->(#{args.inspect} [PRE:#{pre}] [CURSOR:#{cursor}])"
+      debug "Scheduling hook for command: #{hook}->(#{args.inspect}"
       schedule_hook hook, message, args, pre, cursor, hook
       nil
     end
 
     add_hook :core, :empty_command do |message, args, pre, cursor|
       pre.shift
-      next unless pre.count > 0
+      #next unless pre.count > 0
       enabled = cursor[:words].select { |k,v| 
         v[:hooks].any? { |h| 
           hook_runnable? h, message
