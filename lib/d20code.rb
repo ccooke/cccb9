@@ -71,7 +71,7 @@ module Dice
         end
 
         class Conditional < Modifier
-          def init_condition(test, num, subexpression = nil, default = :==)
+          def init_condition(test, num, default = :==, subexpression = nil)
             if test.nil? or test == ""
               @condition_test = default
             else
@@ -81,6 +81,8 @@ module Dice
           end
 
           def applies?(number)
+            #p "TEST: ", @condition_test
+            #p "NUM: ", @condision_num
             number.send(@condition_test, @condition_num)
           end
 
@@ -102,6 +104,8 @@ module Dice
         end
 
         class Test < Modifier
+          attr_reader :unmodified
+
           def initialize(match,size, subexpression=nil)
             @tests = []
             add_match(match,size, subexpression)
@@ -118,21 +122,34 @@ module Dice
 
           def process(input)
             #p input
-            input.map do |n|
+            @unmodified = input
+            @modified = input.map do |n|
               if @tests.any? { |i| i.fail? n }
                 -1
               elsif @tests.any? { |i| i.success? n }
-                1
+                @tests.count { |i| i.success? n }
               else
                 0
               end
             end
           end
+
+          def to_s
+            @tests.map(&:to_s).join
+          end
+
+          def output(callbacks, parser)
+            "(" + @modified.map.with_index { |die,i|
+              #p "OUTPUT: ", [die, i, callbacks ]
+              callbacks[:die].(parser, @unmodified[i]).to_s
+            }.join(",") + ")"
+          end
+          
         end
 
         class Success < Conditional
-          def initialize(cond, size, subexpression = nil, default = :==)
-            init_condition( cond, size, subexpression, default )
+          def initialize(cond, size, default = :==, subexpression = nil)
+            init_condition( cond, size, default, subexpression )
           end
 
           def success?(number)
@@ -142,6 +159,10 @@ module Dice
 
           def fail?(number)
             false
+          end
+
+          def to_s
+            "s#{@condition_test}#{@condition_num}"
           end
         end
 
@@ -153,6 +174,10 @@ module Dice
           def fail?(number)
             #p self, number
             applies?(number)
+          end
+
+          def to_s
+            "f#{@condition_test}#{@condition_num}"
           end
         end
 
@@ -168,6 +193,12 @@ module Dice
           end
           
           def output(callbacks, parser)
+          end
+        end
+
+        class Fudge < Modifier
+          def process(input)
+            input.map { |i| i = i / 2 - 2 }
           end
         end
 
@@ -423,7 +454,7 @@ module Dice
     class FudgeDie < Die
       def initialize(options = {})
         options[:size] = 6
-        options[:modifiers] = []
+        options[:modifiers] = [ Die::Modifier::Fudge.new ]
         super
       end
       
@@ -454,9 +485,10 @@ module Dice
       (?<drop>            (\g<drop_highest> | \g<drop_lowest>) (?<drop_num> \g<mod_nonzero> )?){0}
       (?<failure>         f \s* \g<condition>?                                            ){0}
       (?<success>         s \s* \g<condition>?                                            ){0}
+      (?<wolf>            w \s* \g<condition>                                             ){0}
       (?<reroll>          r \s* \g<condition>?                                            ){0}
 
-      (?<die_modifier>    \g<drop> | \g<keep> | \g<reroll> | \g<success> | \g<failure>    ){0}
+      (?<die_modifier> \g<drop> | \g<keep> | \g<reroll> | \g<success> | \g<failure> | \g<wolf> ){0}
       (?<die_modifiers>   \g<die_modifier>*                                               ){0}
       (?<penetrating>     !p                                                              ){0}
       (?<compounding>     !!                                                              ){0}
@@ -568,7 +600,7 @@ module Dice
             sub = Dice::Parser.new(term[:con_subexpression])
             @subexpressions << sub
             sub.roll
-            p "Found a constant subexpression: ", sub
+            #p "Found a constant subexpression: ", sub
             sub.value
           end
           options = {
@@ -587,7 +619,8 @@ module Dice
           else
             options[:size] = die_size
             options[:modifiers] = []
-            tokenize( MODIFIER_TERMS, term[:die_modifiers] ).map { |m| Die::Modifier.gen( m, options[:size], options[:modifiers] ) }
+            modifiers = term[:die_modifiers].gsub(/w/, 'f=1s=10s')
+            tokenize( MODIFIER_TERMS, modifiers ).map { |m| Die::Modifier.gen( m, options[:size], options[:modifiers] ) }
             Die.new options
           end
         end
