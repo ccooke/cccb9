@@ -416,7 +416,7 @@ module CCCB::Core::Dice
       parser1 = Dice::Parser.new( exp1, default: default )
 
       if symbol.nil?
-        density = parser1.density
+        density = parser1.density.sort { |a,b| a.first <=> b.first }
         q = ""
         max_prob = density.map(&:last).max
         output = (1..4).map {|i|
@@ -430,6 +430,8 @@ module CCCB::Core::Dice
               '-'
             elsif x >= i - 0.66
               '_'
+            elsif n == 0
+              '|'
             else
               ' '
             end
@@ -443,7 +445,7 @@ module CCCB::Core::Dice
           legend << [ "       |" ] + nums.map { |n|
             if n.end_with? '0'
               rows = [ rows, n.length ].max - 1
-              n[row]
+              n == "0" && row > 0 ? '|' : n[row]
             elsif row == 0
               n[-1]
             else 
