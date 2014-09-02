@@ -198,7 +198,14 @@ module Dice
 
         class Fudge < Modifier
           def process(input)
-            input.map { |i| i = i / 2 - 2 }
+            input.map { |i| i = (i-1) / 2 - 1 }
+          end
+          
+          def output(callbacks, parser)
+          end
+
+          def to_s
+            ""
           end
         end
 
@@ -458,12 +465,12 @@ module Dice
         super
       end
       
-      def roll_die
-        [ -1, -1, 0, 0, +1, +1 ][ SecureRandom.random_number(@size) ]
-      end
-
       def output( callbacks, callback_to_use = :fudge )
         super( callbacks, callback_to_use )
+      end
+
+      def to_s
+        "#{ @math_symbol }#{@count}dF#{decorators}#{modifiers}"
       end
     end
 
