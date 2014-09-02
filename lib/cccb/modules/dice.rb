@@ -194,7 +194,6 @@ class CCCB::DieRoller
   def callbacks
     {
       fudge: Proc.new do |obj, roll|
-        info "Fudge called with #{obj}, #{roll}"
         { -1 => :-, 0 => :" ", +1 => '+' }[roll]
       end,
       die: Proc.new do |obj, roll|
@@ -392,6 +391,8 @@ module CCCB::Core::Dice
     add_setting :core, "roll_presets"
 
     set_setting( "d20", "options", "default_die")
+    default_setting( 4, "options", "probability_graph_height" )
+    default_setting( 20, "options", "probability_graph_width" )
   
     add_command :dice, "dice memory show" do |message, (user)|
       message.reply( if message.user.persist[:dice_memory_saved]
@@ -415,48 +416,62 @@ module CCCB::Core::Dice
       end
       parser1 = Dice::Parser.new( exp1, default: default )
 
+
       if symbol.nil?
+        graph_height = message.replyto.get_setting( "options", "probability_graph_height" ).to_i 
+        graph_width = message.replyto.get_setting( "options", "probability_graph_width" ).to_i
+
         density = parser1.density.sort { |a,b| a.first <=> b.first }
-        q = ""
+        graph_scale = 1
+        graph_scale += 1 while ((graph_scale + 1) * density.count) <= graph_width
         max_prob = density.map(&:last).max
-        output = (1..4).map {|i|
-          q += "    "
-          sprintf("% 6.2f%%|",(max_prob * 100 * i/4.0)) + density.map { |n,p|
-            x = p * (1/max_prob) * 4
-            q += "| #{x} |"
+        output = (1..graph_height).map {|i|
+          sprintf("% 6.2f%%|",(max_prob * 100 * i/graph_height.to_f)) + density.map { |n,p|
+            x = p * (1/max_prob) * graph_height
             if x >= i
-              '#'
+              '#' * graph_scale
             elsif x >= i - 0.33
-              '-'
+              '-' * graph_scale
             elsif x >= i - 0.66
-              '_'
+              '_' * graph_scale
             elsif n == 0
-              '|'
+              " " * ((graph_scale-1)/2) + "|" * (graph_scale.odd? ? 1 : 2 ) + " " * ((graph_scale-1)/2) 
             else
-              ' '
-            end
+              ' ' * graph_scale
+            end 
           }.join
         }
-        rows = 0
-        row = 0
-        legend = []
         nums = density.map(&:first).map(&:to_s)
-        until row > rows
-          legend << [ "       |" ] + nums.map { |n|
-            if n.end_with? '0'
-              rows = [ rows, n.length ].max - 1
-              n == "0" && row > 0 ? '|' : n[row]
-            elsif row == 0
-              n[-1]
-            else 
-              ' '
+        last_row = "       |" + " " * (nums.count * graph_scale)
+        legend = [ "", last_row ]
+        line_piece = "-" * ((graph_scale-1)/2)
+        legend[0] = ([ "       |" ] + nums.map.with_index { |n,i|
+          i = (i + 1) * graph_scale
+          line_piece + if n == '0'
+            last_row[ 8 + i - graph_scale, graph_scale ] = " " * ((graph_scale-1)/2) + "|" * (graph_scale.odd? ? 1 : 2 ) + " " * ((graph_scale-1)/2) 
+            "|" * (graph_scale.odd? ? 1 : 2 )
+          elsif n.end_with? '0'
+            if n.start_with? '-'
+              last_row[ 8 + i - (n.length - 1) - graph_scale/2, n.length - 1 ] = n[1..-1].reverse
+            else
+              last_row[ 8 + i - (graph_scale+1)/2, n.length - 1 ] = n
             end
-          }
-          row += 1
-        end
+            if n.start_with? '-'
+              '!' + (graph_scale.even? ? '-' : '')
+            else
+              (graph_scale.even? ? '-' : '') + '!'
+            end
+          else
+            if n.start_with? '-'
+              n[-1] + (graph_scale.even? ? '-' : '')
+            else
+              (graph_scale.even? ? '-' : '') + n[-1]
+            end
+          end + line_piece
+        }).join
         
         message.reply output.reverse.reject { |r| r.match /^\s+$/ }
-        message.reply legend.map(&:join)
+        message.reply legend
         next
       end
       
