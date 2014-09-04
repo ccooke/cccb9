@@ -393,6 +393,7 @@ module CCCB::Core::Dice
     set_setting( "d20", "options", "default_die")
     default_setting( 4, "options", "probability_graph_height" )
     default_setting( 20, "options", "probability_graph_width" )
+    default_setting( "_.=m#@", "options", "probability_graph_chars" )
   
     add_command :dice, "dice memory show" do |message, (user)|
       message.reply( if message.user.persist[:dice_memory_saved]
@@ -420,20 +421,36 @@ module CCCB::Core::Dice
       if symbol.nil?
         graph_height = message.replyto.get_setting( "options", "probability_graph_height" ).to_i 
         graph_width = message.replyto.get_setting( "options", "probability_graph_width" ).to_i
+        graph_chars = message.replyto.get_setting( "options", "probability_graph_chars" )
 
-        density = parser1.density.sort { |a,b| a.first <=> b.first }
+        density = parser1.density
+        lowest = density.map(&:first).min
+        highest = density.map(&:first).max
+        lowest.upto(highest).each do |i|
+          next if density.map(&:first).include? i
+          density.d[i] = 0
+        end
+        density = density.sort { |a,b| a.first <=> b.first }
         graph_scale = 1
         graph_scale += 1 while ((graph_scale + 1) * density.count) <= graph_width
         max_prob = density.map(&:last).max
         output = (1..graph_height).map {|i|
           sprintf("% 6.2f%%|",(max_prob * 100 * i/graph_height.to_f)) + density.map { |n,p|
             x = p * (1/max_prob) * graph_height
-            if x >= i
-              '#' * graph_scale
-            elsif x >= i - 0.33
-              '-' * graph_scale
-            elsif x >= i - 0.66
-              '_' * graph_scale
+            if x >= i && p == max_prob
+              "\x02" + graph_chars[5]*graph_scale + "\x02"
+            elsif x >= i
+              graph_chars[5] * graph_scale
+            elsif x >= i - 0.20
+              graph_chars[4] * graph_scale
+            elsif x >= i - 0.40
+              graph_chars[3] * graph_scale
+            elsif x >= i - 0.60
+              graph_chars[2] * graph_scale
+            elsif x >= i - 0.90
+              graph_chars[1] * graph_scale
+            elsif x >= i - 0.99
+              graph_chars[0] * graph_scale
             elsif n == 0
               " " * ((graph_scale-1)/2) + "|" * (graph_scale.odd? ? 1 : 2 ) + " " * ((graph_scale-1)/2) 
             else
@@ -445,9 +462,16 @@ module CCCB::Core::Dice
         last_row = "       |" + " " * (nums.count * graph_scale)
         legend = [ "", last_row ]
         line_piece = "-" * ((graph_scale-1)/2)
-        legend[0] = ([ "       |" ] + nums.map.with_index { |n,i|
+        legend[0] = ([ "       |" ] + density.map.with_index { |(num,p),i|
+          colour_start = ""
+          colour_end = ""
+          if p == max_prob
+            colour_start = "\x02"
+            colour_end = "\x02"
+          end
+          n = num.to_s
           i = (i + 1) * graph_scale
-          line_piece + if n == '0'
+          line_piece + colour_start + if n == '0'
             last_row[ 8 + i - graph_scale, graph_scale ] = " " * ((graph_scale-1)/2) + "|" * (graph_scale.odd? ? 1 : 2 ) + " " * ((graph_scale-1)/2) 
             "|" * (graph_scale.odd? ? 1 : 2 )
           elsif n.end_with? '0'
@@ -467,7 +491,7 @@ module CCCB::Core::Dice
             else
               (graph_scale.even? ? '-' : '') + n[-1]
             end
-          end + line_piece
+          end + colour_end + line_piece
         }).join
         
         message.reply output.reverse.reject { |r| r.match /^\s+$/ }
