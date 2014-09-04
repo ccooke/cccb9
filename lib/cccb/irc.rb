@@ -103,18 +103,18 @@ class CCCB::Message
       if to_channel?
         super
       else
-        user.nick
+        @user
       end
     end
 
     def reply(string)
       if ctcp? and ctcp != :ACTION
-        network.msg replyto, "NOTICE :\001#{ctcp} #{string}\001"
+        replyto.msg "NOTICE :\001#{ctcp} #{string}\001"
       else
         if string =~ /^\s*\/me\s+(.*)$/i
           string = "\001ACTION #{$~[1]}\001"
         end
-        network.msg replyto, string
+        replyto.msg string
       end
     end
   end
