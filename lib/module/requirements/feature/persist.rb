@@ -42,7 +42,7 @@ module Module::Requirements::Feature::Persist
       persist.lock.synchronize do
         Dir.open(@dir).each do |f|
           next if f.start_with? '.' or ! f.end_with? '.db'
-          loaded = YAML.load( File.read( "#{@dir}/#{f}" ) )
+          loaded = YAML.load( File.read( "#{@dir}/#{f}" ).force_encoding("UTF-8") )
           debug "Loaded data for #{loaded[:class]}"
           persist.data[loaded[:class]] = loaded[:data]
         end

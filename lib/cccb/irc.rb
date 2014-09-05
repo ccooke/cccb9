@@ -109,7 +109,7 @@ class CCCB::Message
 
     def reply(string)
       if ctcp? and ctcp != :ACTION
-        replyto.msg "NOTICE :\001#{ctcp} #{string}\001"
+        network.msg "NOTICE #{replyto} :\001#{ctcp} #{string}\001"
       else
         if string =~ /^\s*\/me\s+(.*)$/i
           string = "\001ACTION #{$~[1]}\001"
@@ -797,6 +797,7 @@ class CCCB::Network
 
         if line
           begin
+            line.force_encoding("UTF-8")
             # IRC protocol actually is dealt with from CCCB::Message.new
             spam "RAW #{line}"
             schedule_hook :server_message, CCCB::Message.new(self, line )
@@ -844,7 +845,16 @@ class CCCB::Network
   end
 
   def msg(target, lines)
-    Array(lines).each do |string|
+    strings = Array(lines).each_with_object([]) do |line,a|
+      while line.length > 420
+        if split = line.match(/^(.{1,419}) /)
+          a << split[1]
+          line = split.post_match
+        end
+      end
+      a << line
+    end
+    strings.each do |string|
       puts "PRIVMSG #{target} :#{string}"
       schedule_hook :client_privmsg, self, target, string
     end

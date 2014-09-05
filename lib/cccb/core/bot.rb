@@ -238,7 +238,11 @@ module CCCB::Core::Bot
         if key
           copy = copy[key]
         end
-        copy.to_json
+        begin
+          copy.to_json
+        rescue Encoding::UndefinedConversionError => e
+          pp copy
+        end
       end
 
       return "Setting #{setting_name} is set to #{value}"
