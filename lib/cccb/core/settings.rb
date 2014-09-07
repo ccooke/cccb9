@@ -16,7 +16,7 @@ module CCCB::Settings
 
   def clear_setting_cache 
     CCCB.instance.replace_log_tag :wipe_cache
-    info "Clearing settings cache on #{self}: #{@___setting_cache.inspect}"
+    debug "Clearing settings cache on #{self}: #{@___setting_cache.inspect}"
     @___setting_cache = {
       keys: {},
       delegation: {}
