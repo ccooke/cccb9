@@ -181,6 +181,11 @@ class CCCB::Message
     include ChannelCommands
   end
 
+  module CMD_INT_CREATE_CHANNEL
+    include ChannelCommands
+  end
+
+
   module CMD_352
     include NickPlusChannel
     def process
@@ -269,7 +274,7 @@ class CCCB::Message
     (?<command> \S+ )
     (?:
       \s+
-      (?<arguments> (?:(?!:)\S+ \s+)* )
+      (?<arguments> (?: (?!:)\S+\s+)* )
       (?:
         : (?<message> .*? )
       )?
@@ -314,7 +319,7 @@ class CCCB::Message
   end
 
   def set_user_data(string)
-    debug "Patch user to #{string}" unless self.user.nil?
+    spam "Patch user to #{string}" unless self.user.nil?
     match = MESSAGE.match( string ) or raise InvalidMessage.new(string)
 
     @from = match[:prefix] ? match[:prefix].to_sym : ""
@@ -349,6 +354,10 @@ class CCCB::Message
 
   def log
     info format(@log_format)
+  end
+
+  def channel
+    raise "Not a channel"
   end
 
   def method_missing(sym, *args)
@@ -437,7 +446,7 @@ class CCCB::User
         end
         user
       else
-        debug "New user #{id}"
+        verbose "New user #{id}"
         message.network.users[id] = super(message, match)
       end
     else
@@ -462,7 +471,7 @@ class CCCB::User
 
   def initialize(message,match, restore_from_archive = false)
     @network = message.network
-    debug "Create user #{match[:id]}"
+    verbose "Create user #{match[:id]}"
     @history = []
     update(message,match)
   end
@@ -554,7 +563,7 @@ class CCCB::ChannelUser
   end
 
   def nick_with_mode
-    "#{ is_op? ? '@' : ( is_voice? ? '+' : '' ) }#{nick}"
+    "#{ is_op? ? '@' : ( is_voice? ? '+' : ' ' ) }#{nick}"
   end
 
   def name
@@ -597,11 +606,11 @@ class CCCB::Channel
   end
 
   def initialize(name, message, restore_from_archive = false)
-    info "INIT channel from #{message.inspect}"
+    debug "INIT channel from #{message.inspect}"
     @network = message.network
     @name = name
     @users = {}
-    debug "New channel #{name}"
+    verbose "New channel #{name}"
     unless message.user.system? or restore_from_archive
       add_user(message.user)
     end
@@ -649,7 +658,7 @@ class CCCB::Channel
   end
 
   def set_mode(user, *mode)
-    debug "#{self} Set mode on #{user} to #{mode}"
+    verbose "#{self} Set mode on #{user} to #{mode}"
     @users[user.real].set_mode *mode
   end
 
@@ -738,7 +747,7 @@ class CCCB::Network
       users[id]
     elsif autovivify
       # autovivify!
-      CCCB::Message.new( self, ":#{name}!nil@nil NOOP", true ).user
+      CCCB::Message.new( self, ":#{name}!nil@nil NOOP :", true ).user
     else
       nil
     end
@@ -749,7 +758,7 @@ class CCCB::Network
     if channels.include? id
       channels[id]
     else
-      CCCB::Message.new( self, ":internal NOOP #{name}", true ).channel
+      CCCB::Message.new( self, ":internal INT_CREATE_CHANNEL #{name} :", true ).channel
     end
   end
 
