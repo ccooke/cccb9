@@ -11,22 +11,27 @@ module CCCB::Core::CoreCommands
       message.reply $load_errors
     end
     
-    add_command :core, ["copy","cp"] do |message, args|
+    add_command :core, [ ["copy","cp"] ] do |message, args|
       raise "Two arguments are required" unless args.count == 2
       message.reply copy_user_setting( message, args[0], args[1] )
     end
 
     add_command :core, [ ["set","setting"], ["my","channel",""] ] do |message, args, words|
-      setting = args.shift
-      args.shift if args[0] == '='
-      value = args.join(' ') unless args.empty?
-      default_type = if message.to_channel? and words.last == "channel"
-        "channel"
-      elsif words.last == "my"
-        "user"
+      settings = message.replyto.storage[:settings].keys
+      if args.empty?
+        message.reply "Found #{settings.count} settings here: #{settings.join(", ")}"
+      else
+        setting = args.shift
+        args.shift if args[0] == '='
+        value = args.join(' ') unless args.empty?
+        default_type = if message.to_channel? and words.last == "channel"
+          "channel"
+        elsif words.last == "my"
+          "user"
+        end
+        setting = parse_setting( setting, message, default_type )
+        message.reply user_setting( message, setting, value )
       end
-      setting = parse_setting( setting, message, default_type )
-      message.reply user_setting( message, setting, value )
     end
 
     add_command :core, "admin reload" do |message|
