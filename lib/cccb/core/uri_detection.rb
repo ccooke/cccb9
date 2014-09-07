@@ -25,13 +25,9 @@ module CCCB::Core::URIDetection
     end
 
     add_hook :uri_detection, :message do |message|
-      info("In uri detection")
       text = message.text
-      info "message: #{message}"
       next unless message.user.get_setting( "options", "uri_events" )
-      info "enabled"
       while match = URL_REGEX.match( text )
-        info "URI: #{match}"
         text = match.post_match
         schedule_hook :uri_found, message, {
           uri: match[:uri],
