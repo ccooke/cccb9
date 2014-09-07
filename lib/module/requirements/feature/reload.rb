@@ -2,7 +2,10 @@ require 'thread'
 
 module Module::Requirements::Feature::Reload
   extend Module::Requirements
-  needs :hooks, :call_module_methods
+  needs :hooks, :call_module_methods, :logging
+
+  @@first_startup ||= []
+  @@first_startup << true if @@first_startup.empty?
 
   def shutdown
     verbose "Hook reload_pre"
@@ -96,12 +99,32 @@ module Module::Requirements::Feature::Reload
 
     call_submodules :module_load
 
+    begin
+      call_submodules :module_test, throw_exceptions: true
+    rescue Exception => e
+      queue = Module::Requirements::Feature::Logging.class_variable_get(:@@logging_queue)
+
+      until queue.empty?
+        (level,message,keys) = queue.pop
+        message.each { |m| debug_print level, *m, **keys }
+      end
+      if @@first_startup.first
+        critical "This is the first startup: #{@@first_startup.inspect}"
+        critical "Self-Tests failed: #{e.class}:#{e}"
+        raise e
+      else
+        $load_errors << critical( "Self-Tests failed: #{e.class}:#{e} #{e.backtrace}")
+      end
+    end
+    @@first_startup[0] = false
+
     call_submodules :module_start
 
     self.start if self.respond_to? :start
 
     run_hooks :ready
     reload.time = Time.now
+
   end
 
   def reload_then(*args, &block)
