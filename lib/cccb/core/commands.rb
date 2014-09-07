@@ -95,7 +95,7 @@ module CCCB::Core::Commands
 
     add_request :core, /^(.*)$/ do |match, message|
       string = match[1]
-      verbose "In words, parsing #{string}"
+      spam "In words, parsing #{string}"
       words = string.scan(COMMAND_WORD_REGEX).map do |(_, quoted_word, _, _, simple_word)|
         simple_word.nil? ? quoted_word : simple_word
       end
@@ -119,7 +119,7 @@ module CCCB::Core::Commands
       end
       rate_limit_by_feature( message, commands.feature_lookup[hook], hook )
       debug "Scheduling hook for command: #{hook}->(#{args.inspect}"
-      schedule_hook hook, message, args, pre, cursor, hook
+      schedule_hook hook, message, args, pre, cursor, hook, run_hook_in_thread: true
       nil
     end
 
