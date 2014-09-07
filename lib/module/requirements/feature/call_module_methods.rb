@@ -3,7 +3,7 @@ module Module::Requirements::Feature::CallModuleMethods
   extend Module::Requirements
   needs :logging
 
-  def call_submodules(method,*args)
+  def call_submodules(method,*args,**kwargs)
     #cp0 = Time.now.to_f
     #puts "Subcall #{method}(#{args.join(", ")})" if $DEBUG
     self.class.module_requirements_loader.submodules.select { |a| 
@@ -18,7 +18,8 @@ module Module::Requirements::Feature::CallModuleMethods
         #cp2 = Time.now.to_f
         #puts("c_sm_m #{method} in #{a} took #{cp2 - cp1}s")
       rescue Exception => e
-        critical "Exception calling #{a}.#{method}: #{e}"
+        critical "Exception calling #{a}.#{method}: #{e} #{e.backtrace}"
+        raise e if kwargs[:throw_exceptions]
       end
     end
     #cp3 = Time.now.to_f
