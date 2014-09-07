@@ -155,7 +155,6 @@ module CCCB::Core::Bot
   end
 
   def user_setting_value message, type, name, key, value_string = nil
-    verbose [ type, name, key ].inspect
     object = resolve_object_type( message, type )
     setting_name = [ object, name, key ].compact.join('::')
     
@@ -183,11 +182,17 @@ module CCCB::Core::Bot
         raise SettingError.new("Sorry, there's something wrong with the value '#{value_string}' (#{e})")
       end
     end
+    real_object = object.setting_object(name)
 
-    verbose "Got translation: #{translation.inspect}"
+    spam "Got translation: #{translation.inspect}"
+    if object != real_object
+      real_object = "#{object}(::#{real_object})"
+    end
     if translation and key and translation.include? key
-      setting_name = [ object, name, translation[key] ] .compact.join('::')
+      setting_name = [ real_object, name, translation[key] ] .compact.join('::')
       key = translation[key]
+    else
+      setting_name = [ real_object, name, key ].compact.join('::')
     end
 
     value = if key
@@ -260,11 +265,7 @@ module CCCB::Core::Bot
 
     bot.command_lock ||= Mutex.new.lock
     bot.command_lock.unlock
-    persist.store.define CCCB, :class
-    persist.store.define CCCB::Network, :name
-    persist.store.define CCCB::User, :network, :id
-    persist.store.define CCCB::Channel, :network, :name 
-
+    
     add_setting :core, "superusers", default: []
     add_setting :user, "options"
     add_setting :channel, "options" 
@@ -274,8 +275,8 @@ module CCCB::Core::Bot
     add_setting :network, "rate_limit"
     add_setting :channel, "rate_limit"
     add_setting :channel, "rate_limit_current", auth: :superuser, persist: false
-    set_setting true, "options", "join_on_invite"
-    set_setting true, "options", "bang_commands_enabled"
+    default_setting true, "options", "join_on_invite"
+    default_setting true, "options", "bang_commands_enabled"
 
     add_hook :core, :pre_setting_set do |obj, setting, hash|
       next unless setting == 'rate_limit' and hash.respond_to? :to_hash
@@ -312,7 +313,7 @@ module CCCB::Core::Bot
     hide_irc_commands :PING unless $DEBUG
 
     add_hook :core, :server_send do |network, string|
-      spam ">>> " + string, network
+      spam "[#{network}] >>> #{string}"
     end
 
     add_hook :core, :server_message do |message|
