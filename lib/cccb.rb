@@ -1,18 +1,9 @@
-require 'thread'
-
 # Early logging
-class Module
-  module Requirements
-    module Feature
-      module Logging
-        @@logging_queue ||= Queue.new
-      end
-    end
-  end
-
-  %i{ critical error warning info verbose debug spam }.each_with_index do |sym,i|
-    define_method sym do |*message|
-      Module::Requirements::Feature::Logging.class_variable_get(:@@logging_queue) << [i,*message]
+$early_logging = []
+module Kernel
+  %i{ critical error warning info verbose debug spam detail}.each_with_index do |sym,i|
+    define_method sym do |*message,**keys|
+      $early_logging << [sym,message,keys]
     end
   end
 end
@@ -21,14 +12,6 @@ require 'etc'
 require 'managedthreads'
 require 'string_format'
 require 'module/requirements'
-require 'module/requirements/feature/reload'
-require 'module/requirements/feature/managed_threading'
-require 'module/requirements/feature/hooks'
-require 'module/requirements/feature/logging'
-require 'module/requirements/feature/call_module_methods'
-require 'module/requirements/feature/staticmethods'
-require 'module/requirements/feature/events'
-require 'module/requirements/feature/persist'
 require 'cccb/config'
 require 'cccb/core'
 require 'cccb/irc'
@@ -37,7 +20,7 @@ $load_time = Time.now
 $load_errors = []
 print_loading = $VERBOSE || $DEBUG;
 
-[ "lib/cccb/core", "lib/cccb/modules" ].each do |dir|
+[ "lib/cccb/core", "lib/cccb/modules", "lib/module/requirements/feature" ].each do |dir|
   Dir.new(dir).select { |f| f.end_with? '.rb' }.each do |file|
     begin
       Kernel.load("#{dir}/#{file}")
@@ -81,6 +64,7 @@ class CCCB
 
     {
       log_level: args[:log_level] || "VERBOSE",
+      log_level_by_label: args[:log_level_by_label] || nil,
       user: args[:user] || Etc.getlogin,
       nick: args[:nick] || Etc.getlogin,
       servers: args[:servers],
@@ -95,5 +79,9 @@ class CCCB
 
   def to_s
     "CCCB"
+  end
+
+  def inspect
+    "<#{to_s}:#{networking.networks}>"
   end
 end
