@@ -70,45 +70,62 @@ module Module::Requirements::Feature::Hooks
     count > 0
   end
 
+  def run_hook_code hook, item, args
+    begin
+      if item[:code].call( *args ) == :end_hook_run
+        return item      
+      end
+    rescue Exception => e
+      if args.last.respond_to? :to_hash and args.last[:throw_exceptions]
+        raise e
+      else
+        schedule_hook :exception, e, hook, item, args
+        if hooks.db.include? :backtrace
+          current_dir = Dir.pwd
+          short_names = {}
+          minimised_backtrace = e.backtrace.map do |l|
+            match = l.match %r{^(?:#{current_dir})?(/?lib/)?(?<file>.*?/(?<short_name>[^/]+?).rb):(?<line_number>\d+):in.*$}
+            unless short_names.include? match[:file]
+              i = 1
+              while short_names.values.include?( short_name = match[:short_name] + i.to_s )
+                i += 1
+              end
+              short_name = match[:short_name] + i.to_s
+              short_names[match[:file]] = short_name
+            end
+            "#{short_names[match[:file]]}:#{match[:line_number]}"
+          end
+          schedule_hook :backtrace, e, short_names, minimised_backtrace, hook, item, args 
+        end
+      end
+    end
+  end
+
+  def run_hook hook, item, args, hook_debug
+    spam "RUN: #{ item[:feature] }:#{ hook }->( #{args} )"
+    hook_debug << [ Time.now, item ]
+    if hook != :hook_debug_hook
+      schedule_hook :hook_debug_hook, hook, [args]
+    end
+
+    if args.last.respond_to? :to_hash and args.last[:run_hook_in_thread]
+      spam "Running hook #{hook} in a new thread"
+      Thread.new do
+        args.last[:run_hook_in_thread] = false
+        run_hook_code hook, item, args
+      end
+    else
+      run_hook_code hook, item, args
+    end
+  end
+
   def run_hooks hook, *args
     hook_stat :run_hooks, hook, args
-    debug "hooks: #{hook}->(#{args.join(", ")})"
+    detail "hooks: #{hook}->(#{args.join(", ")})"
     hook_debug = []
     hook_stat :hooks_visited, hook_debug
     yield_hooks(hook,*args) do |item|
-      spam "RUN: #{ item[:feature] }:#{ hook }->( #{args} )"
-      hook_debug << [ Time.now, item ]
-      if hook != :hook_debug_hook
-        schedule_hook :hook_debug_hook, hook, [args]
-      end
-      begin
-        if item[:code].call( *args ) == :end_hook_run
-          return item      
-        end
-      rescue Exception => e
-        if args.last.respond_to? :to_hash and args.last[:throw_exceptions]
-          raise e
-        else
-          schedule_hook :exception, e, hook, item, args
-          if hooks.db.include? :backtrace
-            current_dir = Dir.pwd
-            short_names = {}
-            minimised_backtrace = e.backtrace.map do |l|
-              match = l.match %r{^(?:#{current_dir})?(/?lib/)?(?<file>.*?/(?<short_name>[^/]+?).rb):(?<line_number>\d+):in.*$}
-              unless short_names.include? match[:file]
-                i = 1
-                while short_names.values.include?( short_name = match[:short_name] + i.to_s )
-                  i += 1
-                end
-                short_name = match[:short_name] + i.to_s
-                short_names[match[:file]] = short_name
-              end
-              "#{short_names[match[:file]]}:#{match[:line_number]}"
-            end
-            schedule_hook :backtrace, e, short_names, minimised_backtrace, hook, item, args 
-          end
-        end
-      end
+      run_hook hook, item, args, hook_debug
     end
   end
 
