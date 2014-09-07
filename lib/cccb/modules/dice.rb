@@ -164,7 +164,6 @@ class CCCB::DieRoller
     replacements = new_expr.split( /;/ )
     new_expressions = []
     count = 0
-    spam replacements, expr
     while e = expressions.shift
       spam [ new_expressions, e, expressions ].inspect
       if (count += 1)== 1000
@@ -372,6 +371,8 @@ end
 module CCCB::Core::Dice
   extend Module::Requirements
 
+  needs :bot, :background
+
   ADVANTAGE_REGEX = /
     w (?:ith)?
     \s*
@@ -416,26 +417,25 @@ module CCCB::Core::Dice
         message.user.get_setting( "roll_presets", "default_die" )
       end
       parser1 = Dice::Parser.new( exp1, default: default )
-
+      density1 = Backgrounder.new(parser1).background(:density)
 
       if symbol.nil?
         graph_height = message.replyto.get_setting( "options", "probability_graph_height" ).to_i 
         graph_width = message.replyto.get_setting( "options", "probability_graph_width" ).to_i
         graph_chars = message.replyto.get_setting( "options", "probability_graph_chars" )
 
-        density = parser1.density
-        lowest = density.map(&:first).min
-        highest = density.map(&:first).max
+        lowest = density1.map(&:first).min
+        highest = density1.map(&:first).max
         lowest.upto(highest).each do |i|
-          next if density.map(&:first).include? i
-          density.d[i] = 0
+          next if density1.map(&:first).include? i
+          density1.d[i] = 0
         end
-        density = density.sort { |a,b| a.first <=> b.first }
+        density1 = density1.sort { |a,b| a.first <=> b.first }
         graph_scale = 1
-        graph_scale += 1 while ((graph_scale + 1) * density.count) <= graph_width
-        max_prob = density.map(&:last).max
+        graph_scale += 1 while ((graph_scale + 1) * density1.count) <= graph_width
+        max_prob = density1.map(&:last).max
         output = (1..graph_height).map {|i|
-          sprintf("% 6.2f%%|",(max_prob * 100 * i/graph_height.to_f)) + density.map { |n,p|
+          sprintf("% 6.2f%%|",(max_prob * 100 * i/graph_height.to_f)) + density1.map { |n,p|
             x = p * (1/max_prob) * graph_height
             if x >= i && p == max_prob
               "\x02" + graph_chars[5]*graph_scale + "\x02"
@@ -458,11 +458,11 @@ module CCCB::Core::Dice
             end 
           }.join
         }
-        nums = density.map(&:first).map(&:to_s)
+        nums = density1.map(&:first).map(&:to_s)
         last_row = "       |" + " " * (nums.count * graph_scale)
         legend = [ "", last_row ]
         line_piece = "-" * ((graph_scale-1)/2)
-        legend[0] = ([ "       |" ] + density.map.with_index { |(num,p),i|
+        legend[0] = ([ "       |" ] + density1.map.with_index { |(num,p),i|
           colour_start = ""
           colour_end = ""
           if p == max_prob
@@ -515,7 +515,8 @@ module CCCB::Core::Dice
       end
       
       parser2 = Dice::Parser.new( exp2, default: "+0" )
-      density = parser1.density - parser2.density
+      density2 = Backgrounder.new(parser2).background(:density)
+      density = density1 - density2
       rational = density.send(sym, 0)
 
       message.reply( if density.exact
@@ -542,7 +543,8 @@ module CCCB::Core::Dice
       end
 
       roller = CCCB::DieRoller.new(message)
-      rolls = roller.roll( expression, default , mode)
+      rolls = Backgrounder.new(roller).background(:roll,expression, default, mode)
+      verbose "Got rolls: #{rolls}"
       message.reply roller.message_die_roll(message.nick, rolls, mode)
     end
 
@@ -807,10 +809,8 @@ module CCCB::Core::Dice
       expression = match[:call].split('/').join(';')
       expression.gsub(/;\s*$/,'')
       message = CCCB::Message.new( network, "PRIVMSG d20 :roll #{expression}", true )
-      p message
       message.instance_variable_set(:@content_server_strings, [])
       def message.reply(reply)
-        puts "M: #{reply}"
         @content_server_strings << reply
       end
       roller = CCCB::DieRoller.new( message )
