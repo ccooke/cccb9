@@ -61,5 +61,29 @@ module CCCB::Core::Debugging
       end
     end
 
+    add_command :debug, "admin log label add" do |message, (label,level)|
+      auth_command :superuser, message
+      raise "What label?" if label.nil?
+      if level
+        level = level.to_s.upcase.to_sym
+        raise "Invalid debug level #{level}" unless CCCB.instance.debug_levels.include? level
+        CCCB.instance.logging.loglevel_by_label ||= {}
+        CCCB.instance.logging.loglevel_by_label[label] = level
+      end
+
+      level = (CCCB.instance.logging.loglevel_by_label||{})[label]
+      message.reply "Logging for #{label} is set to #{level.inspect}"
+    end
+
+    add_command :debug, "admin log label remove" do |message, (label)|
+      auth_command :superuser, message
+      raise "What label?" if label.nil?
+      CCCB.instance.logging.loglevel_by_label ||= {}
+      CCCB.instance.logging.loglevel_by_label.delete(label)
+      CCCB.instance.logging.loglevel_by_label = nil if CCCB.instance.logging.loglevel_by_label.empty?
+      level = (CCCB.instance.logging.loglevel_by_label||{})[label]
+      message.reply "Logging for #{label} is set to #{level.inspect}"
+    end
+
   end
 end
