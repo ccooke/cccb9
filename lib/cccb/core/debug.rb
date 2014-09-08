@@ -85,5 +85,13 @@ module CCCB::Core::Debugging
       message.reply "Logging for #{label} is set to #{level.inspect}"
     end
 
+    add_command :debug, "die die die" do |message|
+      auth_command :superuser, message
+      Thread.list.each do |t|
+        next if t == Thread.current
+        t.raise "Dai the Death"
+      end
+      raise "Dai the Death"
+    end
   end
 end
