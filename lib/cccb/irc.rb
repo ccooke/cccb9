@@ -185,6 +185,20 @@ class CCCB::Message
     include ChannelCommands
   end
 
+  module CMD_330
+    def process
+
+      (bot_name, requester, nickserv_account) = arguments
+      if network.get_setting("options","accept_nickserv")
+        info "This network uses nickserv. Logging registered account"
+        requested_user = network.get_user(requester)
+        info "Updating #{requested_user.inspect}"
+        requested_user.set_setting true, "session", "authenticated"
+        requested_user.set_setting true, "identity", "registered"
+        requested_user.set_setting nickserv_account, "session", "nickserv_account"
+      end
+    end
+  end
 
   module CMD_352
     include NickPlusChannel
