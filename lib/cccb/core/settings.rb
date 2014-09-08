@@ -210,7 +210,7 @@ module CCCB::Settings
       else
         detail "Setting to #{temp.inspect}"
         cursor[name] = temp
-        schedule_hook :setting_set, self, name, nil, current, v
+        schedule_hook :setting_set, self, name, nil, current, temp
       end
     end
     return translation
