@@ -39,7 +39,7 @@ module CCCB::Settings
     if setting_cache[:delegation].include? name
       setting_cache[:delegation][name]
     else
-      target = if name == 'local_settings' or
+      target = if setting_option(name, :local) or
          get_local_setting("local_settings",name) or
          ! delegated?
       then
@@ -60,8 +60,10 @@ module CCCB::Settings
     CCCB.instance.add_log_tag stage: :init
     debug "#{self}.get_setting(#{name},#{key})"
     if (target = setting_object(name)) == self
+      spam "Fetching local object #{self}::#{name}"
       get_local_setting(name,key)
     else
+      spam "Fetching delegated object #{name}"
       CCCB.instance.replace_log_tag stage: :delegate
       target.get_setting(name,key)
     end
@@ -219,7 +221,7 @@ module CCCB::Settings
       opt = if CCCB.instance.settings.db[self.class].include? setting
         CCCB.instance.settings.db[self.class][setting][option]
       else
-        warning "No such option '#{option}' on #{self.class}::#{setting}"
+        spam "Setting #{setting} does not exist on #{self.class}"
         nil
       end
       spam "option #{option} = #{opt}"
@@ -313,7 +315,7 @@ module CCCB::Core::Settings
     :user => :user,
   }
 
-  DEFAULT_SETTING_OPTIONS = %i{ auth default secret persist hide_keys clear_cache_on_set }
+  DEFAULT_SETTING_OPTIONS = %i{ auth default secret persist hide_keys clear_cache_on_set local}
   def get_default_setting_option(type,key)
     case key
     when :auth; DEFAULT_AUTH_BY_TYPE[type]
@@ -322,6 +324,7 @@ module CCCB::Core::Settings
     when :persist; true
     when :hide_keys; []
     when :clear_cache_on_set; false
+    when :local; false
     end
   end
 
@@ -345,7 +348,6 @@ module CCCB::Core::Settings
       spam "Updated setting #{klass}[#{name}] => #{new_options}"
       settings.db[klass][name] = Marshal.load( Marshal.dump( new_options ) )
     end
-    set_setting false, "local_settings", name
   end
   alias_method :alter_setting, :add_setting
 
@@ -418,7 +420,7 @@ module CCCB::Core::Settings
     end
       
     verbose "Cleared settings cache on #{count} objects"
-    
+
     add_hook :core, :pre_setting_set do |obj, setting, hash|
       next unless setting == 'identity' and hash.respond_to? :to_hash and ! hash['parent'].nil?
       verbose "Setting parent of #{obj} to #{hash['parent']}"
@@ -443,11 +445,13 @@ module CCCB::Core::Settings
     # local_settings must be the first setting defined
     add_setting :all, "local_settings", 
       clear_cache_on_set: true,
-      default: { "local_settings" => true, "identity" => true}
+      default: { "local_settings" => true, "identity" => true},
+      local: true
     add_setting :all, "identity", 
       clear_cache_on_set: true, 
       auth: :superuser, 
-      default: { "parent" => nil }
+      default: { "parent" => nil },
+      local: true
   end
 
   def module_test
@@ -459,6 +463,7 @@ module CCCB::Core::Settings
     value = get_setting( test_setting_name, key )
     raise "Set/Get name,key broken: setting[#{key}]=#{value} != random[#{key}]=#{random[key]}" unless value == random[key]
     raise "Set/Get name broken" unless get_setting(test_setting_name) == random
+    settings.db[CCCB].delete test_setting_name
   end
 end
 
