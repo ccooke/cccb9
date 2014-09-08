@@ -162,8 +162,12 @@ module Module::Requirements::Feature::Hooks
   end
 
   def hook_stat_dump
-    warning "DUMPING HOOK STATE: "
-    warning hooks.stats.to_yaml
+    critical "DUMPING HOOK STATES: "
+    critical "THREADS: #{Thread.list}"
+    Thread.list.each do |t|
+      critical "THREAD #{t}: #{t.backtrace}"
+    end
+    critical hooks.stats.to_yaml
   end
 
   def module_load
