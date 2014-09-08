@@ -856,9 +856,13 @@ class CCCB::Network
   def msg(target, lines)
     strings = Array(lines).each_with_object([]) do |line,a|
       while line.length > 420
-        if split = line.match(/^(.{1,419}) /)
-          a << split[1]
-          line = split.post_match
+        chunk = line.slice(0,420)
+        if index = chunk.rindex(' ')
+          a << chunk[0,index]
+          line[0,index+1] = ""
+        else
+          a << chunk
+          line[0,420] = ""
         end
       end
       a << line
