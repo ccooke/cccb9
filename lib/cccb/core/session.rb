@@ -56,7 +56,8 @@ module CCCB::Core::Session
   def module_load
     add_setting :user, "session", persist: false, 
       auth: :superuser, 
-      default: { authenticated: false }
+      default: { "authenticated" => false },
+      local: true
     add_setting :user, "privs", auth: :network
     alter_setting :user, "identity", 
       secret: true, 
@@ -86,14 +87,14 @@ module CCCB::Core::Session
       end
     end
 
-    add_command :session, "register" do |messaeg, args|
+    add_command :session, "register" do |message, args|
       message.reply( if message.to_channel?
         if message.user.registered? and message.user.verify_password(args[0].join(" "))
           message.user.set_setting(SecureRandom.random_bytes(32), "identity", "password")
         end
         "Denied. Hope that password you just invalidated wasn't yours"
       else
-        if match[:password].to_s == ""
+        if args[0].to_s == ""
           "You need a password to register"
         else
           message.user.register(args.join(" "))
