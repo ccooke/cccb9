@@ -56,12 +56,7 @@ module CCCB::Core::Ops
 
     add_command :ops, "op me" do |message|
       next unless message.to_channel?
-      user_id = if message.user.delegated? 
-        message.user.delegated.id
-      else
-        message.user.id
-      end
-        
+      user_id = message.user.setting_storage_object.id
       if message.user.authenticated? and message.network.get_setting("ops", user_id)
         message.network.puts "MODE #{message.channel} +o #{message.nick}"
         message.reply "OK"
