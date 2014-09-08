@@ -198,7 +198,12 @@ module CCCB::Core::Bot
     value = if key
       { key => object.get_setting(name,key) }
     else
-      object.get_setting(name).dup
+      tmp = object.get_setting(name)
+      if tmp.nil?
+        raise CCCB::Settings::NoSuchSettingError.new("No such setting: #{name}")
+      else
+        tmp.dup
+      end
     end
 
     return setting_name, value, key, object
