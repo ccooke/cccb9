@@ -2,14 +2,14 @@ require 'digest/sha2'
 require 'securerandom'
 
 module CCCB::Settings::IdentifiedUser
+
+  NICKSERV_TIMEOUT = 5
+  NICKSERV_VALID_TIME = 3600
+
   def auth_setting(message, name)
-    if message.user.superuser? 
-      true
-    elsif registered? and ( setting_option(name,:auth)==:user or name == 'identity' or name == 'session')
+    super or if ( setting_option(name,:auth)==:user or name == 'identity' or name == 'session') and registered?
       @___auth_reject_reason = "That user account is registered and you are not logged in"
       get_setting("session", "authenticated")
-    else
-      super
     end
   end
 
@@ -23,7 +23,36 @@ module CCCB::Settings::IdentifiedUser
   end
 
   def registered?
-    get_setting("identity", "registered")
+    if network.get_setting("options","accept_nickserv") == true
+      warning network.get_setting("options","accept_nickserv")
+      if false
+        critical "WTF"
+      end
+      session = CCCB.instance.session
+      session.nickserv_auth_expire[network] ||= {}
+      if ! session.nickserv_auth_expire[network].include? self or Time.now > session.nickserv_auth_expire[network][self]
+        verbose "Checking if #{self.nick} is logged in via Nickserv"
+        session.auth_queues[network] ||= {}
+        queue = session.auth_queues[network][self.nick] ||= Queue.new
+        network.puts "WHOIS #{self.nick}"
+        time = Time.now
+        while Time.now - time < NICKSERV_TIMEOUT
+          if queue.empty?
+            sleep 0.1
+          else
+            result = queue.pop
+            if result
+              info "Success!"
+              session.nickserv_auth_expire[network][self] = Time.now + NICKSERV_VALID_TIME
+            end
+            break
+          end
+        end
+        info "Returned from nickserv"
+      end
+    end
+          
+    critical get_setting("identity", "registered")
   end
 
   def register(password)
@@ -63,10 +92,33 @@ module CCCB::Core::Session
       secret: true, 
       hide_keys: [ "password", "salt" ],
       default: settings.db[CCCB::User]["identity"][:default].merge( { registered: false } )
+    default_setting false, "options", "accept_nickserv"
+    
+    session.auth_queues = {}
+    session.nickserv_auth_expire = {}
 
     CCCB::User.class_exec do
       unless included_modules.include? CCCB::Settings::IdentifiedUser
         prepend CCCB::Settings::IdentifiedUser 
+      end
+    end
+
+    add_hook :session, :"330" do |message|
+      info "Got a 330 #{message.arguments.inspect}"
+      queues = CCCB.instance.session.auth_queues[message.network]
+      if queues and queues.include? message.arguments[1]
+        info "Got a queue, send true"
+        queues[message.arguments[1]] << true
+      end
+    end
+
+    add_hook :session, :"318" do |message|
+      info "Got a 318 #{message.arguments.inspect}"
+      queues = CCCB.instance.session.auth_queues[message.network]
+      if queues and queues.include? message.arguments[1]
+        info "Got a queue, send false, delete it"
+        queues[message.arguments[1]] << false
+        queues.delete message.arguments[1]
       end
     end
 
