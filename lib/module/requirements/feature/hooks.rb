@@ -64,9 +64,9 @@ module Module::Requirements::Feature::Hooks
 
   def hook_runnable? hook, *args
     count = 0
-    info "Runnable #{hook}?"
+    detail2 "Runnable #{hook}?"
     yield_hooks(hook,*args) { count += 1 }
-    info "Count: #{count}"
+    detail2 "Count: #{count}"
     count > 0
   end
 
@@ -102,14 +102,14 @@ module Module::Requirements::Feature::Hooks
   end
 
   def run_hook hook, item, args, hook_debug
-    spam "RUN: #{ item[:feature] }:#{ hook }->( #{args} )"
+    detail2 "RUN: #{ item[:feature] }:#{ hook }->( #{args} )"
     hook_debug << [ Time.now, item ]
     if hook != :hook_debug_hook
       schedule_hook :hook_debug_hook, hook, [args]
     end
 
     if args.last.respond_to? :to_hash and args.last[:run_hook_in_thread]
-      spam "Running hook #{hook} in a new thread"
+      detail3 "Running hook #{hook} in a new thread"
       Thread.new do
         args.last[:run_hook_in_thread] = false
         run_hook_code hook, item, args
@@ -121,7 +121,7 @@ module Module::Requirements::Feature::Hooks
 
   def run_hooks hook, *args
     hook_stat :run_hooks, hook, args
-    detail "hooks: #{hook}->(#{args.join(", ")})"
+    spam "hooks: #{hook}->(#{args.join(", ")})"
     hook_debug = []
     hook_stat :hooks_visited, hook_debug
     yield_hooks(hook,*args) do |item|
@@ -143,11 +143,11 @@ module Module::Requirements::Feature::Hooks
           if a.respond_to? :select_hook_feature? 
             feature_cache[item[:feature]] = a.select_hook_feature?(item[:feature])
             if feature_cache[item[:feature]]
-              debug "Hook #{hook}: ALLOW #{item[:feature]}"
+              detail3 "Hook #{hook}: ALLOW #{item[:feature]}"
               false
             else
               schedule_hook :"debug_deny_#{item[:feature]}", hook, item
-              debug "Hook #{hook}: DENY #{item[:feature]}"
+              detail2 "Hook #{hook}: DENY #{item[:feature]}"
               true
             end
           end

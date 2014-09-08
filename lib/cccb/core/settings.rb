@@ -43,11 +43,11 @@ module CCCB::Settings
          get_local_setting("local_settings",name) or
          ! delegated?
       then
-        spam "is local"
+        detail2 "is local"
         self
       else
         object = setting_storage_object
-        spam "is delegated to #{object}"
+        detail2 "is delegated to #{object}"
         object
       end
       debug "Caching delegation for #{self}.#{name} => #{target}"
@@ -60,10 +60,10 @@ module CCCB::Settings
     CCCB.instance.add_log_tag stage: :init
     debug "#{self}.get_setting(#{name},#{key})"
     if (target = setting_object(name)) == self
-      spam "Fetching local object #{self}::#{name}"
+      detail2 "Fetching local object #{self}::#{name}"
       get_local_setting(name,key)
     else
-      spam "Fetching delegated object #{name}"
+      detail2 "Fetching delegated object #{name}"
       CCCB.instance.replace_log_tag stage: :delegate
       target.get_setting(name,key)
     end
@@ -74,16 +74,16 @@ module CCCB::Settings
     if key
       cache_key = "#{name}::#{key}"
       if setting_cache[:keys].include? cache_key
-        spam "cache hit"
+        detail2 "cache hit"
         setting_cache[:keys][cache_key]
       else
-        spam "cache miss"
+        detail2 "cache miss"
         if ( result = get_local_setting_uncached(name,key) ).nil?
           begin
             if CCCB::SETTING_CASCADE.include? self.class
               parent = CCCB::SETTING_CASCADE[self.class].call(self) 
 
-              spam "Cascade to #{parent.inspect}.get_setting(#{name},#{key})"
+              detail3 "Cascade to #{parent.inspect}.get_setting(#{name},#{key})"
               CCCB.instance.replace_log_tag stage: :inherit
               result = parent.get_setting(name, key)
             end
@@ -91,7 +91,7 @@ module CCCB::Settings
           end
           # never cache a nil
         else
-          spam"cache SET: #{self}::#{cache_key} = #{result.inspect}"
+          detail2 "cache SET: #{self}::#{cache_key} = #{result.inspect}"
           setting_cache[:keys][cache_key] = result
         end
         detail "Return result #{result.inspect}"
@@ -104,17 +104,17 @@ module CCCB::Settings
 
   def get_local_setting_uncached(name,key=nil)
     CCCB.instance.replace_log_tag stage: :uncached
+    detail2 "Getting setting #{self}.#{name}"
     settings = if setting_option( name, :persist )
-      spam "is persistent"
+      detail3 "is persistent"
       if name == "session"
-        spam "In #{self}, found session to be persistant: #{CCCB.instance.settings.db[self.class][name]}"
+        detail3 "In #{self}, found session to be persistant: #{CCCB.instance.settings.db[self.class][name]}"
       end
       storage[:settings] ||= {}
     else
-      spam "is transient"
+      detail3 "is transient"
       transient_storage
     end
-    spam "Getting setting #{self}.#{name}"
     db = CCCB.instance.settings.db
 
     cursor = if settings.include? name and !settings[name].nil?
@@ -167,13 +167,13 @@ module CCCB::Settings
     CCCB.instance.replace_log_tag stage: :local
     translation = {}
     CCCB.instance.settings.lock.synchronize do 
-      spam "Setting #{self}.#{name}[#{key}] to #{value}"
+      detail2 "Setting #{self}.#{name}[#{key}] to #{value}"
       current = get_setting(name, key)
       cursor = if setting_option( name, :persist )
-        detail "is in persistant storage"
+        detail3 "is in persistant storage"
         storage[:settings] ||= {}
       else
-        detail "is transient"
+        detail3 "is transient"
         transient_storage
       end
 
@@ -182,9 +182,9 @@ module CCCB::Settings
       else
         value
       end
-      detail "Temp sent as #{temp.inspect}"
+      detail3 "Temp sent as #{temp.inspect}"
       run_hooks :pre_setting_set, self, name, temp, translation, throw_exceptions: true
-      detail "Temp returned as #{temp.inspect}"
+      detail3 "Temp returned as #{temp.inspect}"
       unless cursor.include? name
         cursor[name] = Marshal.load( Marshal.dump( setting_option(name, :default) ) )
         debug "Defaulting to #{cursor[name]}"
@@ -221,10 +221,10 @@ module CCCB::Settings
       opt = if CCCB.instance.settings.db[self.class].include? setting
         CCCB.instance.settings.db[self.class][setting][option]
       else
-        spam "Setting #{setting} does not exist on #{self.class}"
+        detail3 "Setting #{setting} does not exist on #{self.class}"
         nil
       end
-      spam "option #{option} = #{opt}"
+      detail2 "option #{option} = #{opt}"
       opt
     rescue Exception => e
       pp "CLASS: #{self.class} ", CCCB.instance.settings.db

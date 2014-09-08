@@ -4,7 +4,7 @@ module CCCB::Core::FilterHooks
   
   module FilterHookFeatures
     def select_hook_feature?( feature )
-      spam "Called select_hook_feature( #{feature} )"
+      detail2 "Called select_hook_feature( #{feature} )"
       if feature == :core
         true
       else

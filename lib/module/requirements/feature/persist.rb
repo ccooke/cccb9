@@ -17,9 +17,9 @@ module Module::Requirements::Feature::Persist
         klass.class_exec(key,persist.data) do |k,store|
           define_method :storage do 
             cursor = store[self.class.name][:data]
-            spam "Access #{self} storage by #{key.inspect}"
+            detail3 "Access #{self} storage by #{key.inspect}"
             key.each do |method|
-              spam "Lookup #{method}"
+              detail2 "Lookup #{method}"
               subkey = self.send(method)
               cursor[subkey] ||= {}
               cursor = cursor[subkey]
@@ -59,7 +59,7 @@ module Module::Requirements::Feature::Persist
             File.open( "#{@dir}/#{klass}.db.tmp", 'w' ) do |f|
               stringified = { :class => klass, :data => store }.to_yaml
               f.puts stringified
-              spam "Written #{stringified.length} bytes"
+              detail3 "Written #{stringified.length} bytes"
             end
             File.rename "#{@dir}/#{klass}.db.tmp", "#{@dir}/#{klass}.db"
           end
