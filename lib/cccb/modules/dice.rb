@@ -424,6 +424,11 @@ module CCCB::Core::Dice
         graph_width = message.replyto.get_setting( "options", "probability_graph_width" ).to_i
         graph_chars = message.replyto.get_setting( "options", "probability_graph_chars" )
 
+        # '▁▂▃▄▅▆▇█'
+        # '▁▂▃▄▅▆▇█'
+        # "_.-=#8"
+        graph_distinctions = graph_chars.each_char.map.with_index { |c,i| [ c, Rational(i+1,graph_chars.length) ] }.reverse
+
         lowest = density1.map(&:first).min
         highest = density1.map(&:first).max
         lowest.upto(highest).each do |i|
@@ -437,20 +442,12 @@ module CCCB::Core::Dice
         output = (1..graph_height).map {|i|
           sprintf("% 6.2f%%|",(max_prob * 100 * i/graph_height.to_f)) + density1.map { |n,p|
             x = p * (1/max_prob) * graph_height
-            if x >= i && p == max_prob
-              "\x02" + graph_chars[5]*graph_scale + "\x02"
-            elsif x >= i
-              graph_chars[5] * graph_scale
-            elsif x >= i - 0.20
-              graph_chars[4] * graph_scale
-            elsif x >= i - 0.40
-              graph_chars[3] * graph_scale
-            elsif x >= i - 0.60
-              graph_chars[2] * graph_scale
-            elsif x >= i - 0.90
-              graph_chars[1] * graph_scale
-            elsif x >= i - 0.99
-              graph_chars[0] * graph_scale
+            if char = graph_distinctions.find { |(c,fraction)| x >= i - (1-fraction) }
+              if p == max_prob
+                "\x02" + char[0] * graph_scale + "\x02"
+              else
+                char[0] * graph_scale
+              end
             elsif n == 0
               " " * ((graph_scale-1)/2) + "|" * (graph_scale.odd? ? 1 : 2 ) + " " * ((graph_scale-1)/2) 
             else
