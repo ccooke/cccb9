@@ -114,7 +114,7 @@ module CCCB::Core::Bot
           if message.to_channel? 
             result = Array(result).map { |l| "#{message.nick}: #{l}" }
           end
-          message.reply Array(result) unless result.nil?
+          message.reply Array(result) unless Array(result).empty?
         rescue Exception => e
           message.reply "Sorry, that didnt work: #{e}"
           verbose "#{e} #{e.backtrace}"
