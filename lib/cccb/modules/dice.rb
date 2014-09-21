@@ -499,7 +499,7 @@ module CCCB::Core::Dice
       sym = case symbol
       when 'gt'
         :>
-      when 'eq'
+      when 'eq', '='
         :==
       when 'lt'
         :<
@@ -507,6 +507,8 @@ module CCCB::Core::Dice
         :<=
       when 'ge'
         :>=
+      when '<=', '<', '==', '>', '>='
+        symbol.to_sym
       else
         raise "Unknown comparison symbol: #{symbol}"
       end
