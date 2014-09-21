@@ -39,8 +39,8 @@ module Module::Requirements::Feature::Hooks
     hooks.db[ hook ].select { |h| h[:feature] == feature }
   end
 
-  def schedule_hook hook, *args
-    hooks.queue << [ hook, args ]
+  def schedule_hook hook, *args, &block
+    hooks.queue << [ hook, args, block ]
   end
 
   def get_blocks_for hook, *args
@@ -116,16 +116,24 @@ module Module::Requirements::Feature::Hooks
       end
     else
       run_hook_code hook, item, args
+      nil
     end
   end
 
-  def run_hooks hook, *args
+  def run_hooks hook, *args, &block
     hook_stat :run_hooks, hook, args
     spam "hooks: #{hook}->(#{args.join(", ")})"
     hook_debug = []
     hook_stat :hooks_visited, hook_debug
+    threads = []
     yield_hooks(hook,*args) do |item|
-      run_hook hook, item, args, hook_debug
+      thr = run_hook hook, item, args, hook_debug
+      threads << thr unless thr.nil?
+    end
+    sleep 0.1 while threads.any? { |t| p t; t.alive? }
+    unless block.nil?
+      info block
+      info block.call(hook,hook_debug) 
     end
   end
 
@@ -226,9 +234,9 @@ module Module::Requirements::Feature::Hooks
         loop do
           begin
             hook_stat :current, :waiting
-            (hook_to_run, args) = hooks.queue.pop
+            (hook_to_run, args, block) = hooks.queue.pop
             hook_stat :current, :processing, hook_to_run, args
-            run_hooks hook_to_run, *args
+            run_hooks hook_to_run, *args, &block
           rescue Exception => e
             hook_stat :exception, 
             stats[:current] = [ :exception, Time.now, e ]
