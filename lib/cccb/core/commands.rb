@@ -76,6 +76,9 @@ module CCCB::Core::Commands
       return true if message.user.superuser?
       "You are not a superuser"
     end
+    message.reply.title = "Access denied for #{message.reply.title}"
+    message.reply.summary = "Denied: #{reason}"
+    message.reply.fulltext = "Access denied for authorisation class '#{auth_class}': #{reason}"
     raise "Denied: #{reason}"
   end
 
@@ -87,9 +90,10 @@ module CCCB::Core::Commands
     }
     commands.feature_lookup = {}
 
-    add_hook :core, :exception, top: true do |e, hook, item, args|
+    add_hook :core, :exception, top: true do |e, hook, item, (message,*args)|
       next unless hook =~ /^command\//
-      args.first.reply "Error: #{e.message}"
+      message.reply.title = "Error"
+      message.reply.summary = "Error: #{e.message}"
       :end_hook_run
     end
 
@@ -119,7 +123,13 @@ module CCCB::Core::Commands
       end
       rate_limit_by_feature( message, commands.feature_lookup[hook], hook )
       debug "Scheduling hook for command: #{hook}->(#{args.inspect}"
-      schedule_hook hook, message, args, pre, cursor, hook, run_hook_in_thread: true
+      message.reply.title = "Command: #{pre[1,pre.length].join(" ")}"
+      schedule_hook hook, message, args, pre, cursor, hook, run_hook_in_thread: true do
+       # message.reply "In post block"
+       # message.reply "Response: #{message.instance_variable_get(:@response)}"
+       # message.reply "Data: #{message.reply.minimal_form}"
+        message.send_reply
+      end
       nil
     end
 
@@ -161,3 +171,4 @@ module CCCB::Core::Commands
 
 
 end
+
