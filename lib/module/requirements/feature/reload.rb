@@ -140,7 +140,11 @@ module Module::Requirements::Feature::Reload
     loop do 
       reply = reload.queue.pop
       puts "Start a reload"
-      clean_reload
+      begin
+        clean_reload
+      rescue Exception => e
+        p e
+      end
       reply << "ok" if reply.respond_to? :<<
     end
   end
