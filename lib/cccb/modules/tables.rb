@@ -12,17 +12,19 @@ module CCCB::Core::Tables
     raise "No such table: #{table_name}" if table.nil?
     raise "Empty table" unless table[:entries].count > 0 
 
+    max_entry = table[:entries].max_by { |(r,d)| r.max }
+    max_num = max_entry[0].max
     value = if table.include? :expression
+
       parser = Dice::Parser.new(table[:expression], default: "1d20")
       parser.roll
       parser.value
     else
-      max_entry = table[:entries].max_by { |(r,d)| r.max }
-      max_num = max_entry[0].max
       SecureRandom.random_number( max_num ) + 1
     end
 
     value += modifier || 0
+    value = value > max_num ? max_num : value
     
     table[:entries].select { |(r,d)| r.include? value }.map { |r,d| gen_table_entry( message, d, recursion + 1 ) }.each do |result|
       result.map! do |string|
@@ -54,7 +56,8 @@ module CCCB::Core::Tables
       when "entry"
         entry 
       when "link"
-        gen_table_result( message, entry, modifier, recursion )
+        (entry, modifier) = entry.split
+        gen_table_result( message, entry, modifier.to_i, recursion )
       end
     end
   end
