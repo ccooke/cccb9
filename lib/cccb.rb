@@ -20,7 +20,7 @@ $load_time = Time.now
 $load_errors = []
 print_loading = $VERBOSE || $DEBUG;
 
-[ "lib/cccb/core", "lib/cccb/modules", "lib/module/requirements/feature" ].each do |dir|
+[ "lib/module/requirements/feature", "lib/cccb/core", "lib/cccb/modules" ].each do |dir|
   Dir.new(dir).select { |f| f.end_with? '.rb' }.each do |file|
     begin
       Kernel.load("#{dir}/#{file}")
