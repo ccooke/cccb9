@@ -107,13 +107,14 @@ class CCCB::Message
       end
     end
 
-    def reply(string)
+    def write(string)
       if ctcp? and ctcp != :ACTION
         network.msg "NOTICE #{replyto} :\001#{ctcp} #{string}\001"
       else
         if string =~ /^\s*\/me\s+(.*)$/i
           string = "\001ACTION #{$~[1]}\001"
         end
+        #replyto.msg caller_locations.inspect
         replyto.msg string
       end
     end
@@ -326,6 +327,33 @@ class CCCB::Message
       self.extend self.class.const_get( const ) 
       process
     end
+  end
+
+  def reply(data = nil)
+    @response ||= CCCB::Reply.new(self)
+    unless data.nil?
+      @response.summary = data 
+      send_reply
+    else
+      @response
+    end
+  end
+
+  def send_reply
+    unless @response.nil?
+      data = @response.minimal_form
+      if data[:title]
+        self.write "\x02#{data[:title].join(" ")}\x02"
+      end
+      Array(data[:text]).each do |l|
+        self.write l
+      end
+      @response = nil
+    end
+  end
+
+  def clear_reply
+    @response = nil
   end
 
   def name
@@ -869,6 +897,7 @@ class CCCB::Network
 
   def msg(target, lines)
     strings = Array(lines).each_with_object([]) do |line,a|
+      next if line.nil?
       while line.length > 420
         chunk = line.slice(0,420)
         if index = chunk.rindex(' ')
