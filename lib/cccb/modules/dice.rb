@@ -394,6 +394,7 @@ module CCCB::Core::Dice
     set_setting( "d20", "options", "default_die")
     default_setting( 4, "options", "probability_graph_height" )
     default_setting( 20, "options", "probability_graph_width" )
+    default_setting( "0.00", "options", "probability_graph_cutoff" )
     default_setting( "_.=m#@", "options", "probability_graph_chars" )
   
     add_command :dice, "dice memory show" do |message, (user)|
@@ -420,9 +421,12 @@ module CCCB::Core::Dice
       density1 = Backgrounder.new(parser1).background(:density)
 
       if symbol.nil?
+
         graph_height = message.replyto.get_setting( "options", "probability_graph_height" ).to_i 
         graph_width = message.replyto.get_setting( "options", "probability_graph_width" ).to_i
         graph_chars = message.replyto.get_setting( "options", "probability_graph_chars" )
+        graph_cutoff = message.replyto.get_setting( "options", "probability_graph_cutoff" )
+        raise "Invalid graph cutoff '#{graph_cutoff}': Must be a number (with optional decimal)" unless graph_cutoff.match /^\d+(?:\.\d+)?/
 
         # '▁▂▃▄▅▆▇█'
         # '▁▂▃▄▅▆▇█'
@@ -436,6 +440,34 @@ module CCCB::Core::Dice
           density1.d[i] = 0
         end
         density1 = density1.sort { |a,b| a.first <=> b.first }
+
+        state = :start
+        decimals = graph_cutoff.reverse.index('.')
+        temp = []
+        density1 = density1.each_with_object([]) do |(i,p),a|
+          probability = "%.#{decimals}f" % (p.to_f * 100)
+          p "PR: #{i} :: #{state.inspect} :: #{p} :: #{probability} > #{graph_cutoff}"
+          if probability > graph_cutoff
+            case state
+            when :start
+              state = :middle
+            when :end?
+              state = :middle
+              a += temp
+              temp = []
+            end
+            a << [i,p]
+          else
+            case state
+            when :middle
+              state = :end?
+              a << [i,p]
+            when :end?
+              temp << [i,p]
+            end
+          end
+        end
+
         graph_scale = 1
         graph_scale += 1 while ((graph_scale + 1) * density1.count) <= graph_width
         max_prob = density1.map(&:last).max

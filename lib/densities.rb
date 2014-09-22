@@ -470,7 +470,7 @@ class ExplodingModifier
     @max=max
     @explosions=explosions
   end
-  def fun(list)
+  def process(list)
     list + [@max]*@explosions
   end
 end
