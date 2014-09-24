@@ -339,13 +339,10 @@ class CCCB::Message
     end
   end
 
-  def send_reply
+  def send_reply(final = false)
     unless @response.nil?
       data = @response.minimal_form
-      if data[:title]
-        self.write "\x02#{data[:title].join(" ")}\x02"
-      end
-      Array(data[:text]).each do |l|
+      CCCB.instance.reply.irc_parser.render(data).split(/\n/).each do |l|
         self.write l
       end
       @response = nil
