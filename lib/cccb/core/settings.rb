@@ -80,7 +80,7 @@ module CCCB::Settings
         detail2 "cache miss"
         if ( result = get_local_setting_uncached(name,key) ).nil?
           begin
-            if CCCB::SETTING_CASCADE.include? self.class
+            if setting_option(name,:cascade) and CCCB::SETTING_CASCADE.include? self.class
               parent = CCCB::SETTING_CASCADE[self.class].call(self) 
 
               detail3 "Cascade to #{parent.inspect}.get_setting(#{name},#{key})"
@@ -315,7 +315,7 @@ module CCCB::Core::Settings
     :user => :user,
   }
 
-  DEFAULT_SETTING_OPTIONS = %i{ auth default secret persist hide_keys clear_cache_on_set local}
+  DEFAULT_SETTING_OPTIONS = %i{ auth default secret persist hide_keys clear_cache_on_set local cascade}
   def get_default_setting_option(type,key)
     case key
     when :auth; DEFAULT_AUTH_BY_TYPE[type]
@@ -323,6 +323,7 @@ module CCCB::Core::Settings
     when :secret; false
     when :persist; true
     when :hide_keys; []
+    when :cascade; true
     when :clear_cache_on_set; false
     when :local; false
     end
@@ -452,6 +453,8 @@ module CCCB::Core::Settings
       auth: :superuser, 
       default: { "parent" => nil },
       local: true
+    add_setting :all, "auth",
+      cascade: false
   end
 
   def module_test
