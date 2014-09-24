@@ -10,7 +10,7 @@ module CCCB::Core::InfoBot
     add_command :info, "info" do |message, args|
       text = if args[1] == '='
         target = message.to_channel? ? :channel : :network
-        user_setting message, target, "info", args[0], args[2]
+        user_setting message, "#{target}::info::#{args[0]}", args[2]
       elsif args[0] and value = message.get_setting("info", args[0])
         value
       elsif args[0]
