@@ -148,6 +148,9 @@ class CCCB::ContentServer
       if template == :plain_text
         res["Content-type"] = "text/plain"
         res.body = hash[:text].to_s
+      elsif template == :html
+        res['Content-type'] = "text/html"
+        res.body = hash[:text].to_s
       else
         erb_file = "#{CCCB.instance.basedir}/web/template/#{template}.rhtml"
         res.body = ErbalT::render_from_hash(File.read(erb_file),hash)
