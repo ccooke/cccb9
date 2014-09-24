@@ -82,6 +82,41 @@ module CCCB::Core::Commands
     raise "Denied: #{reason}"
   end
 
+  def process_command(message,command)
+    string = command
+    spam "In words, parsing #{string}"
+    words = string.scan(COMMAND_WORD_REGEX).map do |(_, quoted_word, _, _, simple_word)|
+      simple_word.nil? ? quoted_word : simple_word
+    end
+    words.unshift("command")
+    spam "Looking for command #{words.inspect}"
+    cursor = commands.registry
+    args = words.map &:dup
+    pre = []
+    hook = :empty_command
+    words.each do |word|
+      schedule_hook :debug_command_selection, words, cursor[:words].keys
+      spam "CURSOR: #{cursor} WORD: #{word}"
+      if cursor[:words].include? word
+        pre << args.shift
+        cursor = cursor[:words][word]
+        hook = cursor[:hook] || hook
+        spam "Command word #{word}, hook #{hook}"
+      else
+        break
+      end
+    end
+    rate_limit_by_feature( message, commands.feature_lookup[hook], hook )
+    debug "Scheduling hook for command: #{hook}->(#{args.inspect}"
+    message.reply.title = "Command: #{pre[1,pre.length].join(" ")}"
+    schedule_hook hook, message, args, pre, cursor, hook, run_hook_in_thread: true do
+     # message.reply "In post block"
+     # message.reply "Response: #{message.instance_variable_get(:@response)}"
+     # message.reply "Data: #{message.reply.minimal_form}"
+      message.send_reply final: true
+    end
+  end
+
   def module_load
     default_setting true, "allowed_features", "commands"
 
@@ -98,38 +133,7 @@ module CCCB::Core::Commands
     end
 
     add_request :core, /^(.*)$/ do |match, message|
-      string = match[1]
-      spam "In words, parsing #{string}"
-      words = string.scan(COMMAND_WORD_REGEX).map do |(_, quoted_word, _, _, simple_word)|
-        simple_word.nil? ? quoted_word : simple_word
-      end
-      words.unshift("command")
-      spam "Looking for command #{words.inspect}"
-      cursor = commands.registry
-      args = words.map &:dup
-      pre = []
-      hook = :empty_command
-      words.each do |word|
-        schedule_hook :debug_command_selection, words, cursor[:words].keys
-        spam "CURSOR: #{cursor} WORD: #{word}"
-        if cursor[:words].include? word
-          pre << args.shift
-          cursor = cursor[:words][word]
-          hook = cursor[:hook] || hook
-          spam "Command word #{word}, hook #{hook}"
-        else
-          break
-        end
-      end
-      rate_limit_by_feature( message, commands.feature_lookup[hook], hook )
-      debug "Scheduling hook for command: #{hook}->(#{args.inspect}"
-      message.reply.title = "Command: #{pre[1,pre.length].join(" ")}"
-      schedule_hook hook, message, args, pre, cursor, hook, run_hook_in_thread: true do
-       # message.reply "In post block"
-       # message.reply "Response: #{message.instance_variable_get(:@response)}"
-       # message.reply "Data: #{message.reply.minimal_form}"
-        message.send_reply
-      end
+      process_command(message, match[1])
       nil
     end
 
@@ -167,8 +171,34 @@ module CCCB::Core::Commands
         message.reply get_code(hook[:source_file],hook[:source_line])
       end
     end
-  end
 
+    CCCB::ContentServer.add_keyword_path('command') do |network,session,match|
+      command = match[:call].split('/').join(' ')
+      message = CCCB::Message.new( network, ":WEB PRIVMSG d20 :#{command}" )
+      output_queue = Queue.new
+      message.instance_variable_set(:@content_server_strings, output_queue)
+      def message.send_reply(final: false)
+        unless @response.nil?
+          data = @response.long_form
+          @response = nil
+          @content_server_strings << CCCB.instance.reply.web_parser.render(data)
+        end
+        @content_server_strings << :EOM if final
+      end
+      
+      process_command(message, command)
+      text = output_queue.pop
+      until (data = output_queue.pop) == :EOM
+        text += data
+      end
+
+      {
+        template: :html,
+        text: text
+      }
+    end
+
+  end
 
 end
 
