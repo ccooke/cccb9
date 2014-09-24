@@ -4,6 +4,10 @@ module CCCB::Core::Debugging
   needs :bot, :commands, :logging
 
   def module_load
+    add_command :debug, "echo" do |message,args|
+      message.reply.summary = args.join(" ").split("\\n").join("\n")
+    end
+      
     add_command :debug, "admin trace add" do |message, hooks|
       default_setting true, "allowed_features", "debug_hook_trace"
       target = if message.to_channel? 
