@@ -201,21 +201,21 @@ class CCCB::DieRoller
     }
   end
 
+  def processed_expression(expression)
+    (expressions,used) = expand_preset( expression.split( /;/ ) )
+    spam expressions.inspect
+    return expressions.dup
+  end
+
   def roll(expression, default, mode)
     success = false
     expression ||= ""
     rolls = []
-    processed_expression = []
+    expressions = processed_expression(expression)
     until success 
       success = true
       catch :reroll do
-        (expressions,used) = expand_preset( expression.split( /;/ ) )
         expression_count = 0
-        if used.any? { |e| e.start_with? 'dm_' }
-          mode = "dmroll"
-        end
-        spam expressions.inspect
-        processed_expression = expressions.dup
         while expression_count < 30 and expr = expressions.shift
           catch :next_expression do
             if ( expression_count += 1 ) == 30
@@ -346,23 +346,6 @@ class CCCB::DieRoller
       end
     end
 
-    memory = {
-      rolls: rolls,
-      expression: processed_expression,
-      mode: mode,
-      msg: @message,
-      jinx: @dice_current_jinx == :applied_jinx,
-      access: Time.now
-    }
-    
-    @message.network.persist[:dice_memory] ||= []
-    @message.network.persist[:dice_memory].unshift memory
-    @message.network.persist[:dice_memory].pop if @message.network.persist[:dice_memory].count > 100
-    (@message.user.persist[:dice_memory_saved] ||= {})["current"] = @message.network.persist[:dice_memory].first
-
-    if @dice_current_jinx == :applied_jinx
-      @message.user.persist[:dice_jinx] = false
-    end
     return rolls
   end
 
@@ -384,6 +367,13 @@ module CCCB::Core::Dice
     \s*
     $
   /x
+
+  def add_dice_memory(message, memory)
+    message.network.persist[:dice_memory] ||= []
+    message.network.persist[:dice_memory].unshift memory
+    message.network.persist[:dice_memory].pop if message.network.persist[:dice_memory].count > 100
+    (message.user.persist[:dice_memory_saved] ||= {})["current"] = message.network.persist[:dice_memory].first
+  end
 
   def module_load
     add_setting :user, "roll_presets"
@@ -577,6 +567,16 @@ module CCCB::Core::Dice
       rolls = Backgrounder.new(roller).background(:roll,expression, default, mode)
       verbose "Got rolls: #{rolls}"
       message.reply roller.message_die_roll(message.nick, rolls, mode)
+
+      memory = {
+        rolls: rolls,
+        expression: roller.processed_expression(expression),
+        mode: mode,
+        msg: message,
+        access: Time.now
+      }
+      add_dice_memory(message, memory)
+      
     end
 
     add_command :dice, "history show" do |message, args|
@@ -598,6 +598,7 @@ module CCCB::Core::Dice
       /ix.match( args.empty? ? "my last" : args.join(' ') )
       user = nil
       selected = if match[:index]
+        p message.network.persist[:dice_memory]
         list = message.network.persist[:dice_memory].dup
         if match[:user]
           user = if match[:user] == 'my'
