@@ -41,7 +41,7 @@ module CCCB::Core::CoreCommands
         if $load_errors.count == 0
           m.reply.title = "Reload successful"
         else
-          m.reply.force_title = "Reload failed: #{$load_errors.count} error(s):"
+          m.reply.force_title = "Reload failed: #{$load_errors.count} error(s)"
           m.reply.summary = $load_errors.dup
         end
         # This needs to be here because this code executes after the reload
