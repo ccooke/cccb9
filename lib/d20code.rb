@@ -10,6 +10,10 @@ module Dice
 
     class Term
       attr_accessor :density, :value
+
+      def value
+        @value || 0
+      end
     end
 
     class Number < Term
