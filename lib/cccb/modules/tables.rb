@@ -6,9 +6,20 @@ module CCCB::Core::Tables
 
   def gen_table_result(message, table_name, modifier=0, recursion=0)
     raise "Too many nested tables detected at #{table_name}" if recursion > 20
-    table = message.user.get_setting("tables", table_name) || if message.to_channel?
-      message.channel.get_setting("tables", table_name)
+    prefix = ""
+    container = if table_name.include? '::'
+      match = /^(?<channel>.*?)::(?<table>.*)$/.match( table_name )
+      table_name = match[:table]
+      prefix = match[:channel] + "::"
+      message.network.get_channel("##{match[:channel]}")
+    elsif message.user.setting? "tables", table_name
+      message.user
+    elsif message.to_channel?
+      message.channel
+    else
+      raise "I can't find a valid object for that table"
     end
+    table = container.get_setting("tables",table_name)
     raise "No such table: #{table_name}" if table.nil?
     raise "Empty table" unless table[:entries].count > 0 
 
@@ -25,8 +36,8 @@ module CCCB::Core::Tables
 
     value += modifier || 0
     value = value > max_num ? max_num : value
-    
-    table[:entries].select { |(r,d)| r.include? value }.map { |r,d| gen_table_entry( message, d, recursion + 1 ) }.each do |result|
+
+    table[:entries].select { |(r,d)| r.include? value }.map { |r,d| gen_table_entry( message, d, recursion + 1, prefix ) }.each do |result|
       result.map! do |string|
         if string.respond_to? :gsub
           string.gsub /(%(?<char>.))/ do |match|
@@ -41,12 +52,10 @@ module CCCB::Core::Tables
           string
         end
       end
-      message.reply result
     end
-    nil
   end
 
-  def gen_table_entry( message, entries, recursion )
+  def gen_table_entry( message, entries, recursion, prefix )
     unless entries.respond_to? :count
       entries = [ [ entries, "entry" ] ]
     end
@@ -57,7 +66,7 @@ module CCCB::Core::Tables
         entry 
       when "link"
         (entry, modifier) = entry.split
-        gen_table_result( message, entry, modifier.to_i, recursion )
+        gen_table_result( message, prefix + entry, modifier.to_i, recursion )
       end
     end
   end
@@ -157,7 +166,13 @@ module CCCB::Core::Tables
     end
 
     add_command :tables, [ %w{gen generate} ] do |message, (table,modifier)|
-      message.reply gen_table_result message, table, modifier.to_i 
+      result =  gen_table_result( message, table, modifier.to_i )
+      if result.flatten.count > 2
+        message.reply.force_title = "Table: #{table} (+#{modifier})"
+      else
+        message.reply.title = "Table: #{table} (+#{modifier})"
+      end
+      message.reply.summary = markdown_list(result)
     end
   end
 end
