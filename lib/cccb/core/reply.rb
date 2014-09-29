@@ -14,7 +14,7 @@ class CCCB::Reply
       block += normal_text(code).each_line.map do |l|
         l.strip.gsub /^/, '| '
       end
-      block.join("\n")
+      block.join("\n") + "\n"
     end
     def codespan(code)
       block_code(code,nil)
@@ -31,29 +31,42 @@ class CCCB::Reply
     def emphasis(text)
       bold text
     end
-    def linebreak(text)
+    def linebreak
       "\n"
     end
     def paragraph(text)
       text + "\n"
     end
     def list(content,list_type)
-      index = 0
-      content.split("\x03").map do |i|
-        case list_type
-        when :ordered
-          index += 1
-          "#{index}. #{i}"
-        when :unordered
-          "* #{i}"
-        end
-      end.join("\n") + "\n"
+      "\u0000L[#{content}\u0000L]"
     end
     def list_item(content, list_type)
-      "#{content}\x03"
+      type = list_type.to_s[0]
+      "\u0000L#{type}#{content}\n"
     end
     def link(link,title,content)
       content
+    end
+    def postprocess(data)
+      lists = []
+      parsed = ""
+      until ( index = data.index("\u0000") ).nil?
+        parsed += data[0,index]
+        token = data[index+1,2]
+        data[0,index+3] = ""
+        case token
+        when "L["
+          lists << { index: 1 }
+        when "L]"
+          lists.pop
+        when "Lu"
+          parsed += "#{ "  " * (lists.count-1) }* "
+        when "Lo"
+          parsed += "#{ "  " * (lists.count-1) }#{lists.last[:index]}. "
+          lists.last[:index] += 1
+        end
+      end
+      parsed + data
     end
   end
 
@@ -108,6 +121,16 @@ end
 
 module CCCB::Core::Reply
   extend Module::Requirements
+
+  def markdown_list(list)
+    list.map do |i|
+      if i.is_a? Array
+        markdown_list(i).force_encoding("UTF-8").gsub(/^(\s*)\*/m,'  \1*')
+      else
+        "* #{i}"
+      end
+    end.join("\n")
+  end
 
   def module_load
     reply.irc_parser = Redcarpet::Markdown.new( 
