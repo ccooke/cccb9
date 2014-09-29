@@ -109,7 +109,7 @@ class CCCB::Message
 
     def write(string)
       if ctcp? and ctcp != :ACTION
-        network.msg "NOTICE #{replyto} :\001#{ctcp} #{string}\001"
+        network.puts "NOTICE #{replyto} :\001#{ctcp} #{string}\001"
       else
         if string =~ /^\s*\/me\s+(.*)$/i
           string = "\001ACTION #{$~[1]}\001"
@@ -339,9 +339,10 @@ class CCCB::Message
     end
   end
 
-  def send_reply(final = false)
+  def send_reply(final: false)
     unless @response.nil?
       data = @response.minimal_form
+      p data
       CCCB.instance.reply.irc_parser.render(data).split(/\n/).each do |l|
         self.write l
       end

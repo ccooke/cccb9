@@ -6,12 +6,12 @@ module Module::Requirements::Feature::Hooks
   extend Module::Requirements
   needs :logging, :managed_threading
   
-  def add_hook(feature, hooklist, filter: {}, generator: false, top: false, &block)
+  def add_hook(feature, hooklist, filter: {}, generator: 0, top: false, &block)
     Array(hooklist).each do |hook|
       spam "ADD hook #{hook}" 
       hooks.db[ hook ] ||= []
-      call = if generator
-        caller_locations(4,1).first
+      call = if generator > 0
+        caller_locations(3 + generator,1).first
       else
         caller_locations(3,1).first
       end
@@ -130,10 +130,9 @@ module Module::Requirements::Feature::Hooks
       thr = run_hook hook, item, args, hook_debug
       threads << thr unless thr.nil?
     end
-    sleep 0.1 while threads.any? { |t| p t; t.alive? }
+    sleep 0.1 while threads.any? { |t| t.alive? }
     unless block.nil?
-      info block
-      info block.call(hook,hook_debug) 
+      block.call(hook,hook_debug) 
     end
   end
 

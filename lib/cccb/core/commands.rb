@@ -25,7 +25,7 @@ module CCCB::Core::Commands
     lines = File.read(file).lines
     indent = lines[line - 1].index /[^[:space:]]/
     length = lines[line,lines.length].find_index { |l| l.index(/[^[:space:]]/) == indent }
-    return [ "  " * indent + "# #{banner || "From #{file}:#{line}"}" ] + lines[line-1,length+2]
+    return [ '```' + (banner || "#{file}:#{line}") ] + lines[line-1,length+2].map(&:rstrip) + ['```']
   end
 
   def expand_words(list)
@@ -57,7 +57,7 @@ module CCCB::Core::Commands
       end
       cursor[:hook] = real_hook_name
       commands.feature_lookup[real_hook_name] = feature
-      add_hook feature, real_hook_name, generator: true, &block
+      add_hook feature, real_hook_name, generator: 3, &block
     end
   end
 
@@ -170,6 +170,10 @@ module CCCB::Core::Commands
         end
         message.reply get_code(hook[:source_file],hook[:source_line])
       end
+    end
+
+    add_command :commands, "good bot" do |message, args|
+      message.reply("Thank you")
     end
 
     CCCB::ContentServer.add_keyword_path('command') do |network,session,match|
