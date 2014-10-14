@@ -29,7 +29,13 @@ class Backgrounder
       ensure
         w.close
       end
+      
+      Kernel.exit(0)
 
+      loop do
+        critical "Still in subprocess #{$$}"
+        sleep 1
+      end
     end
 
     w.close
@@ -37,7 +43,8 @@ class Backgrounder
     data = r.read
     r.close
     verbose "Waiting for #{pid}"
-    Process.kill "TERM",  pid
+    #Process.kill "TERM",  pid
+    Process.wait(pid)
     verbose "Cleaned up"
     out = Marshal.load( data )
 
