@@ -108,7 +108,6 @@ module CCCB::Core::Commands
     end
     rate_limit_by_feature( message, commands.feature_lookup[hook], hook )
     debug "Scheduling hook for command: #{hook}->(#{args.inspect}"
-    message.reply.title = "Command: #{pre[1,pre.length].join(" ")}"
     schedule_hook hook, message, args, pre, cursor, hook, run_hook_in_thread: true do
      # message.reply "In post block"
      # message.reply "Response: #{message.instance_variable_get(:@response)}"
@@ -176,16 +175,21 @@ module CCCB::Core::Commands
       message.reply("Thank you")
     end
 
-    CCCB::ContentServer.add_keyword_path('command') do |network,session,match|
+    servlet = Proc.new do |network, session, match|
       command = match[:call].split('/').join(' ')
       message = CCCB::Message.new( network, ":WEB PRIVMSG d20 :#{command}" )
       output_queue = Queue.new
       message.instance_variable_set(:@content_server_strings, output_queue)
+      message.instance_variable_set(:@http_match_object,match)
       def message.send_reply(final: false)
         unless @response.nil?
           data = @response.long_form
           @response = nil
-          @content_server_strings << CCCB.instance.reply.web_parser.render(data)
+          if @http_match_object[:keyword] == 'raw'
+            @content_server_strings << "<pre>#{data}</pre>"
+          else
+            @content_server_strings << CCCB.instance.reply.web_parser.render(data)
+          end
         end
         @content_server_strings << :EOM if final
       end
@@ -201,6 +205,9 @@ module CCCB::Core::Commands
         text: text
       }
     end
+
+    CCCB::ContentServer.add_keyword_path('command',&servlet)
+    CCCB::ContentServer.add_keyword_path('raw',&servlet)
 
   end
 
