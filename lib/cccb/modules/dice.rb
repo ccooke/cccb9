@@ -399,6 +399,19 @@ module CCCB::Core::Dice
       end )
     end
 
+    add_command :dice, "average" do |message, (expression)|
+      raise "Of what?" if expression.nil?
+      default = if message.to_channel?
+        message.replyto.get_setting( "roll_presets", "default_die" )
+      else
+        message.user.get_setting( "roll_presets", "default_die" )
+      end
+      parser = Dice::Parser.new( expression, default: default )
+      average = Backgrounder.new(parser).background(:average)
+      message.reply "The average of #{expression} is #{average}"
+    end
+      
+
     add_command :dice, "prob" do |message, (exp1, symbol, exp2)|
       raise "Of what?" if exp1.nil?
         
@@ -436,7 +449,7 @@ module CCCB::Core::Dice
         temp = []
         density1 = density1.each_with_object([]) do |(i,p),a|
           probability = "%.#{decimals}f" % (p.to_f * 100)
-          p "PR: #{i} :: #{state.inspect} :: #{p} :: #{probability} > #{graph_cutoff}"
+          #p "PR: #{i} :: #{state.inspect} :: #{p} :: #{probability} > #{graph_cutoff}"
           if probability > graph_cutoff
             case state
             when :start
@@ -513,8 +526,7 @@ module CCCB::Core::Dice
           end + colour_end + line_piece
         }).join
         
-        message.reply output.reverse.reject { |r| r.match /^\s+$/ }
-        message.reply legend
+        message.reply output.reverse.reject { |r| r.match /^\s+$/ } + legend
         next
       end
       
