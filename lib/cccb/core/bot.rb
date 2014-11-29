@@ -314,7 +314,7 @@ module CCCB::Core::Bot
       end
     end
 
-    hide_irc_commands :"315", :"352", :"366", :"QUIT"
+    hide_irc_commands :"315", :"352", :"366", :"QUIT", :"303"
     hide_irc_commands :PING unless $DEBUG
 
     add_hook :core, :server_send do |network, string|
