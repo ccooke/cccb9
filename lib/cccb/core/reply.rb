@@ -7,7 +7,7 @@ class CCCB::Reply
     end
     def block_code(code,language = nil)
       block = if language 
-        [ "|== #{bold code} ==", ] 
+        [ "|== #{italic code} ==", ] 
       else
         []
       end
@@ -22,14 +22,31 @@ class CCCB::Reply
     def bold(text)
       "\x02#{text}\x02"
     end
+    def reverse(text)
+      "\x16#{text}\x16"
+    end
+    def italic(text)
+      "\x06#{text}\x06"
+    end
+    def underline(text)
+      "\x1f#{text}\x1f"
+    end
     def header(title,level)
-      ("[" * level) + bold(title) + ("]" * level) + "\n"
+      case level
+      when 1 then text = underline(bold(title))
+      when 2 then text = underline(italic(title))
+      when 3 then text = underline(title)
+      when 4 then text = italic(title)
+      else
+        text = title
+      end
+      text + "\n"
     end
     def double_emphasis(text)
       bold text
     end
     def emphasis(text)
-      bold text
+      italic text
     end
     def linebreak
       "\n"
@@ -67,6 +84,47 @@ class CCCB::Reply
         end
       end
       parsed + data
+    end
+    def table(*rows)
+      table = []
+      max_width = []
+      rows.each do |r|
+        row = []
+        table << row
+        r.split("\u0000T").each_with_index do |c,i|
+          max_width[i] ||= 0
+          row << c
+          max_width[i] = c.length if c.length > max_width[i]
+        end
+      end
+      output = ""
+      table.each_with_index do |r,n|
+        r.each_with_index do |c,i|
+          content = c
+          content = if n == 0
+            bold(c).center(max_width[i]+2)
+          else
+            c.center(max_width[i])
+          end
+          c.replace(content)
+        end
+        output += "|" + r.join(" | ") + "|\n"
+      end
+      output
+    end
+    def table_row(*args)
+      args[0]
+    end
+    def table_cell(*args)
+      "#{args[0]}\u0000T"
+    end
+    def respond_to?(sym)
+      puts "#{self}.respond_to?(#{sym.inspect})"
+      super
+    end
+    def method_missing(sym,*args,**kwargs,&block)
+      puts "#{self}.#{sym}(*#{args.inspect},**#{kwargs.inspect},&#{block})"
+      super
     end
   end
 
@@ -138,13 +196,15 @@ module CCCB::Core::Reply
       no_intra_emphasis: true,
       lax_spacing: true,
       quote: false,
-      footnotes: false,
+      footnotes: true,
       tables: true
     )
     reply.web_parser = Redcarpet::Markdown.new( 
       Redcarpet::Render::HTML, 
       autolink: true,
       footnotes: true,
+      quote: true,
+      lax_spacing: true,
       tables: true
     )
   end
