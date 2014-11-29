@@ -90,7 +90,14 @@ module CCCB::Core::CoreCommands
       else
         message.network
       end
-      network.puts "QUIT Reconnecting"
+      network.puts "QUIT :Reconnecting"
+    end
+
+    add_command :core, "admin shutdown" do |message,args|
+      auth_command :superuser, message
+      CCCB.instance.networking.networks.each do |name,network|
+        network.puts "QUIT :Shutting down for maintenance"
+      end
     end
   end
 end
