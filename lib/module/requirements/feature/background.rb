@@ -50,6 +50,7 @@ class Backgrounder
 
     verbose "Here: #{out}"
 
+    raise out if out.is_a? Exception
     out
   end
 end
