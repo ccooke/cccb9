@@ -142,7 +142,7 @@ class CCCB::ContentServer
 	end
 
   def self.add_keyword_path( keyword, &block )
-    add_path %r{^/#{keyword}(?:/(?<call>.*))?$}, :path do |network,session,match,req,res|
+    add_path %r{^/(?<keyword>#{keyword})(?:/(?<call>.*))?$}, :path do |network,session,match,req,res|
       hash = block.call(network, session, match)
       template = hash[:template] || 'default'
       if template == :plain_text
