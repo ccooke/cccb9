@@ -666,5 +666,12 @@ module Dice
     def to_s
       @terms.map(&:to_s).join
     end
+
+    def average
+      probabilities = self.density
+      max_probability = probabilities.map(&:last).max
+      modes = probabilities.select { |n,p| p == max_probability }.map(&:first)
+      average = modes.inject(:+) / modes.count.to_f
+    end
   end
 end
