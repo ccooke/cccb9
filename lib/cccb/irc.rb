@@ -836,7 +836,7 @@ class CCCB::Network
         
         line = nil
         begin
-          Timeout.timeout(300) do
+          Timeout.timeout(30) do
             line = self.sock.gets
           end
         rescue Timeout::Error
