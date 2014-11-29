@@ -118,14 +118,15 @@ class CCCB::Reply
     def table_cell(*args)
       "#{args[0]}\u0000T"
     end
-    def respond_to?(sym)
-      puts "#{self}.respond_to?(#{sym.inspect})"
-      super
-    end
-    def method_missing(sym,*args,**kwargs,&block)
-      puts "#{self}.#{sym}(*#{args.inspect},**#{kwargs.inspect},&#{block})"
-      super
-    end
+    
+    #def respond_to?(sym)
+    #  puts "#{self}.respond_to?(#{sym.inspect})"
+    #  super
+    #end
+    #def method_missing(sym,*args,**kwargs,&block)
+    #  puts "#{self}.#{sym}(*#{args.inspect},**#{kwargs.inspect},&#{block})"
+    #  super
+    #end
   end
 
   @categories = %i{ title summary fulltext }

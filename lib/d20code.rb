@@ -228,7 +228,7 @@ module Dice
             numbers = input.dup
             until numbers.count <= @keep_number
               remove = numbers.send(@keep_method)
-              puts "Keep dropping #{remove}" if $DEBUG
+              #puts "Keep dropping #{remove}" if $DEBUG
               @dropped << remove
               numbers.delete_at( numbers.index( remove ) ) 
             end
@@ -263,7 +263,7 @@ module Dice
             numbers = input.dup
             until dropped == @drop_number or numbers.count == 0
               remove = numbers.send(@drop_method)
-              puts "Dropping #{remove}" if $DEBUG
+              #puts "Dropping #{remove}" if $DEBUG
               @dropped << remove
               dropped += 1
               numbers.delete_at( numbers.index( remove ) )
@@ -385,27 +385,27 @@ module Dice
         while rolls < count
           catch(:reroll) do
             @rolls[rolls] += 1
-            puts "Roll #{rolls} of #{count}" if $DEBUG
+            #puts "Roll #{rolls} of #{count}" if $DEBUG
             this_roll = roll_die
             number += this_roll
-            puts "Rolled a #{this_roll}. Total is now #{number}" if $DEBUG
+            #puts "Rolled a #{this_roll}. Total is now #{number}" if $DEBUG
 
             if explode? this_roll
               if @penetrating
-                puts "Reroll(penetrate)" if $DEBUG
+                #puts "Reroll(penetrate)" if $DEBUG
                 number -= 1
                 throw :reroll
               elsif @compounding
-                puts "Reroll(compound)" if $DEBUG
+                #puts "Reroll(compound)" if $DEBUG
                 throw :reroll          
               elsif @exploding 
-                puts "Reroll(explode)" if $DEBUG
+                #puts "Reroll(explode)" if $DEBUG
                 count += 1 if count < 100
               end
             end
             
             if @modifiers.select { |m| m.is_a? Modifier::Reroll }.any? { |m| m.reroll_with? number }
-              puts "Reroll #{number}" if $DEBUG
+              #puts "Reroll #{number}" if $DEBUG
               number = 0
               throw :reroll
             end
@@ -440,7 +440,7 @@ module Dice
       def output( callbacks, callback_to_use = :die )
         output = [ to_s ]
         if @value
-          output << "["
+          output << "\\["
           @value.each_with_index do |v,i|
             if callbacks.include? callback_to_use
               output << callbacks[callback_to_use].( self, v )
