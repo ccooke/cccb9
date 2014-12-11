@@ -1,7 +1,7 @@
 # Early logging
 $early_logging = []
 module Kernel
-  %i{ critical error warning info verbose debug spam detail}.each_with_index do |sym,i|
+  %i{ critical error warning info verbose debug spam detail detail2 detail3}.each_with_index do |sym,i|
     define_method sym do |*message,**keys|
       $early_logging << [sym,message,keys]
     end
