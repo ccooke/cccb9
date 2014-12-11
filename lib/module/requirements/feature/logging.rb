@@ -186,6 +186,7 @@ module Module::Requirements::Feature::Logging
     logging.loglevel ||= self.class.const_get( self.log_level.upcase ) || VERBOSE
     logging.loglevel_by_label ||= self.log_level_by_label || nil
     logging.logfile = File.open( self.logfile, 'a' ) || STDOUT
+    
     global_methods :debug_print, *debug_levels.map(&:to_s).map(&:downcase).map(&:to_sym)
     logging.number_to_const = {}
     @@logging_number_to_const.each do |k,v|
@@ -201,6 +202,7 @@ module Module::Requirements::Feature::Logging
   end
 
   def module_start
+    logging.logfile = File.open( self.logfile, 'a' ) || STDOUT
     logging_transition_threaded
   end
 
