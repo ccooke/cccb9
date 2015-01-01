@@ -357,8 +357,10 @@ module CCCB::Core::Dice
   needs :bot, :background
 
   ADVANTAGE_REGEX = /
+    \s*
     w (?:ith)?
     \s*
+    (?: \/ \s* )?
     (?: 
       (?<advantage> a (?: dv (?: antage )? )? )
     |
@@ -563,9 +565,11 @@ module CCCB::Core::Dice
       mode = words.last == 'toss' ? 'qroll' : words.last
       expression = args.join(" ")
 
-      match = ADVANTAGE_REGEX.match(expression)
       default_die = message.user.get_setting("options", "default_die")
+      match = ADVANTAGE_REGEX.match(expression)
       default = if match
+        from,to = match.offset(0)
+        expression[from, to-from] = ""
         if match[:advantage]
           "2#{default_die}dl"
         elsif match[:disadvantage]
