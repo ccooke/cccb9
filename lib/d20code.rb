@@ -43,6 +43,9 @@ module Dice
     class Die < Term
       class Modifier
 
+        def reset
+        end
+
         def self.gen(match,size,modifiers)
 
           sub = nil
@@ -52,8 +55,10 @@ module Dice
             sub.value
           end
 
-          if match[:reroll]
-            obj = Reroll.new(match,size, subexpression)
+          if match[:reroll_once]
+            obj = Reroll.new(match,size, subexpression, max_rerolls: 1 )
+          elsif match[:reroll]
+            obj = Reroll.new(match,size, subexpression, max_rerolls: 1000 )
           elsif match[:keep]
             obj = Keep.new(match,size, subexpression)
           elsif match[:drop]
@@ -75,7 +80,13 @@ module Dice
         end
 
         class Conditional < Modifier
+
+          def reset
+            @matches = 0
+          end
+
           def init_condition(test, num, default = :==, subexpression = nil)
+            self.reset
             if test.nil? or test == ""
               @condition_test = default
             else
@@ -84,10 +95,19 @@ module Dice
             @condition_num = subexpression ? subexpression : num.to_i
           end
 
+          def would_apply_with?(number)
+            number.send(@condition_test, @condition_num)
+          end
+
           def applies?(number)
             #p "TEST: ", @condition_test
             #p "NUM: ", @condision_num
-            number.send(@condition_test, @condition_num)
+            if would_apply_with?(number)
+              @matches += 1
+              true
+            else
+              false
+            end
           end
 
           def condition_to_s
@@ -186,17 +206,32 @@ module Dice
         end
 
         class Reroll < Conditional
-          def initialize(match,size, subexpression)
+          attr_reader :max_rerolls
+
+          def initialize(match,size, subexpression, max_rerolls: 1000 )
+            @max_rerolls = max_rerolls
             number = subexpression ? subexpression : match[:condition_number].to_i
             #p match
             init_condition( match[:conditional], number || 1 )
           end
 
+          def applies?(number)
+            if @matches > @max_rerolls
+              false
+            else
+              super
+            end
+          end
+
           def reroll_with?(number)
-            applies? number
+            would_apply_with? number
           end
           
           def output(callbacks, parser)
+          end
+
+          def to_s
+            "r#{if @max_rerolls == 1 then 'o' end}#{@condition_test}#{@condition_num}"
           end
         end
 
@@ -382,6 +417,7 @@ module Dice
         count = @count
         rolls = 0
         number = 0
+        @modifiers.map(&:reset)
         while rolls < count
           catch(:reroll) do
             @rolls[rolls] += 1
@@ -404,7 +440,7 @@ module Dice
               end
             end
             
-            if @modifiers.select { |m| m.is_a? Modifier::Reroll }.any? { |m| m.reroll_with? number }
+            if @modifiers.select { |m| m.is_a? Modifier::Reroll }.any? { |m| m.applies? number }
               #puts "Reroll #{number}" if $DEBUG
               number = 0
               throw :reroll
@@ -497,7 +533,7 @@ module Dice
       (?<failure>         f \s* \g<condition>?                                            ){0}
       (?<success>         s \s* \g<condition>?                                            ){0}
       (?<wolf>            w \s* \g<condition>                                             ){0}
-      (?<reroll>          r \s* \g<condition>?                                            ){0}
+      (?<reroll>          (?: (?<reroll_once> ro ) | r ) \s* \g<condition>?               ){0}
 
       (?<die_modifier> \g<drop> | \g<keep> | \g<reroll> | \g<success> | \g<failure> | \g<wolf> ){0}
       (?<die_modifiers>   \g<die_modifier>*                                               ){0}
