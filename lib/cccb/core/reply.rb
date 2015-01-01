@@ -1,3 +1,4 @@
+gem 'redcarpet', '<=3.2.0'
 require 'redcarpet'
 
 class CCCB::Reply
