@@ -709,6 +709,12 @@ module CCCB::Core::Dice
       when "my"
         args.shift
         :user
+      when "network"
+        args.shift
+        :network
+      when "global"
+        args.shift
+        :core
       when "channel"
         args.shift
         :channel
@@ -717,8 +723,16 @@ module CCCB::Core::Dice
       end
 
       name = args.shift
-      preset = args.join(" ")
-      message.reply user_setting( message, target, "roll_presets", name, preset || "" )
+
+      if name == "list" or name.nil?
+        preset = nil
+        setting = "#{target}::roll_presets"
+      else
+        preset = args.join(" ") || ""
+        setting = "#{target}::roll_presets::#{name}"
+      end
+
+      message.reply user_setting( message, setting, preset )
     end
 
     add_command :dice, "history forget" do |message, (name)|
