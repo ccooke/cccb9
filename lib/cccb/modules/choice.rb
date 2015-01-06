@@ -8,11 +8,16 @@ module CCCB::Core::Choice
   def module_load
     add_command :choice, "choose" do |message, args|
       choices = args.join(' ').split( /(?:\s+(?:\s*(?:x?or(?=\W))\s*)+\s*|,)+\s*/ )
-      message.reply( if message.user.get_setting("options", "tease_me") and rand <= (get_setting("options", "tease_frequency")||0.1)
-        "Whichever one makes you happy, okay?!"
-      else
-        choices[ SecureRandom.random_number( choices.length ) ]
-      end )
+
+      if message.user.get_setting("options", "tease_me")
+        frequency = message.user.get_setting("options","tease_frequency") || 0.1
+        if rand <= frequency.to_f
+          message.reply "Whichever one makes you happy, okay?!"
+          next
+        end
+      end
+        
+      message.reply( choices[ SecureRandom.random_number( choices.length ) ] )
     end
 
     add_help(
