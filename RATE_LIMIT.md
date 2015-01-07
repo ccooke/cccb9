@@ -1,14 +1,15 @@
 
-# Authorisation
+# Rate Limiting
 
-## Rate limiting
+## The Short Version
 
 * Each channel has its own settings for rate limiting
+* You need to be +o and in the channel in order to view or change these settings
 * You can view them with:
-  ```!set c(#D&D)::rate_limit```
+  ```!set rate_limit::``` from inside the channel
   (Assuming you want to look at #D&D)
 * You can set them with:
-  ```!set c(#D&D)::rate_limit::thing = <bucket> + <rate>```
+  ```!set rate_limit::thing = <bucket> + <rate>``` from inside the channel
 
 ## Buckets and Rates
 
@@ -16,11 +17,11 @@ Where "thing" is a thing you want to rate limit, "bucket" is a number of times t
 
 So, "five uses, but they refresh at a rate of one per minute" would be:
 
-  ```!set c(#D&D)::rate_limit::thing = 5 + 0.016666666666666666```
+  ```!set rate_limit::thing = 5 + 0.016666666666666666```
 
 and "1 use, every 30 seconds" would be:
 
-  ```!set c(#D&D)::rate_limit::thing = 1 + 0.03333333333333333```
+  ```!set rate_limit::thing = 1 + 0.03333333333333333```
 
 ## Things
 
@@ -28,11 +29,11 @@ Everything you can ask the bot to do ties in to a feature, which is a collective
 
 You can also rate limit the bot's features. The following will apply a single rate limit to every dice or probability command (!roll, !qroll, !toss, !prob, !average, etc):
 
-  ```!set c(#D&D)::rate_limit::dice = 1 + 0.03333333333333333```
+  ```!set rate_limit::dice = 1 + 0.03333333333333333```
 
 You can also set rate limits on individual commands. This can be done by setting a rate limit on "!command/command-name". For instance, to apply a limit to the "!prob" command only, the following will suffice:
 
-  ```!set c(#D&D)::rate_limit::!command/prob = 1 + 0.016666666666666666```
+  ```!set rate_limit::!command/prob = 1 + 0.016666666666666666```
 
 ### Specific overrides general
 
