@@ -7,7 +7,6 @@
 * You need to be +o and in the channel in order to view or change these settings
 * You can view them with:
   ```!set rate_limit::``` from inside the channel
-  (Assuming you want to look at #D&D)
 * You can set them with:
   ```!set rate_limit::thing = <bucket> + <rate>``` from inside the channel
 
