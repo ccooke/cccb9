@@ -6,7 +6,7 @@ module Module::Requirements::Feature::Hooks
   extend Module::Requirements
   needs :logging, :managed_threading
   
-  def add_hook(feature, hooklist, filter: {}, generator: 0, top: false, &block)
+  def add_hook(feature, hooklist, filter: {}, generator: 0, top: false, unique: false, &block)
     Array(hooklist).each do |hook|
       spam "ADD hook #{hook}" 
       hooks.db[ hook ] ||= []
@@ -17,6 +17,7 @@ module Module::Requirements::Feature::Hooks
       end
       hooks.features[feature] = true
       method = top ? :unshift : :push
+      raise "Attempted to redefine a unique hook" if unique and hooks.db[hook].count > 0
       hooks.db[ hook ].send(method,
         :feature => feature,
         :filter => filter,
@@ -215,6 +216,7 @@ module Module::Requirements::Feature::Hooks
 
     global_methods :schedule_hook, :run_hooks
     add_hook_runner
+
   end
 
   def hook_stat( name, *args )
@@ -228,12 +230,13 @@ module Module::Requirements::Feature::Hooks
   def add_hook_runner
     hooks.lock.synchronize do
       hook_id = (hooks.runners += 1)
-      ManagedThread.new :"hook_runner_#{hooks.runners}" do
+      ManagedThread.new :"hook_runner_#{hooks.runners}", start: true do
         hook_stat :runner_id, hook_id
         loop do
           begin
             hook_stat :current, :waiting
             (hook_to_run, args, block) = hooks.queue.pop
+            detail2 "RUNNER: #{hook_id}: #{hook_to_run}, #{args}, #{block}"
             hook_stat :current, :processing, hook_to_run, args
             run_hooks hook_to_run, *args, &block
           rescue Exception => e
