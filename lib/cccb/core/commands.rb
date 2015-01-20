@@ -144,7 +144,7 @@ module CCCB::Core::Commands
           hook_runnable? h, message
         } 
       }.map(&:first).join(", ")
-      message.reply "Ambiguous command '#{pre.join " "}'. Possible commands from this base: #{enabled}"
+      #message.reply "Ambiguous command '#{pre.join " "}'. Possible commands from this base: #{enabled}"
     end
 
     add_command :commands, "show commands" do |message, args|
