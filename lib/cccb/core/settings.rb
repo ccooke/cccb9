@@ -4,7 +4,9 @@ module CCCB::Settings
   class NoSuchSettingError < SettingError; end
 
   def transient_storage
-    @___cccb_transient_storage___ ||= {}
+    @___cccb_transient_storage___ ||= {
+      "shadow" => {}
+    }
   end
 
   def setting_cache
@@ -14,9 +16,35 @@ module CCCB::Settings
     }
   end
 
+  def setting_cache_get(key)
+    if transient_storage["shadow"].include? key 
+      transient_storage["shadow"][key]
+    else
+      setting_cache[:keys][key]
+    end
+  end
+
+  def setting_cache_set(key,value)
+    if transient_storage["shadow"].include? key 
+      transient_storage["shadow"][key] = value
+    end
+    setting_cache[:keys][key] = value
+  end
+
+  def setting_cache_delete(key)
+    if transient_storage["shadow"].include? key 
+      transient_storage["shadow"].delete(key)
+    end
+    setting_cache[:keys].delete(key)
+  end
+
+  def setting_cache_include?(key)
+    transient_storage["shadow"].include? key or setting_cache[:keys].include? key
+  end
+
   def clear_setting_cache 
     CCCB.instance.replace_log_tag :wipe_cache
-    debug "Clearing settings cache on #{self}: #{@___setting_cache.inspect}"
+    spam "Clearing settings cache on #{self}: #{@___setting_cache.inspect}"
     @___setting_cache = {
       keys: {},
       delegation: {}
@@ -50,7 +78,7 @@ module CCCB::Settings
         detail2 "is delegated to #{object}"
         object
       end
-      debug "Caching delegation for #{self}.#{name} => #{target}"
+      spam "Caching delegation for #{self}.#{name} => #{target}"
       setting_cache[:delegation][name] = target
     end
   end
@@ -58,7 +86,7 @@ module CCCB::Settings
   def get_setting(name,key=nil)
     CCCB.instance.add_log_tag :get
     CCCB.instance.add_log_tag stage: :init
-    debug "#{self}.get_setting(#{name},#{key})"
+    detail "#{self}.get_setting(#{name},#{key})"
     if (target = setting_object(name)) == self
       detail2 "Fetching local object #{self}::#{name}"
       get_local_setting(name,key)
@@ -73,9 +101,9 @@ module CCCB::Settings
     CCCB.instance.replace_log_tag stage: :local
     if key
       cache_key = "#{name}::#{key}"
-      if setting_cache[:keys].include? cache_key
+      if setting_cache_include? cache_key
         detail2 "cache hit"
-        setting_cache[:keys][cache_key]
+        setting_cache_get(cache_key)
       else
         detail2 "cache miss"
         if ( result = get_local_setting_uncached(name,key) ).nil?
@@ -92,7 +120,7 @@ module CCCB::Settings
           # never cache a nil
         else
           detail2 "cache SET: #{self}::#{cache_key} = #{result.inspect}"
-          setting_cache[:keys][cache_key] = result
+          setting_cache_set(cache_key, result)
         end
         detail "Return result #{result.inspect}"
         result
@@ -120,7 +148,7 @@ module CCCB::Settings
     cursor = if settings.include? name and !settings[name].nil?
       settings
     elsif db[self.class].include? name
-      debug "Defaulted #{name},#{key} on #{self}"
+      spam "Defaulted #{name},#{key} on #{self}"
       settings[name] = Marshal.load( Marshal.dump( setting_option(name, :default) ) )
       settings
     end
@@ -187,7 +215,7 @@ module CCCB::Settings
       detail3 "Temp returned as #{temp.inspect}"
       unless cursor.include? name
         cursor[name] = Marshal.load( Marshal.dump( setting_option(name, :default) ) )
-        debug "Defaulting to #{cursor[name]}"
+        spam "Defaulting to #{cursor[name]}"
       end
       
       clear_setting_cache if setting_option(name,:clear_cache_on_set)
@@ -195,7 +223,7 @@ module CCCB::Settings
         temp.each do |k,v|
           saved = cursor[name].include? k ? cursor[name][k] : nil
           cache_key = "#{name}::#{key}"
-          setting_cache[:keys].delete( cache_key )
+          setting_cache_delete(cache_key)
           if v.nil?
             detail "Deleting key #{k.inspect}"
             cursor[name].delete k
@@ -424,7 +452,7 @@ module CCCB::Core::Settings
 
     add_hook :core, :pre_setting_set do |obj, setting, hash|
       next unless setting == 'identity' and hash.respond_to? :to_hash and ! hash['parent'].nil?
-      verbose "Setting parent of #{obj} to #{hash['parent']}"
+      debug "Setting parent of #{obj} to #{hash['parent']}"
       
       parents = [ obj ]
       next_parent = find_setting_storage_object(obj, hash['parent'])
@@ -440,10 +468,32 @@ module CCCB::Core::Settings
         parents << next_parent
         next_parent = next_parent.setting_storage_object
       end
-        
+    end
+
+    add_hook :core, :pre_setting_set do |obj, setting, hash|
+      next unless setting == 'shadow'
+      batches = hash.each_with_object({}) do |(k,v),h|
+        match = /^(?<setting>\w+)::(?<key>\w+)$/.match(k)
+        raise "Invalid shadow setting: #{k}" unless match
+        raise "Shadowing a shadow is not supported" if match[:setting] == setting
+        h[match[:setting]] ||= {}
+        h[match[:setting]][match[:key]] = v
+      end
+
+      batches.each do |s,h|
+        run_hooks :pre_setting_set, obj, s, h
+        h.each do |k,v|
+          hash["#{s}::#{k}"] = v
+        end
+      end
     end
 
     # local_settings must be the first setting defined
+    add_setting :all, "shadow",
+      auth: :superuser,
+      persist: false,
+      default: { "identity::parent" => nil },
+      local: true
     add_setting :all, "local_settings", 
       clear_cache_on_set: true,
       default: { "local_settings" => true, "identity" => true},
