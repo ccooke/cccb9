@@ -591,9 +591,12 @@ module CCCB::Core::Dice
         "1#{default_die}"
       end
 
-      roller = CCCB::DieRoller.new(message)
-      #rolls = roller.roll(expression, default, mode)
-      rolls = Backgrounder.new(roller).background(:roll, expression, default, mode)
+      roller = api(
+        :"core.background", 
+        object: CCCB::DieRoller.new(message),
+        methods: [ :roll ]
+      )
+      rolls = roller.roll( expression, default, mode)
       debug "Got rolls: #{rolls}"
       message.reply roller.message_die_roll(message.nick, rolls, mode)
 
