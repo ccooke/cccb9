@@ -353,7 +353,7 @@ module CCCB::Core::Treasure
       ]
     )
 
-    CCCB::ContentServer.add_keyword_path('treasure') do |network,session,match|
+    CCCB::ContentServer.add_keyword_path('treasure') do |session,match|
       type, level = match[:call].split('/')
       { 
         template: :plain_text,

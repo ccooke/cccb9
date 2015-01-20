@@ -54,16 +54,17 @@ module CCCB::Core::Help
       :superuser
     )
 
-    CCCB::ContentServer.add_keyword_path('help') do |network,session,match|
-      features = network.get_setting("allowed_features")
-      url = "/help/"
-      local_topics = if network
-        url = "/network/#{network.name}/help/"
-        local_topics = help.topics.each_with_object({}) do |(name,topic),hash| 
-          hash[name] = topic if features.include? topic[:feature].to_s
-        end
-      else
-        help.topics
+    CCCB::ContentServer.add_keyword_path('help') do |session,match|
+      features = session.network.get_setting("allowed_features").dup
+      core_features = CCCB.instance.get_setting("allowed_features")
+      core_features.each do |f,enabled|
+        features[f] = enabled if enabled and not features.include? f
+      end
+
+      url = if session.network.name == "__httpserver__" then "/help/" else "/network/#{session.network.name}/help/" end
+      local_topics = help.topics.each_with_object({}) do |(name,topic),hash| 
+        detail2 "Topic: #{name} => #{topic}. My features: #{features}"
+        hash[name] = topic if features.include? topic[:feature].to_s and features[topic[:feature].to_s]
       end
 
       if match[:call] and local_topics.include? match[:call]

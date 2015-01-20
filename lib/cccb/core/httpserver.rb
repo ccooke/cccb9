@@ -118,7 +118,13 @@ class CCCB::ContentServer
         session = OpenStruct.new
         CCCB.instance.set_setting( session, "web_sessions", key )
         res.cookies << WEBrick::Cookie.new( network.name, sid )
+        session.network = network
       end
+
+      session.message = CCCB::Message.new( 
+        network,
+        ":#{key} PRIVMSG d20 :#{req.request_line}"
+      )
     else
       debug "No match: #{req.path}"
       session = OpenStruct.new
@@ -135,7 +141,7 @@ class CCCB::ContentServer
 			end
 			if match = matcher.match( match_object )
         
-				block.call( network, session, match, req, res )
+				block.call( session, match, req, res )
         return
 			end
 		end
@@ -147,8 +153,8 @@ class CCCB::ContentServer
 	end
 
   def self.add_keyword_path( keyword, &block )
-    add_path %r{^/(?<keyword>#{keyword})(?:/(?<call>.*))?$}, :path do |network,session,match,req,res|
-      hash = block.call(network, session, match, req, res)
+    add_path %r{^/(?<keyword>#{keyword})(?:/(?<call>.*))?$}, :path do |session,match,req,res|
+      hash = block.call(session, match, req, res)
       template = hash[:template] || 'default'
       if template == :plain_text
         debug "Plain text: #{hash.inspect}"
@@ -217,7 +223,7 @@ module CCCB::Core::HTTPServer
       }
     end
 
-    CCCB::ContentServer.add_keyword_path('status') do |network,session,match,req,res|
+    CCCB::ContentServer.add_keyword_path('status') do |session,match,req,res|
       {
         title: "Status for #{session.network.name}",
         blocks: [

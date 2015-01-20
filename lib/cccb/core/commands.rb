@@ -180,12 +180,14 @@ module CCCB::Core::Commands
       message.reply("Thank you")
     end
 
-    servlet = Proc.new do |network, session, match|
+    servlet = Proc.new do |session, match|
       command = match[:call].split('/').join(' ')
-      message = CCCB::Message.new( network, ":WEB PRIVMSG d20 :#{command}" )
       output_queue = Queue.new
+      message = session.message
       message.instance_variable_set(:@content_server_strings, output_queue)
       message.instance_variable_set(:@http_match_object,match)
+
+      verbose session.message.instance_variables
       def message.send_reply(final: false)
         unless @response.nil?
           data = @response.long_form

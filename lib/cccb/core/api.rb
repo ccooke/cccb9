@@ -55,14 +55,14 @@ module CCCB::Core::APICore
       args[:string]
     end
 
-    servlet = Proc.new do |network, session, match, request|
+    servlet = Proc.new do |session, match, request|
       debug "Got call: #{request}"
 
       params = CGI::parse(request.query_string).each_with_object({}) do |(k,v),h| 
         h[k.to_sym] = v.last
       end
       method = match[:call].split('/').first
-      params[:__message] = CCCB::Message.new( network, ":WEB PRIVMSG d20 :#{request.request_line}" )
+      params[:__message] = session.message
 
       debug "API call from web: #{method.inspect}, #{params.inspect}"
       begin

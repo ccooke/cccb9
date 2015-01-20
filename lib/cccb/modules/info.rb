@@ -21,11 +21,11 @@ module CCCB::Core::InfoBot
       message.reply text
     end
 
-    CCCB::ContentServer.add_keyword_path('info') do |network,session,match|
+    CCCB::ContentServer.add_keyword_path('info') do |session,match|
       factoids = {}
       factoids["These things I hold to be universally true"] = CCCB.instance.get_setting("info")
-      factoids["On #{network}, I believe that"] = network.nil? ? {} : network.get_setting("info")
-      channel_info = network.channels.each do |name,channel|
+      factoids["In this context, I believe that"] = session.network.get_setting("info")
+      channel_info = session.network.channels.each do |name,channel|
         factoids["In #{name}"] = channel.get_setting("info")
       end
 
