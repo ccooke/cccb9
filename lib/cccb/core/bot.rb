@@ -3,6 +3,9 @@ require 'json'
 
 module CCCB::Core::Bot
   class SettingError < Exception; end
+  class LogException < Exception; end
+  class PublicException < Exception; end
+  class PrivateException < Exception; end
 
   extend Module::Requirements
   needs :hooks, :reload, :call_module_methods, :managed_threading, :events, :persist, :settings, :networking
@@ -78,27 +81,60 @@ module CCCB::Core::Bot
 
   def rate_limit_by_feature( message, feature, hook )
     if message.to_channel? 
-      rate_limit = if hook_limit = message.channel.get_setting("rate_limit", "!#{hook}")
-        feature = "!#{hook}"
-        hook_limit
-      else
-        message.channel.get_setting("rate_limit",feature.to_s)
-      end
+
+      rate_key = feature.to_s
+      rate_limit = nil
+
+      if hook.to_s.start_with? 'command/'
+        keys = hook.to_s.split('/')
+        keys.shift
+        search = keys.length.times.with_object([]) { |i,o|
+          last = keys.pop
+          o << [ "!command", *keys, last ].join('/') 
+          o << [ "!command", *keys, '*' ].join('/') 
+        }
+        search << feature.to_s
+        search.find do |k|
+          rate_key = k
+          rate_limit = message.channel.get_setting("rate_limit", k)
+          not rate_limit.nil?
+        end
+      end 
+
       unless rate_limit.nil?
-        timestamp = Time.now
+        timestamp = Time.now.to_f
         current = message.channel.get_setting("rate_limit_current")
-        current[feature.to_s] ||= {
+        current[rate_key] ||= {
           bucket: rate_limit[:bucketsize],
           last_fill: timestamp,
           lock: Mutex.new
         }
-        current = current[feature.to_s]
+        current = current[rate_key]
+        current[:triggered_by] ||= nil
+        current[:triggered_time] ||= 0
+        current[:triggered_spam] ||= false
+        current[:last_fill] = current[:last_fill].to_f
         current[:lock].synchronize do
           current[:bucket] += rate_limit[:fillrate] * ( timestamp - current[:last_fill] )
           current[:bucket] = rate_limit[:bucketsize] if current[:bucket] > rate_limit[:bucketsize]
           current[:last_fill] = timestamp
+          if current[:bucket] < 1 
+            seconds_between = 1.0 / rate_limit[:fillrate] 
+            time_to_next = (1.0 - current[:bucket]) / rate_limit[:fillrate] 
+
+            if timestamp - current[:triggered_time] > seconds_between
+              current[:triggered_by] = message.user
+              current[:triggered_time] = timestamp
+              current[:triggered_spam] = nil
+              raise PrivateException.new( "#{rate_key} is rate limited in #{message.channel}. Next use in #{sprintf "%.2f", time_to_next}s" )
+            elsif timestamp - current[:triggered_time] <= seconds_between and not current[:triggered_spam]
+              current[:triggered_spam] = true
+              raise PublicException.new( "#{message.user.nick}: #{rate_key} is rate limited in #{message.channel}. Next use in #{sprintf "%.2f", time_to_next}s" )
+            else
+              raise LogException.new( "#{message.user.nick}: #{rate_key} is rate limited in #{message.channel}. Next use in #{sprintf "%.2f", time_to_next}s" )
+            end
+          end
         end
-        raise "Rate limited: try again in #{( 1 - current[:bucket] ) / rate_limit[:fillrate]} seconds" if current[:bucket] < 1
         current[:bucket] -= 1
       end
     end
@@ -115,6 +151,14 @@ module CCCB::Core::Bot
             result = Array(result).map { |l| "#{message.nick}: #{l}" }
           end
           message.reply Array(result) unless Array(result).empty?
+        rescue LogException => e
+          debug "Log Exception: #{e}"
+        rescue PrivateException => e
+          debug "Private Exception for #{message.user}: #{e}"
+          message.network.msg message.nick, e.to_s
+        rescue PublicException => e
+          debug "Exception: #{e}"
+          message.reply e.to_s
         rescue Exception => e
           message.reply "Sorry, that didnt work: #{e}"
           verbose "#{e} #{e.backtrace}"
@@ -251,7 +295,7 @@ module CCCB::Core::Bot
         begin
           copy.to_json
         rescue Encoding::UndefinedConversionError => e
-          pp copy
+          #pp copy
         end
       end
 
