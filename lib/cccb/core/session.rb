@@ -139,6 +139,21 @@ module CCCB::Core::Session
       end
     end
 
+    register_api_method :session, :login do |**args|
+      raise "No network provided" unless args[:network].respond_to? :get_user
+      raise "No username provided" unless args[:user]
+      raise "No password provided" unless args[:password]
+
+      user = args[:network].get_user(args[:user])
+      if user.register(args[:password])
+        if args[:session]
+          args[:session]
+        end
+      else 
+        false
+      end
+    end
+
     add_command :session, "register" do |message, args|
       message.reply( if message.to_channel?
         if message.user.registered? and message.user.verify_password(args[0].join(" "))
