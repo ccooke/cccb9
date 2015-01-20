@@ -107,11 +107,16 @@ module CCCB::Core::Commands
       end
     end
     rate_limit_by_feature( message, commands.feature_lookup[hook], hook )
-    debug "Scheduling hook for command: #{hook}->(#{args.inspect}"
-    schedule_hook hook, message, args, pre, cursor, hook, run_hook_in_thread: true do
-     # message.reply "In post block"
-     # message.reply "Response: #{message.instance_variable_get(:@response)}"
-     # message.reply "Data: #{message.reply.minimal_form}"
+    if hook_runnable? hook, message, *args
+      verbose "Scheduling hook for command: #{hook}->(#{args.inspect}) #{hook_runnable?(hook,*args).inspect}"
+      schedule_hook hook, message, args, pre, cursor, hook, run_hook_in_thread: true do
+       # message.reply "In post block"
+       # message.reply "Response: #{message.instance_variable_get(:@response)}"
+       # message.reply "Data: #{message.reply.minimal_form}"
+        message.send_reply final: true
+      end
+    else
+      message.reply "Command disabled"
       message.send_reply final: true
     end
   end
