@@ -90,16 +90,20 @@ class CCCB::ContentServer
     session = nil
     network = nil
 
-    if match = %r{^(?<cp>/network/(?<network>[^/]+))(?<path>.*)$}.match( req.path )
+    if match = %r{^(?<cp>/network/(?<network>[^/]+))?(?<path>.*)$}.match( req.path )
       debug "Req.path #{req.path.inspect} replace with #{match[:path]}"
       req.path.replace match[:path].to_s
       if req.path == ""
         req.path.replace "/status"
       end
-      network = cccb.networking.networks[match[:network]]
+      if match[:cp]
+        network = cccb.networking.networks[match[:network]]
+      else
+        network = cccb.networking.networks["__httpserver__"]
+      end
       raise "No such network" if network.nil?
 
-      session_cookie = req.cookies.find { |c| c.name == match[:cp] }
+      session_cookie = req.cookies.find { |c| c.name == network.name }
       if session_cookie.nil?
         session = nil
       else
@@ -113,9 +117,10 @@ class CCCB::ContentServer
         info "New (or expired) session #{key}"
         session = OpenStruct.new
         CCCB.instance.set_setting( session, "web_sessions", key )
-        res.cookies << WEBrick::Cookie.new( match[:cp], sid )
+        res.cookies << WEBrick::Cookie.new( network.name, sid )
       end
     else
+      debug "No match: #{req.path}"
       session = OpenStruct.new
     end
 
@@ -143,9 +148,10 @@ class CCCB::ContentServer
 
   def self.add_keyword_path( keyword, &block )
     add_path %r{^/(?<keyword>#{keyword})(?:/(?<call>.*))?$}, :path do |network,session,match,req,res|
-      hash = block.call(network, session, match)
+      hash = block.call(network, session, match, req, res)
       template = hash[:template] || 'default'
       if template == :plain_text
+        debug "Plain text: #{hash.inspect}"
         res["Content-type"] = "text/plain"
         res.body = hash[:text].to_s
       elsif template == :html
@@ -221,5 +227,11 @@ module CCCB::Core::HTTPServer
         ]
       }
     end
+
+    conf = {
+      name: "__httpserver__"
+    }
+    networking.networks[conf[:name]] = CCCB::Network.new(conf)
+
   end
 end
