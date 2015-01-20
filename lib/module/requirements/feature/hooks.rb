@@ -66,8 +66,8 @@ module Module::Requirements::Feature::Hooks
   def hook_runnable? hook, *args
     count = 0
     detail2 "Runnable #{hook}?"
-    yield_hooks(hook,*args) { count += 1 }
-    detail2 "Count: #{count}"
+    yield_hooks(hook,*args) { |i,h| count += 1 }
+    detail3 "#{hook} Count: #{count}"
     count > 0
   end
 
@@ -146,6 +146,7 @@ module Module::Requirements::Feature::Hooks
         schedule_hook :"debug_deny_#{item[:feature]}", hook, item
         next 
       end
+      next if args.empty?
       next if args.any? { |a|
         begin
           if a.respond_to? :select_hook_feature? 
@@ -162,10 +163,9 @@ module Module::Requirements::Feature::Hooks
         rescue Exception => e
           verbose "Exception while filtering features: #{e.message}"
         end
-
       }
 
-      yield item
+      yield item, hook
     end
   end
 
