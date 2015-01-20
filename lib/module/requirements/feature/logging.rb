@@ -168,7 +168,7 @@ module Module::Requirements::Feature::Logging
     until old_queue.empty?
       logging.log_queue << old_queue.pop
     end
-    verbose "Transitioned to unthreaded logging"
+    debug "Transitioned to unthreaded logging"
   end
 
   def logging_transition_threaded
