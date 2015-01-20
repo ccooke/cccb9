@@ -4,7 +4,7 @@ require 'd20code'
 
 class CCCB::DieRoller
 
-  def initialize(message)
+  def initialize(message, callbacks: true)
     @message = message
     if @message.to_channel?
       @roll_style = @message.channel.get_setting( "options", "dice_rolls_compact" ) ? :compact : :full
@@ -17,6 +17,7 @@ class CCCB::DieRoller
       :no_jinx
     end
     @expression_cache = {}
+    @run_callbacks = callbacks
   end
 
   def self.dice_colour( max, roll )
@@ -74,7 +75,7 @@ class CCCB::DieRoller
         end
         @message.reply replytext
       when :pointbuy
-        @message.reply "Point-buy equivalent: D&D #{entry[:dnd]}, D&D Next: #{entry[:dnd5e]}, Pathfinder #{entry[:pf]}"
+        @message.reply "Point-buy equivalent: D&D 3e-4e #{entry[:dnd]}, D&D 5e #{entry[:dnd5e]}, Pathfinder #{entry[:pf]}"
       when :reroll
         @message.reply "Roll ##{entry[:rerolls]}:"
       when :note
@@ -183,11 +184,16 @@ class CCCB::DieRoller
     parser = if @expression_cache.include? expression
       @expression_cache[expression]
     else
-      info "New parser: #{expression} with default #{default}"
+      debug "New parser: #{expression} with default #{default}"
       @expression_cache[expression] = Dice::Parser.new( expression, default: default ) 
     end
     parser.roll
-    [ parser.value, parser.output( self.callbacks ) ]
+    output = if @run_callbacks
+      parser.output( self.callbacks) 
+    else
+      parser.output( {} )
+    end
+    [ parser.value, output ]
   end
 
   def callbacks
@@ -354,7 +360,7 @@ end
 module CCCB::Core::Dice
   extend Module::Requirements
 
-  needs :bot, :background
+  needs :bot, :background, :api_core
 
   ADVANTAGE_REGEX = /
     \s*
@@ -388,7 +394,7 @@ module CCCB::Core::Dice
     default_setting( 20, "options", "probability_graph_width" )
     default_setting( "0.00", "options", "probability_graph_cutoff" )
     default_setting( "_.=m#@", "options", "probability_graph_chars" )
-  
+
     add_command :dice, "dice memory show" do |message, (user)|
       message.reply( if message.user.persist[:dice_memory_saved]
         memories = message.user.persist[:dice_memory_saved].sort { |(n1,r1),(n2,r2)| 
@@ -561,6 +567,12 @@ module CCCB::Core::Dice
       end )
     end
 
+    register_api_method :dice, :roll do |**args|
+      roller = CCCB::DieRoller.new(args[:__message], callbacks: false )
+      #roller.roll(args[:q],"1d20","roll")
+      Backgrounder.new(roller).background(:roll, args[:q], "1d20", 'roll')
+    end
+  
     add_command :dice, [%w{toss qroll roll dmroll}] do |message, args, words|
       mode = words.last == 'toss' ? 'qroll' : words.last
       expression = args.join(" ")
@@ -580,8 +592,9 @@ module CCCB::Core::Dice
       end
 
       roller = CCCB::DieRoller.new(message)
-      rolls = Backgrounder.new(roller).background(:roll,expression, default, mode)
-      verbose "Got rolls: #{rolls}"
+      #rolls = roller.roll(expression, default, mode)
+      rolls = Backgrounder.new(roller).background(:roll, expression, default, mode)
+      debug "Got rolls: #{rolls}"
       message.reply roller.message_die_roll(message.nick, rolls, mode)
 
       memory = {
@@ -614,7 +627,7 @@ module CCCB::Core::Dice
       /ix.match( args.empty? ? "my last" : args.join(' ') )
       user = nil
       selected = if match[:index]
-        p message.network.persist[:dice_memory]
+        #p message.network.persist[:dice_memory]
         list = message.network.persist[:dice_memory].dup
         if match[:user]
           user = if match[:user] == 'my'
