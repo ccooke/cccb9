@@ -6,15 +6,24 @@ class Backgrounder
 
   def initialize(obj)
     @obj = obj
+    @auto_background = {}
+  end
+
+  def __auto_background(sym)
+    @auto_background[sym] = true
   end
 
   def method_missing(sym, *args, **kwargs)
     args += [ **kwargs ] unless kwargs.empty?
     debug "Sending #{sym} args: #{args.inspect}"
-    @obj.send(sym,*args)
+    if @auto_background.include? sym
+      background(sym, *args, **kwargs)
+    else
+      @obj.send(sym,*args)
+    end
   end
 
-  def background(sym, *args, background_timeout: 5, **kwargs)
+  def background(sym, *args, background_timeout: 180, **kwargs)
     pid = nil
     meta = nil
     @@lock.synchronize do
@@ -53,13 +62,14 @@ class Backgrounder
     pid = fork do
       CCCB.instance.replace_log_tag pid: $$.to_s
       CCCB.instance.logging_transition_unthreaded
+      ttl = CCCB.instance.get_setting("settings", "background_process_timeout")
       output_parent.close
       input_parent.close
 
       spam "Started backgrounder process #{$$}"
       
       loop do
-        select = IO.select([input_child],[],[input_child],5)
+        select = IO.select([input_child],[],[input_child],ttl)
         detail "Select: #{select}"
         break if select.nil? or select[0].empty?
 
@@ -114,6 +124,21 @@ end
 module Module::Requirements::Feature::Background
   extend Module::Requirements
   needs :logging
+
+  def module_load
+    default_setting 300, "settings", "background_process_timeout"
+    add_command :core, "background killall" do 
+      Backgrounder.killall
+    end
+
+    register_api_method :core, :"background" do |**args|
+      proxy = Backgrounder.new(args[:object])
+      Array(args[:methods]).each do |method|
+        proxy.__auto_background(method.to_sym)
+      end
+      proxy
+    end
+  end
 
   def module_unload
     Backgrounder.killall
