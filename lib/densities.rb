@@ -382,7 +382,7 @@ class ModifiedDieDensity < Density
       # This is (the only place) where we decide whether we do APPROXIMATIONS or precise calculations
       # Monte-Carlo approximation
       elsif (stepnum(density.to_a.size,number) > num)
-        puts "Monte Carlo: #{stepnum(density.to_a.size,number)} > #{num}"
+        #puts "Monte Carlo: #{stepnum(density.to_a.size,number)} > #{num}"
         @exact=false
         @uniform=false
         @d.delete(0)
@@ -399,7 +399,7 @@ class ModifiedDieDensity < Density
         end
       # BRUTE FORCE
       else
-        puts "Exact calc: #{stepnum(density.to_a.size,number)} <= #{num}"
+        #puts "Exact calc: #{stepnum(density.to_a.size,number)} <= #{num}"
         @uniform=false
         @d.delete(0)
         (density.to_a).repeated_combination(number).each do |comb|
