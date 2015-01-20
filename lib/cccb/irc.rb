@@ -302,13 +302,17 @@ class CCCB::Message
                 :text, :hide, :user, :log_format, :command_downcase, 
                 :time, :params
 
-  def initialize(network, string, restore_from_archive = false)
+  def initialize(network, string, restore_from_archive = false, time: nil)
+    init(network, string, restore_from_archive, time: time)
+  end
+
+  def init(network, string, restore_from_archive = false, time: nil)
     @restore_from_archive = restore_from_archive
     @network = network
     @log_format = "%(network) %(raw)"
     @raw = string
     @hide = false
-    @time = Time.now
+    @time = time || Time.now
     
     match = set_user_data(string)
 
@@ -327,6 +331,7 @@ class CCCB::Message
       self.extend self.class.const_get( const ) 
       process
     end
+
   end
 
   def reply(data = nil)
@@ -342,7 +347,7 @@ class CCCB::Message
   def send_reply(final: false)
     unless @response.nil?
       data = @response.minimal_form
-      p data
+      #p data
       CCCB.instance.reply.irc_parser.render(data).split(/\n/).each do |l|
         self.write l
       end
@@ -431,14 +436,27 @@ class CCCB::Message
     coder.scalar = "#{network.name}: t#{@time.utc.to_f} #{raw}"
   end
 
+  def marshal_dump
+    {
+      meta: "cccb9.message",
+      net: network.name,
+      time: @time.utc.to_f,
+      data: raw
+    }
+  end
+
+  def marshal_load(m)
+    network = CCCB.instance.networking.networks[m[:net]]
+    self.init(network, m[:data], true, time: m[:time] )
+  end
+
   YAML.add_domain_type "cccb9", "message" do |tag, data|
-    if data =~ /^(.*?): (\d+\.\d+) (\w+) (.*)$/
+    if data =~ /^(.*?): t(\d+\.\d+) (.*)$/
       network_name = $1
       time = $2
-      tz = $3
       string = $4
       if network = CCCB.instance.networking.networks[network_name]
-        CCCB::Message.new( network, string, true )
+        CCCB::Message.new( network, string, true, time: time )
       else
         OpenStruct.new()
       end
