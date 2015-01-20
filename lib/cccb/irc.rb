@@ -504,7 +504,7 @@ class CCCB::User
         end
         user
       else
-        verbose "New user #{id}"
+        debug "New user #{id}"
         message.network.users[id] = super(message, match)
       end
     else
@@ -529,7 +529,7 @@ class CCCB::User
 
   def initialize(message,match, restore_from_archive = false)
     @network = message.network
-    verbose "Create user #{match[:id]}"
+    debug "Create user #{match[:id]}"
     @history = []
     update(message,match)
   end
