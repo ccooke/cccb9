@@ -191,7 +191,7 @@ module CCCB::Core::Bot
       message.network.get_user($~[:user].downcase)
     when /^c(?:hannel)?\((?<channel>#[^\]]+)\)$/i
       message.network.get_channel($~[:channel].downcase)
-    when /^n(?:etwork)?\((?<network>#[^\]]+)\)$/i
+    when /^n(?:etwork)?\((?<network>[^\]]+)\)$/i
       CCCB.instance.networking.networks[$~[:network].downcase]
     else
       message.network.channels[use_type.downcase] || message.network.users[use_type.downcase]
@@ -320,6 +320,7 @@ module CCCB::Core::Bot
     add_setting :channel, "options" 
     add_setting :network, "options"
     add_setting :core, "options"
+    add_setting :core, "settings"
     add_setting :core, "rate_limit"
     add_setting :network, "rate_limit"
     add_setting :channel, "rate_limit"
