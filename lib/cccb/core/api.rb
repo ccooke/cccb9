@@ -10,7 +10,7 @@ module CCCB::Core::APICore
     method_name = :"#{feature}.#{method}"
     hook_name = :"api/#{method_name}"
     debug "Adding API method #{method_name}"
-    add_hook feature, hook_name, generator: 2, unique: true do |return_queue, **args|
+    add_hook feature, hook_name, generator: 1, unique: true do |return_queue, **args|
       detail2 "Hook #{hook_name} called for #{method}"
       detail2 "Return #{return_queue}, args: #{args}"
       args[:method_name] = method_name

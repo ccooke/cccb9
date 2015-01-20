@@ -25,7 +25,9 @@ module CCCB::Core::Commands
     lines = File.read(file).lines
     indent = lines[line - 1].index /[^[:space:]]/
     length = lines[line,lines.length].find_index { |l| l.index(/[^[:space:]]/) == indent }
-    return [ '```' + (banner || "#{file}:#{line}") ] + lines[line-1,length+2].map(&:rstrip) + ['```']
+    t = [ '## ' + (banner || "#{file}:#{line}") ] + lines[line-1,length+2].map(&:rstrip).map { |l| "    #{l}" }
+    debug t
+    t
   end
 
   def expand_words(list)

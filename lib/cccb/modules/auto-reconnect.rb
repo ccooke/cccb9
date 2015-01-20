@@ -14,7 +14,7 @@ module CCCB::Core::AutoReconnect
         CCCB.instance.networking.networks.each do |netname, network|
           auto_reconnect.networks[netname] ||= {}
           unless network.connected?
-            debug "Skipping reconnection checks on #{netname}: It is not connected"
+            spam "Skipping reconnection checks on #{netname}"
             auto_reconnect.disconnected[netname] = true
             next
           end
