@@ -1,7 +1,7 @@
 module CCCB::Core::Debugging
   extend Module::Requirements
 
-  needs :bot, :commands, :logging
+  needs :bot, :commands, :logging, :persist
 
   def module_load
     add_command :debug, "echo" do |message,args|
@@ -91,6 +91,7 @@ module CCCB::Core::Debugging
 
     add_command :debug, "die die die" do |message|
       auth_command :superuser, message
+      persist.store.save
       Thread.list.each do |t|
         next if t == Thread.current
         t.raise "Dai the Death"
