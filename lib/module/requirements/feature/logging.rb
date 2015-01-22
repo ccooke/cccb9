@@ -136,7 +136,9 @@ module Module::Requirements::Feature::Logging
     unless Thread.current.thread_variable? :logging_tags
       Thread.current.thread_variable_set :logging_tags, []
     end
-    Thread.current.thread_variable_get(:logging_tags) << { trace: caller_map[-3], tags: tagset }
+    tags = Thread.current.thread_variable_get(:logging_tags)
+    tags << { trace: caller_map[-3], tags: tagset }
+    tags.shift while tags.length > 5
   end
 
   def log( *strings, **keys )
