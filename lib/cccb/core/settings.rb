@@ -18,6 +18,7 @@ module CCCB::Settings
 
   def setting_cache_get(key)
     if transient_storage["shadow"].include? key 
+      info "Shadow override #{self}::#{key}"
       transient_storage["shadow"][key]
     else
       setting_cache[:keys][key]
@@ -26,6 +27,7 @@ module CCCB::Settings
 
   def setting_cache_set(key,value)
     if transient_storage["shadow"].include? key 
+      info "Shadow override #{self}::#{key} = #{value}"
       transient_storage["shadow"][key] = value
     end
     setting_cache[:keys][key] = value
@@ -33,6 +35,7 @@ module CCCB::Settings
 
   def setting_cache_delete(key)
     if transient_storage["shadow"].include? key 
+      info "Shadow override #{self}.delete(#{key})"
       transient_storage["shadow"].delete(key)
     end
     setting_cache[:keys].delete(key)
@@ -58,7 +61,7 @@ module CCCB::Settings
 
   def setting_storage_object
     return @___setting_storage_object unless @___setting_storage_object.nil?
-    target = get_local_setting("identity", "parent")
+    target = transient_storage["shadow"]["identity::parent"] || get_local_setting("identity", "parent")
     spam "Redirection is to #{target.inspect}"
     @___setting_storage_object = CCCB.instance.find_setting_storage_object(self, target)
   end
@@ -102,7 +105,7 @@ module CCCB::Settings
     if key
       cache_key = "#{name}::#{key}"
       if setting_cache_include? cache_key
-        detail2 "cache hit"
+        detail "cache hit for #{cache_key}"
         setting_cache_get(cache_key)
       else
         detail2 "cache miss"
@@ -400,6 +403,7 @@ module CCCB::Core::Settings
     if target.nil?
       object
     else
+      object = transient_storage["shadow"]["identity::override_parent_object"] || object
       target = case object
       when CCCB::User
         object.network.get_user(target)
@@ -490,13 +494,15 @@ module CCCB::Core::Settings
 
     # local_settings must be the first setting defined
     add_setting :all, "shadow",
+      clear_cache_on_set: true, 
       auth: :superuser,
       persist: false,
       default: { "identity::parent" => nil },
-      local: true
+      local: true,
+      cascade: false
     add_setting :all, "local_settings", 
       clear_cache_on_set: true,
-      default: { "local_settings" => true, "identity" => true},
+      default: { "local_settings" => true, "identity" => true, "shadow" => true },
       local: true
     add_setting :all, "identity", 
       clear_cache_on_set: true, 
@@ -516,6 +522,8 @@ module CCCB::Core::Settings
     value = get_setting( test_setting_name, key )
     raise "Set/Get name,key broken: setting[#{key}]=#{value} != random[#{key}]=#{random[key]}" unless value == random[key]
     raise "Set/Get name broken" unless get_setting(test_setting_name) == random
+    random.each { |k,v| set_setting nil, test_setting_name, k }
+    raise "Set/Get delete broken" unless get_setting(test_setting_name) == {}
     settings.db[CCCB].delete test_setting_name
   end
 end
