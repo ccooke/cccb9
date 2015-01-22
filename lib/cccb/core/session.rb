@@ -9,13 +9,14 @@ module CCCB::Settings::IdentifiedUser
   def auth_setting(message, name)
     super or if ( setting_option(name,:auth)==:user or name == 'identity' or name == 'session') and registered?
       @___auth_reject_reason = "That user account is registered and you are not logged in"
-      get_setting("session", "authenticated")
+      get_setting("session", "authenticated::#{message.network.name}")
     end
   end
 
   def verify_password(password)
     return false unless registered?
 
+    info "verify password for #{self} in #{self.network}. #{self} is a #{self.class}"
     salt = get_setting("identity", "salt")
     hash = Digest::SHA256.hexdigest(password+salt)
 
@@ -24,10 +25,6 @@ module CCCB::Settings::IdentifiedUser
 
   def registered?
     if network.get_setting("options","accept_nickserv") == true
-      warning network.get_setting("options","accept_nickserv")
-      if false
-        critical "WTF"
-      end
       session = CCCB.instance.session
       session.nickserv_auth_expire[network] ||= {}
       if ! session.nickserv_auth_expire[network].include? self or Time.now > session.nickserv_auth_expire[network][self]
@@ -51,29 +48,28 @@ module CCCB::Settings::IdentifiedUser
         info "Returned from nickserv"
       end
     end
-          
-    critical get_setting("identity", "registered")
+    get_setting("identity", "registered")
   end
 
-  def register(password)
+  def register(password, network)
     if registered?
       if verify_password(password)
-        set_setting true, "session", "authenticated"
+        set_setting true, "session", "authenticated::#{network.name}"
         "OK"
       else
         "Denied"
       end
     else
-      set_setting true, "session", "authenticated"
+      set_setting true, "session", "authenticated::#{network.name}"
       set_setting true, "identity", "registered"
       set_setting password, "identity", "password"
       "You are now registered"
     end
   end
 
-  def authenticated?
+  def authenticated?(network)
     return false unless registered?
-    get_setting("session", "authenticated")
+    get_setting("session", "authenticated::#{network.name}")
   end
 end
 
@@ -85,7 +81,7 @@ module CCCB::Core::Session
   def module_load
     add_setting :user, "session", persist: false, 
       auth: :superuser, 
-      default: { "authenticated" => false },
+      default: {  },
       local: true
     add_setting :user, "privs", auth: :network
     alter_setting :user, "identity", 
@@ -135,20 +131,31 @@ module CCCB::Core::Session
       if ctcp_params.first.to_s == ""
         "You need a password to register"
       else
-        message.user.register(message.ctcp_params.first)
+        message.user.register(message.ctcp_params.first, message.network)
       end
     end
 
     register_api_method :session, :login do |**args|
-      raise "No network provided" unless args[:network].respond_to? :get_user
+      raise "No network provided" unless args[:session].respond_to? :network
       raise "No username provided" unless args[:user]
       raise "No password provided" unless args[:password]
 
-      user = args[:network].get_user(args[:user])
-      if user.register(args[:password])
-        if args[:session]
-          args[:session]
+      network = if args[:network]
+        CCCB.instance.networking.networks[args[:network]]
+      else
+        args[:session].network
+      end
+
+      user = network.get_user(args[:user])
+      next false unless user.registered?
+      next true if user.authenticated?(args[:session].network)
+
+      if out = user.register(args[:password], args[:session].network)
+        if args[:session].user != user
+          args[:session].message.user = user
+          args[:session].user = user
         end
+        true
       else 
         false
       end
@@ -164,7 +171,7 @@ module CCCB::Core::Session
         if args[0].to_s == ""
           "You need a password to register"
         else
-          message.user.register(args.join(" "))
+          message.user.register(args.join(" "),message.network)
         end
       end )
     end
