@@ -125,6 +125,7 @@ class CCCB::ContentServer
         network,
         ":#{key} PRIVMSG d20 :#{req.request_line}"
       )
+      session.user = session.message.user
     else
       debug "No match: #{req.path}"
       session = OpenStruct.new
