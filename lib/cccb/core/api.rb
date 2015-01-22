@@ -63,6 +63,7 @@ module CCCB::Core::APICore
       end
       method = match[:call].split('/').first
       params[:__message] = session.message
+      params[:session] = session
 
       debug "API call from web: #{method.inspect}, #{params.inspect}"
       begin
