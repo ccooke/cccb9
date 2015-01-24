@@ -14,13 +14,13 @@ module CCCB::Core::GiantMultiplayerRobot
     last_turn_text = last_turn_data.text.split(/\r\n/).reverse.join.gsub(/\s+/, ' ')
     last_turn = Chronic.parse( last_turn_text )
 
+    giant_multiplayer_robot.games[id].updated = Time.now
     if giant_multiplayer_robot.games[id].last_turn != last_turn
       players = m.post("http://multiplayerrobot.com/Game/Details?id=#{id}")
       next_player = players.search("div.game-host/a/img").attribute("title").text
 
       giant_multiplayer_robot.games[id].last_turn = last_turn
       giant_multiplayer_robot.games[id].next_player = next_player
-      giant_multiplayer_robot.games[id].updated = Time.now
       return true
     else 
       return false
@@ -30,8 +30,10 @@ module CCCB::Core::GiantMultiplayerRobot
   def module_load
     giant_multiplayer_robot.games ||= {}
     giant_multiplayer_robot.channel_updated = Hash.new(0)
+    giant_multiplayer_robot.channel_next_player = {}
     add_setting :channel, "gmr_games"
-    default_setting 300, "options", "gmr_update_frequency"
+    default_setting 86400, "options", "gmr_nag_frequency"
+    default_setting 60, "options", "gmr_update_frequency"
   end
 
   def module_unload
@@ -48,19 +50,26 @@ module CCCB::Core::GiantMultiplayerRobot
             spam "Checking on #{channel}"
             begin
               channel.get_setting("gmr_games").each do |game_name, game_id|
-                debug "Check GMR: #{channel} #{game_name}"
+                spam "Check GMR: #{channel} #{game_name}"
                 game = giant_multiplayer_robot.games[game_id]
                 frequency = channel.get_setting("options", "gmr_update_frequency").to_i
                 if game.nil? or Time.now - game.updated  > frequency
+                  debug "Update GMR #{channel} #{game_name}/#{game_id} #{Time.now - game.updated } > #{frequency}"
                   update_gmr_game(game_id)
                   game = giant_multiplayer_robot.games[game_id]
                 end
 
                 channel_elapsed = Time.now - giant_multiplayer_robot.channel_updated[channel]
-                if channel_elapsed.to_f > frequency
+
+                next_player_map = (giant_multiplayer_robot.channel_next_player[channel] ||= {})
+
+                if next_player_map[game_id].nil? or next_player_map[game_id] != game.next_player or 
+                  (Time.now - giant_multiplayer_robot.channel_updated[channel]) > channel.get_setting("options","gmr_nag_frequency").to_i
+                then
                   waiting = elapsed_time( Time.now - game.last_turn )
                   channel.msg "GMR Game #{game_name} (##{game_id}): Next player is #{game.next_player}. Waiting #{waiting}"
                   giant_multiplayer_robot.channel_updated[channel] = Time.now
+                  next_player_map[game_id] = game.next_player
                 end
               end
             rescue Exception => e
@@ -68,7 +77,7 @@ module CCCB::Core::GiantMultiplayerRobot
             end
           end
         end
-        sleep 10
+        sleep 1
       end
     end
   end
