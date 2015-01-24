@@ -140,6 +140,28 @@ module CCCB::Core::Bot
     end
   end
 
+  TIME_VALUES = {
+    seconds: 1,
+    minutes: 60,
+    hours: 3600,
+    days: 86400,
+    weeks: 7 * 86400,
+    years: 52 * 7 * 86400
+  }
+  def elapsed_time(seconds)
+    seconds = seconds.to_i
+    TIME_VALUES.sort_by { |(k,v)| v }.reverse.inject("") do |s,(k,v)|
+      verbose "#{seconds} #{k} #{v}"
+      if seconds / v > 0
+        n = seconds / v
+        seconds = seconds % v
+        s += "#{n} #{k} "
+      else
+        s
+      end
+    end
+  end
+
   def add_request feature, regex, &block
     add_hook feature, :request, generator: 1 do |request, message|
       if match = regex.match( request )
