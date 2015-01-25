@@ -54,7 +54,7 @@ module CCCB::Core::GiantMultiplayerRobot
                 game = giant_multiplayer_robot.games[game_id]
                 frequency = channel.get_setting("options", "gmr_update_frequency").to_i
                 if game.nil? or Time.now - game.updated  > frequency
-                  debug "Update GMR #{channel} #{game_name}/#{game_id} #{Time.now - game.updated } > #{frequency}"
+                  debug "Update GMR #{channel} #{game_name}/#{game_id}"
                   update_gmr_game(game_id)
                   game = giant_multiplayer_robot.games[game_id]
                 end

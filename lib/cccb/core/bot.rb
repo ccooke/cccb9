@@ -151,7 +151,6 @@ module CCCB::Core::Bot
   def elapsed_time(seconds)
     seconds = seconds.to_i
     TIME_VALUES.sort_by { |(k,v)| v }.reverse.inject("") do |s,(k,v)|
-      verbose "#{seconds} #{k} #{v}"
       if seconds / v > 0
         n = seconds / v
         seconds = seconds % v

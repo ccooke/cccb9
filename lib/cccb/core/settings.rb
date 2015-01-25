@@ -42,6 +42,7 @@ module CCCB::Settings
   end
 
   def setting_cache_include?(key)
+    transient_storage["shadow"] ||= {}
     transient_storage["shadow"].include? key or setting_cache[:keys].include? key
   end
 
