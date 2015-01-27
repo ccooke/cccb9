@@ -13,7 +13,12 @@ module CCCB::Core::GiantMultiplayerRobot
     last_turn_data = turns.search("div.turn-finished/div.turn-cell-text").to_a.first
     last_turn_text = last_turn_data.text.split(/\r\n/).reverse.join.gsub(/\s+/, ' ')
     last_turn = Chronic.parse( last_turn_text )
-
+    info "#{last_turn}"
+    # Convert to GMT
+    last_turn = (last_turn + last_turn.gmt_offset).utc
+    info "#{last_turn}"
+    
+    info "#{giant_multiplayer_robot.games[id].last_turn} != #{last_turn}"
     giant_multiplayer_robot.games[id].updated = Time.now
     if giant_multiplayer_robot.games[id].last_turn != last_turn
       players = m.post("http://multiplayerrobot.com/Game/Details?id=#{id}")
@@ -57,6 +62,7 @@ module CCCB::Core::GiantMultiplayerRobot
                   debug "Update GMR #{channel} #{game_name}/#{game_id}"
                   update_gmr_game(game_id)
                   game = giant_multiplayer_robot.games[game_id]
+                  info "Game #{game}"
                 end
 
                 channel_elapsed = Time.now - giant_multiplayer_robot.channel_updated[channel]
