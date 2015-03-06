@@ -532,7 +532,7 @@ module Dice
       (?<failure>         f \s* \g<condition>?                                            ){0}
       (?<success>         s \s* \g<condition>?                                            ){0}
       (?<wolf>            w \s* \g<condition>                                             ){0}
-      (?<reroll>          (?: (?<reroll_once> ro ) | r ) \s* \g<condition>?               ){0}
+      (?<reroll>          (?: (?<reroll_once> ro ) | r(?!o) ) \s* \g<condition>?               ){0}
 
       (?<die_modifier> \g<drop> | \g<keep> | \g<reroll> | \g<success> | \g<failure> | \g<wolf> ){0}
       (?<die_modifiers>   \g<die_modifier>*                                               ){0}
