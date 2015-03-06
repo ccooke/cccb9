@@ -373,13 +373,14 @@ module CCCB::Core::Dice
       (?<disadvantage> d (?: is (?: adv (?: antage )? )? )? )
     )
     \s*
-    $
+    (?: ; | $ )
   /x
 
   def add_dice_memory(message, memory)
+    memory_limit = message.network.get_setting( "options", "dice_memory_limit" ).to_i
     message.network.persist[:dice_memory] ||= []
     message.network.persist[:dice_memory].unshift memory
-    message.network.persist[:dice_memory].pop if message.network.persist[:dice_memory].count > 100
+    message.network.persist[:dice_memory].pop while message.network.persist[:dice_memory].count > memory_limit
     (message.user.persist[:dice_memory_saved] ||= {})["current"] = message.network.persist[:dice_memory].first
   end
 
@@ -394,6 +395,7 @@ module CCCB::Core::Dice
     default_setting( 20, "options", "probability_graph_width" )
     default_setting( "0.00", "options", "probability_graph_cutoff" )
     default_setting( "_.=m#@", "options", "probability_graph_chars" )
+    default_setting( 2048, "options", "dice_memory_limit" )
 
     add_command :dice, "dice memory show" do |message, (user)|
       message.reply( if message.user.persist[:dice_memory_saved]
