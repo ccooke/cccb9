@@ -654,7 +654,11 @@ module CCCB::Core::Dice
           user = if match[:user] == 'my'
             message.user
           else
-            message.network.users[match[:user].downcase]
+            if submatch = match[:user].match( /^n\((\w+)\)::(.*)$/ )
+              CCCB.instance.networking.networks[submatch[1]].users[submatch[2].downcase]
+            else
+              message.network.users[match[:user].downcase]
+            end
           end
           spam "Selecting on #{user}"
 
