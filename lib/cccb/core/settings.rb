@@ -361,12 +361,18 @@ module CCCB::Core::Settings
     end
   end
 
+
   def add_setting(type,name,**options)
     type = SETTING_TARGET.keys if type == :all
+    reference = caller_locations(1).first
     Array(type).each do |t|
       klass = SETTING_TARGET[t]
       settings.db[klass] ||= {}
       current_options = settings.db[klass][name] || {}
+      current_options[:help_ref] = {
+        file: reference.path,
+        line: reference.lineno
+      }
       option_keys = DEFAULT_SETTING_OPTIONS + current_options.keys + options.keys
       new_options = option_keys.uniq.each_with_object({}) do |key,hash|
         hash[key] = if options.include? key
