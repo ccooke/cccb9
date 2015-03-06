@@ -29,7 +29,6 @@ module CCCB::Core::Commands
     debug t
     t
   end
-
   def expand_words(list)
     list = Array(list)
     arrays,non_arrays = list.partition { |i| i.respond_to? :each }
@@ -174,6 +173,7 @@ module CCCB::Core::Commands
           h[:id] ||= id += 1; 
           h[:id] == args[1].to_i
         end
+        message.reply get_help(hook[:source_file],hook[:source_line])
         message.reply get_code(hook[:source_file],hook[:source_line])
       end
     end
