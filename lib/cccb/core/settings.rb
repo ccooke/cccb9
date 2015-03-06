@@ -461,6 +461,8 @@ module CCCB::Core::Settings
       
     verbose "Cleared settings cache on #{count} objects"
 
+    #@doc
+    # When identity::parent is set, detect circular delegation loops and prevent them.
     add_hook :core, :pre_setting_set do |obj, setting, hash|
       next unless setting == 'identity' and hash.respond_to? :to_hash and ! hash['parent'].nil?
       debug "Setting parent of #{obj} to #{hash['parent']}"
@@ -481,6 +483,9 @@ module CCCB::Core::Settings
       end
     end
 
+    #@doc 
+    # Ensures all keys set on 'shadow' are of the form <real_setting>::<key> and applies calls the pre_setting_set hook for each setting
+    # The 'shadow' setting provides a non-persistant means of overriding the value of any setting on an object.
     add_hook :core, :pre_setting_set do |obj, setting, hash|
       next unless setting == 'shadow'
       batches = hash.each_with_object({}) do |(k,v),h|
@@ -499,7 +504,17 @@ module CCCB::Core::Settings
       end
     end
 
-    # local_settings must be the first setting defined
+    #@doc
+    # Stores settings that are never delegated to another object
+    add_setting :all, "local_settings", 
+      clear_cache_on_set: true,
+      default: { "local_settings" => true, "identity" => true, "shadow" => true },
+      local: true
+
+    #@doc
+    # Provides a means of temporarily overriding the value of a setting.
+    # Setting <object>::shadow::<setting>::<key> to something will cause <object>::<setting>::<key> to be overriden. 
+    # Values written to the shadow setting are never saved, so they will not persist if the object is removed or the bot restarted.
     add_setting :all, "shadow",
       clear_cache_on_set: true, 
       auth: :superuser,
@@ -507,10 +522,8 @@ module CCCB::Core::Settings
       default: { "identity::parent" => nil },
       local: true,
       cascade: false
-    add_setting :all, "local_settings", 
-      clear_cache_on_set: true,
-      default: { "local_settings" => true, "identity" => true, "shadow" => true },
-      local: true
+    #@doc
+    # Stores settings which control the 
     add_setting :all, "identity", 
       clear_cache_on_set: true, 
       auth: :superuser, 
