@@ -441,7 +441,6 @@ module Dice
             end
             
             if @modifiers.select { |m| m.is_a? Modifier::Reroll }.any? { |m| m.applies? number }
-              #puts "Reroll #{number}" if $DEBUG
               number = 0
               throw :reroll
             end
