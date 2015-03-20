@@ -100,7 +100,7 @@ class CCCB::Message
     end
 
     def replyto
-      if to_channel?
+      if to_channel? and not ctcp?
         super
       else
         @user
