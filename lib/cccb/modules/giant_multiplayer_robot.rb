@@ -34,8 +34,8 @@ module CCCB::Core::GiantMultiplayerRobot
 
   def module_load
     giant_multiplayer_robot.games ||= {}
-    giant_multiplayer_robot.channel_updated = Hash.new(0)
-    giant_multiplayer_robot.channel_next_player = {}
+    giant_multiplayer_robot.channel_updated ||= Hash.new(0)
+    giant_multiplayer_robot.channel_next_player ||= {}
     add_setting :channel, "gmr_games"
     default_setting 86400, "options", "gmr_nag_frequency"
     default_setting 60, "options", "gmr_update_frequency"
@@ -74,6 +74,7 @@ module CCCB::Core::GiantMultiplayerRobot
                 then
                   waiting = elapsed_time( Time.now - game.last_turn )
                   channel.msg "GMR Game #{game_name} (##{game_id}): Next player is #{game.next_player}. Waiting #{waiting}"
+                  schedule_hook :event, event: :gmr_game_nag, game: game_name, id: game_id, next_player: game.next_player, updated: true
                   giant_multiplayer_robot.channel_updated[channel] = Time.now
                   next_player_map[game_id] = game.next_player
                 end
