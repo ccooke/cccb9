@@ -2,7 +2,7 @@ module CCCB::Settings::ChannelAuthByList
   def auth_setting(message, name)
     super or if setting_option(name,:auth) == :channel
       user_id = message.user.setting_storage_object.id
-      if message.user.authenticated? and message.channel.get_setting("ops", user_id)
+      if message.user.authenticated?(message.network) and message.channel.get_setting("ops", user_id)
         return true
       end
     end
@@ -59,7 +59,7 @@ module CCCB::Core::Ops
         message.user.id
       end
 
-      if message.user.authenticated?
+      if message.user.authenticated?(message.network)
         if message.network.get_setting("ops", user_id)
           message.user.channels.each do |channel|
             message.network.puts "MODE #{channel} +o #{message.nick}"
@@ -76,7 +76,7 @@ module CCCB::Core::Ops
     add_command :ops, "op me" do |message|
       next unless message.to_channel?
       user_id = message.user.setting_storage_object.id
-      if message.user.authenticated? and message.channel.get_setting("ops", user_id)
+      if message.user.authenticated?(message.network) and message.channel.get_setting("ops", user_id)
         message.network.puts "MODE #{message.channel} +o #{message.nick}"
         message.reply "OK"
       else
