@@ -365,7 +365,13 @@ class CCCB::Message
 
   def set_user_data(string)
     spam "Patch user to #{string}" unless self.user.nil?
-    match = MESSAGE.match( string ) or raise InvalidMessage.new(string)
+    begin
+      match = MESSAGE.match( string ) 
+    rescue Exception => e
+      info e
+      info e.class
+      raise InvalidMessage.new(string)
+    end
 
     @from = match[:prefix] ? match[:prefix].to_sym : ""
     @user = CCCB::User.new( self, @restore_from_archive )
@@ -865,6 +871,9 @@ class CCCB::Network
         if line
           begin
             line.force_encoding("UTF-8")
+            if not line.valid_encoding?
+              line = line.encode("UTF-16be", :invalid=>:replace, :replace=>"?").encode('UTF-8')
+            end
             # IRC protocol actually is dealt with from CCCB::Message.new
             spam "RAW #{line}"
             schedule_hook :server_message, CCCB::Message.new(self, line )
