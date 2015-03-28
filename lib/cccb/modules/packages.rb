@@ -29,7 +29,7 @@ module CCCB::Core::Packages
           target = message.user.id
         end
 
-        if match[:verb].to_s.downcase == 'gives' and message.user.authenticated?
+        if match[:verb].to_s.downcase == 'gives' and message.user.authenticated?(message.network)
           package = {
             :fuse => 30,
             :type => :real,

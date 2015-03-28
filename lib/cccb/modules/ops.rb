@@ -32,9 +32,13 @@ module CCCB::Core::Ops
       next unless setting == "auto-op"
 
       hash.keys.each do |nick|
-        next if nick =~ /^[^!]+![^@]+@\S+$/
-        user = obj.user_by_name(nick) or raise "Unable to find user with nick 'nick'"
-        hash[user.from] = hash.delete(nick)
+        if nick =~ /^[^!]+![^@]+@\S+$/
+          hash[nick.to_sym] = hash.delete(nick)
+          next
+        end
+        info "Nick is #{nick}"
+        user = obj.user_by_name(nick) or raise "Unable to find user with nick '#{nick}'"
+        hash[user.from.to_sym] = hash.delete(nick)
         translation[nick] = user.from
       end
     end
@@ -43,7 +47,8 @@ module CCCB::Core::Ops
       auto_op = message.channel.get_setting("auto-op")
       if auto_op
         auto_op.each do |from,enabled|
-          if enabled and message.from == from
+          info "M: #{message.from.inspect} == #{from.inspect}"
+          if enabled and message.from == from.to_sym
             message.network.puts "MODE #{message.channel} +o #{message.nick}"
           end
         end

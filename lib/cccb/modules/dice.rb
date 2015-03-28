@@ -373,13 +373,14 @@ module CCCB::Core::Dice
       (?<disadvantage> d (?: is (?: adv (?: antage )? )? )? )
     )
     \s*
-    $
+    (?: ; | $ )
   /x
 
   def add_dice_memory(message, memory)
+    memory_limit = message.network.get_setting( "options", "dice_memory_limit" ).to_i
     message.network.persist[:dice_memory] ||= []
     message.network.persist[:dice_memory].unshift memory
-    message.network.persist[:dice_memory].pop if message.network.persist[:dice_memory].count > 100
+    message.network.persist[:dice_memory].pop while message.network.persist[:dice_memory].count > memory_limit
     (message.user.persist[:dice_memory_saved] ||= {})["current"] = message.network.persist[:dice_memory].first
   end
 
@@ -394,6 +395,7 @@ module CCCB::Core::Dice
     default_setting( 20, "options", "probability_graph_width" )
     default_setting( "0.00", "options", "probability_graph_cutoff" )
     default_setting( "_.=m#@", "options", "probability_graph_chars" )
+    default_setting( 2048, "options", "dice_memory_limit" )
 
     add_command :dice, "dice memory show" do |message, (user)|
       message.reply( if message.user.persist[:dice_memory_saved]
@@ -573,42 +575,58 @@ module CCCB::Core::Dice
       Backgrounder.new(roller).background(:roll, args[:q], "1d20", 'roll')
     end
   
+    roll_stack = {}
     add_command :dice, [%w{toss qroll roll dmroll}] do |message, args, words|
-      mode = words.last == 'toss' ? 'qroll' : words.last
-      expression = args.join(" ")
+      begin
+        roll_stack[message.replyto] ||= 0
+        this_roll = roll_stack[message.replyto] += 1
+        mode = words.last == 'toss' ? 'qroll' : words.last
+        expression = args.join(" ")
 
-      default_die = message.user.get_setting("options", "default_die")
-      match = ADVANTAGE_REGEX.match(expression)
-      default = if match
-        from,to = match.offset(0)
-        expression[from, to-from] = ""
-        if match[:advantage]
-          "2#{default_die}dl"
-        elsif match[:disadvantage]
-          "2#{default_die}dh"
+        default_die = message.user.get_setting("options", "default_die")
+        while match = ADVANTAGE_REGEX.match(expression)
+          default = if match
+            from,to = match.offset(0)
+            start = expression(0..from).rindex(';')||0
+            expression[from, to-from] = ""
+            this_expression = expression[start..from]
+            if match[:advantage]
+              "2#{default_die}dl"
+            elsif match[:disadvantage]
+              "2#{default_die}dh"
+            end
+          else
+            "1#{default_die}"
+          end
         end
-      else
-        "1#{default_die}"
+
+        roller = api(
+          :"core.background", 
+          object: CCCB::DieRoller.new(message),
+          methods: [ :roll ]
+        )
+        rolls = roller.roll( expression, default, mode)
+        debug "Got rolls: #{rolls}"
+        reply = roller.message_die_roll(message.nick, rolls, mode)
+        if roll_stack[message.replyto] > 1 
+          message.reply reply.map do |l|
+            "#{message.replyto}: (#{this_roll}): #{l}"
+          end
+        else
+          message.reply reply
+        end
+
+        memory = {
+          rolls: rolls,
+          expression: roller.processed_expression(expression),
+          mode: mode,
+          msg: message,
+          access: Time.now
+        }
+        add_dice_memory(message, memory)
+      ensure
+        roll_stack[message.replyto] -= 1
       end
-
-      roller = api(
-        :"core.background", 
-        object: CCCB::DieRoller.new(message),
-        methods: [ :roll ]
-      )
-      rolls = roller.roll( expression, default, mode)
-      debug "Got rolls: #{rolls}"
-      message.reply roller.message_die_roll(message.nick, rolls, mode)
-
-      memory = {
-        rolls: rolls,
-        expression: roller.processed_expression(expression),
-        mode: mode,
-        msg: message,
-        access: Time.now
-      }
-      add_dice_memory(message, memory)
-      
     end
 
     add_command :dice, "history show" do |message, args|
@@ -636,7 +654,11 @@ module CCCB::Core::Dice
           user = if match[:user] == 'my'
             message.user
           else
-            message.network.users[match[:user].downcase]
+            if submatch = match[:user].match( /^n\((\w+)\)::(.*)$/ )
+              CCCB.instance.networking.networks[submatch[1]].users[submatch[2].downcase]
+            else
+              message.network.users[match[:user].downcase]
+            end
           end
           spam "Selecting on #{user}"
 

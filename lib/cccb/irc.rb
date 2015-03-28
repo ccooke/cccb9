@@ -100,7 +100,7 @@ class CCCB::Message
     end
 
     def replyto
-      if to_channel?
+      if to_channel? 
         super
       else
         @user
@@ -109,7 +109,7 @@ class CCCB::Message
 
     def write(string)
       if ctcp? and ctcp != :ACTION
-        network.puts "NOTICE #{replyto} :\001#{ctcp} #{string}\001"
+        network.puts "NOTICE #{@user.nick} :\001#{ctcp} #{string}\001"
       else
         if string =~ /^\s*\/me\s+(.*)$/i
           string = "\001ACTION #{$~[1]}\001"

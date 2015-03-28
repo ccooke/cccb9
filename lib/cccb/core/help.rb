@@ -1,21 +1,113 @@
 module CCCB::Core::Help
   extend Module::Requirements
-  needs :commands
+  needs :commands, :api_core
+
+  def add_help(*args)
+    info "Deprecated method add_help called at #{caller_locations(1,1)}"
+  end
  
-  def add_help feature, topic, summary, text, special = :none
-    help.topics[ topic ] = {
-      :feature => feature,
-      :summary => summary,
-      :text => text,
-      :special => special
+  def get_help(file,start)
+    lines = File.read(file).lines
+    help_markup = []
+    seek = start - 2
+    info "AT: #{lines[seek]}"
+    while seek >= 0 and lines[seek].match(/^\s+#/)
+      info "Add #{lines[seek]}"
+      help_markup.unshift lines[seek].chomp
+      seek -= 1
+    end
+
+    mode = :none
+    base_info = { 
+      doc: [], 
+      detail: [],
+      file: file,
+      line: start,
+      code: get_code(file,start)
     }
+    help_markup[0..-1].each_with_object(base_info) do |line,h|
+      line.gsub! /^\s*# ?/, ''
+      info "HT: #{line}"
+      if line.match /^\s*@(doc|detail|param)\z/
+        if line.match /^\s*@doc/
+          mode = :doc
+        elsif match = line.match(/^\s*@detail(?:\s+(?<text>.*))?$/)
+          mode = :detail
+          h[:doc] << match[:text] if match[:text]
+        elsif match = line.match(/^\s*@param\s+(?<param>\w+)\s+(?<type>\w+)\s+(?<help>.*?)\s*$/)
+          h[:params] ||= {}
+          h[:params][match[:param]] = {
+            type: match[:type],
+            text: match[:help]
+          }
+        else
+          warning "Invalid help tag: #{line}"
+        end
+        next
+      end
+
+      case mode
+      when :doc
+        h[:doc] << line
+        h[:detail] << line
+      when :detail
+        h[:detail] << line
+      end
+    end
+  end
+
+  def unindent(string)
+    indent = string.each_line.inject(string.length) do |i,line|
+      indent_length = string.length - string.lstrip.length
+      i = if indent_length < i then indent_length else i end
+    end
+    string.each_line.map { |l| l[indent,-1] }.join
+  end
+
+  def hook_description_detail(hook, help_data = {})
+    true
+  end
+
+  def hook_description(hook)
+    unindent case hook
+    when /^api\//
+    when /^command\//
+    else
+      str = <<-EOF
+        # Hook '#{hook}'
+        Active hooks with this name:
+      EOF
+    end
   end
 
   def module_load
     help.topics = {}
+    
+    #@doc
+    #@param hook The name of a hook in the bot
+    #@param id (default: nil) 
+    # Returns the help
+    register_api_method :help, :doc do |**args|
+      raise "Missing hook" unless args.include? :hook
+      hook = args[:hook].to_sym
+      if args.include? :id
+        id = args[:id].to_i
+        hook = hooks.db[hook].find.with_index { |h,i| i == id }
+        help = get_help(hook[:source_file], hook[:source_line])
+        hook_description_detail hook, help
+      else
+        hook_description hook 
+      end
+    end
 
-    add_command :help, "help" do |message, (topic)|
-      message.reply "See #{CCCB.instance.get_setting("http_server","url")}/network/#{message.network}/help/#{topic}"
+    add_command :help, "help" do |message, (type, topic, number)|
+      if topic 
+        
+      else
+        #message.reply "See #{CCCB.instance.get_setting("http_server","url")}/network/#{message.network}/help/#{topic}"
+        message.reply [ 
+        ]
+      end
     end
 
     add_help(
