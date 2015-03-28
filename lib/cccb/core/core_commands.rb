@@ -4,6 +4,10 @@ module CCCB::Core::CoreCommands
   needs :commands
   
   def module_load
+    add_command :debug, "puppet" do |message, args|
+      auth_command :superuser, message
+      message.network.puts args.join(" ")
+    end
 
     add_command :debug, "show load errors" do |message, args|
       auth_command :superuser, message
