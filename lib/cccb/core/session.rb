@@ -148,7 +148,7 @@ module CCCB::Core::Session
 
       user = network.get_user(args[:user])
       next false unless user.registered?
-      next true if user.authenticated?(args[:session].network)
+      next :auth if user.authenticated?(args[:session].network)
 
       if out = user.register(args[:password], args[:session].network)
         if args[:session].user != user
