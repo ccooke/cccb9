@@ -2,7 +2,7 @@ module CCCB::Core::AutoCut
   extend Module::Requirements
   
   def module_load
-    default_setting 9999, "options", "auto_cut_length"
+    default_setting 512, "options", "auto_cut_length"
     default_setting 20, "options", "auto_cut_context"
     default_setting false, "options", "auto_cut_verbose"
 
