@@ -37,3 +37,11 @@ You can also set rate limits on individual commands. This can be done by setting
 ### Specific overrides general
 
 If you have both a rate limit on a command level and on the feature level, the command level rate limit will be applied (and using that particular command will not count as a use of the feature).
+
+### Adding a message
+
+You can set a message to be included in the rate limit command:
+
+  ```!set channel::options::rate_limit_message = "Bugger off."```
+
+This will be included in all rate limit messages

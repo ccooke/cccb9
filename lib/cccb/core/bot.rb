@@ -122,16 +122,17 @@ module CCCB::Core::Bot
             seconds_between = 1.0 / rate_limit[:fillrate] 
             time_to_next = (1.0 - current[:bucket]) / rate_limit[:fillrate] 
 
+            message_extra = message.channel.get_setting("options", "rate_limit_message")
             if timestamp - current[:triggered_time] > seconds_between
               current[:triggered_by] = message.user
               current[:triggered_time] = timestamp
               current[:triggered_spam] = nil
-              raise PrivateException.new( "#{rate_key} is rate limited in #{message.channel}. Next use in #{sprintf "%.2f", time_to_next}s" )
+              raise PrivateException.new( "#{rate_key} is rate limited in #{message.channel}. Next use in #{sprintf "%.2f", time_to_next}s. #{message_extra}" )
             elsif timestamp - current[:triggered_time] <= seconds_between and not current[:triggered_spam]
               current[:triggered_spam] = true
-              raise PublicException.new( "#{message.user.nick}: #{rate_key} is rate limited in #{message.channel}. Next use in #{sprintf "%.2f", time_to_next}s" )
+              raise PublicException.new( "#{message.user.nick}: #{rate_key} is rate limited in #{message.channel}. Next use in #{sprintf "%.2f", time_to_next}s. #{message_extra}" )
             else
-              raise LogException.new( "#{message.user.nick}: #{rate_key} is rate limited in #{message.channel}. Next use in #{sprintf "%.2f", time_to_next}s" )
+              raise LogException.new( "#{message.user.nick}: #{rate_key} is rate limited in #{message.channel}. Next use in #{sprintf "%.2f", time_to_next}s. #{message_extra}" )
             end
           end
         end
@@ -348,6 +349,7 @@ module CCCB::Core::Bot
     add_setting :channel, "rate_limit_current", auth: :superuser, persist: false
     default_setting true, "options", "join_on_invite"
     default_setting true, "options", "bang_commands_enabled"
+    default_setting "", "options", "rate_limit_message"
 
     add_hook :core, :pre_setting_set do |obj, setting, hash|
       next unless setting == 'rate_limit' and hash.respond_to? :to_hash
