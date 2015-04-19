@@ -351,12 +351,12 @@ class CCCB::Message
       CCCB.instance.reply.irc_parser.render(data).split(/\n/).each do |l|
         self.write l
       end
-      @response = nil
+      self.clear_reply
     end
   end
 
   def clear_reply
-    @response = nil
+    @response = CCCB::Reply.new(self)
   end
 
   def name
