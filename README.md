@@ -53,6 +53,8 @@ The bot is mostly configured via irc commands. The bot recognises requests in se
   * Channel text prefixed with the bot's nick ("/msg #channel botname: do soemthing" (or just "botname: do something" if you're in the channel)
   * If the (default enabled) option bang_commands_enabled is set, and channel text prefixed with an exclamation mark: ("/msg #channel !do something")
 
+Some commands and configuration options can only be used by a superuser. To add yourself as a superuser, send the command "admin superuser enable password", where "password" is the superuser password set in the profile (above).
+
 Configuration for the bot is based on a set of cascading storage dictionaries. These are defined by the bot and its modules to store configuration and session data. Each dictionary stores a number of keys which can be set to particular values. 
 
 Dictionaries are stored in a tree structure:
