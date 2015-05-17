@@ -46,6 +46,11 @@ class CCCB::DieRoller
   def message_die_roll(nick, rolls, mode )
     compact = ( (mode != 'roll') || (@roll_style == :compact) )
     batch = []
+    if rolls.is_a? Exception
+      @message.reply "Error: #{rolls.message}"
+      return
+    end
+
     rolls.each do |entry|
       #p "EN:", entry, mode, compact
       if compact and entry[:type] != :roll and not batch.empty?
