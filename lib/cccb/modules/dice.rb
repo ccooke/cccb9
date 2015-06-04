@@ -605,11 +605,12 @@ module CCCB::Core::Dice
           end
         end
 
-        roller = api(
-          :"core.background", 
-          object: CCCB::DieRoller.new(message),
-          methods: [ :roll ]
-        )
+        #roller = api(
+        #  :"core.background", 
+        #  object: CCCB::DieRoller.new(message),
+        #  methods: [ :roll ]
+        #)
+        roller = CCCB::DieRoller.new(message)
         rolls = roller.roll( expression, default, mode)
         debug "Got rolls: #{rolls}"
         reply = roller.message_die_roll(message.nick, rolls, mode)
