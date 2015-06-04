@@ -592,7 +592,7 @@ module CCCB::Core::Dice
         while match = ADVANTAGE_REGEX.match(expression)
           default = if match
             from,to = match.offset(0)
-            start = expression(0..from).rindex(';')||0
+            start = expression[0..from].rindex(';')||0
             expression[from, to-from] = ""
             this_expression = expression[start..from]
             if match[:advantage]
