@@ -468,24 +468,27 @@ module CCCB::Core::Bot
     end
 
     add_hook :core, :message do |message|
-      if message.to_channel?
-        if message.text =~ /
-          ^
-          \s*
-          (?:
-            #{message.network.nick}: \s* (?<request>.*?) 
-          |
-            (?<bang> ! ) \s* (?<request> .*? )
-          )
-          \s*
-          $
-        /x
+      request = if message.text =~ /
+        ^
+        \s*
+        (?:
+          #{message.network.nick}: \s* (?<request>.*?) 
+        |
+          (?<bang> ! ) \s* (?<request> .*? )
+        )
+        \s*
+        $
+      /x
+        if message.to_channel?
           next if $~[:bang] and not message.channel.get_setting("options", "bang_commands_enabled")
-          run_hooks :request, $~[:request], message
         end
+        $~[:request]
       else
-        run_hooks :request, message.text, message
+        next if message.to_channel?
+        message.text
       end
+
+      run_hooks :request, request, message
     end
     
     add_hook :core, :ctcp_ACTION do |message|
