@@ -313,6 +313,7 @@ class CCCB::Message
     @raw = string
     @hide = false
     @time = time || Time.now
+    @actioned = false
     
     match = set_user_data(string)
 
@@ -334,6 +335,10 @@ class CCCB::Message
 
   end
 
+  def actioned?
+    @actioned
+  end
+
   def reply(data = nil)
     @response ||= CCCB::Reply.new(self)
     unless data.nil?
@@ -345,6 +350,7 @@ class CCCB::Message
   end
 
   def send_reply(final: false)
+    @actioned = true
     unless @response.nil?
       data = @response.minimal_form
       #p data
