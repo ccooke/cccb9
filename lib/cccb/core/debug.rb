@@ -35,6 +35,13 @@ module CCCB::Core::Debugging
       end
     end
 
+    add_command :debug, "admin channel join" do |message,channels|
+      raise "Denied" unless message.user.superuser?
+      channels.each do |channel|
+        message.network.puts "JOIN #{channel}"
+      end
+    end
+
     add_command :debug, "admin channel leave" do |message,channels|
       raise "Denied" unless message.user.superuser?
       channels.each do |channel|
