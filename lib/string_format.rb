@@ -1,5 +1,5 @@
 module String::Keyreplace
-  KEYWORD_REGEX = /(?:|[^%])(%\((\w+)\))/
+  KEYWORD_REGEX = /(?:|[^%])(%\((\w+(?::[^)]+)?)\))/
 
   def keyreplace! &block
     while match = self.match( KEYWORD_REGEX )
