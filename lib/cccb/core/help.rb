@@ -271,7 +271,10 @@ module CCCB::Core::Help
         end
       end
       
-      message.reply help_expand( Array(reply).join("\n"), message )
+      message.reply.fulltext = help_expand( Array(reply).join("\n"), message )
+      if message.reply.fulltext.lines.count > 6
+        message.reply.summary = help_expand("*Cut for length* See #{server}#{full_url} for the full version")
+      end
     end
 
   end
