@@ -25,64 +25,75 @@ class CCCB::ContentServer
 		@@server
 	end
 
-	def self.restart
+  def self.shutdown
+    @@server.shutdown
+
 		ObjectSpace.each_object do |o|
-			o.shutdown if o.class == WEBrick::HTTPServer
+      next unless o.is_a? WEBrick::HTTPServer
+      o.listeners.each { |l| l.close unless l.to_io.closed? }
+      o.shutdown
 		end
 
 		@@thread.kill if @@thread.respond_to? :kill
+  end
+
+	def self.restart
+    self.shutdown
 
     delay = 1
-    10.times do
-      options = { 
-        Port: CCCB.instance.get_setting( "http_server", "port" ),
-        DoNotReverseLookup: true,
-        SSLEnable: true,
-        Logger: WEBrick::Log.new(nil,WEBrick::Log::WARN),
-        AccessLog: [
-          [ 
-            CCCB::Logger,
-            "WWW %a GET %U -> %s %b bytes"
-          ]
+    options = { 
+      Port: CCCB.instance.get_setting( "http_server", "port" ),
+      DoNotReverseLookup: true,
+      SSLEnable: true,
+      Logger: WEBrick::Log.new(nil,WEBrick::Log::WARN),
+      AccessLog: [
+        [ 
+          CCCB::Logger,
+          "WWW %a GET %U -> %s %b bytes"
         ]
-      }
-      if cert_file = CCCB.instance.get_setting("http_server", "cert_file")
-        options[:SSLCertificate] = OpenSSL::X509::Certificate.new File.read(cert_file)
-      end
-      if key_file = CCCB.instance.get_setting("http_server", "cert_key")
-        options[:SSLPrivateKey] = OpenSSL::PKey::RSA.new File.read(key_file)
-      end
-      unless options.include? :SSLCertificate and options.include? :SSLPrivateKey
-        options.delete( :SSLCertificate )
-        options.delete( :SSLPrivateKey )
-        options[:SSLCertName] = [ %w{ CN localhost } ]
-      end
-        
-      @@server = WEBrick::HTTPServer.new options
-      if @@server
-        unless options.include? :SSLCertificate and options.include? :SSLPrivateKey
-          Dir.mkdir("conf/ssl") unless Dir.exists?("conf/ssl")
-          File.write("conf/ssl/auto_generated.cert", @@server.ssl_context.cert.to_s)
-          File.write("conf/ssl/auto_generated.key", @@server.ssl_context.key.to_s)
-          CCCB.instance.set_setting("conf/ssl/auto_generated.cert","http_server","cert_file")
-          CCCB.instance.set_setting("conf/ssl/auto_generated.key","http_server","cert_key")
-        end
-        break
-      end
-      error "HTTP server did not start - sleeping a few seconds before retrying"
-      sleep delay
-      delay *= 2
+      ]
+    }
+    if cert_file = CCCB.instance.get_setting("http_server", "cert_file")
+      options[:SSLCertificate] = OpenSSL::X509::Certificate.new File.read(cert_file)
     end
-    
+    if key_file = CCCB.instance.get_setting("http_server", "cert_key")
+      options[:SSLPrivateKey] = OpenSSL::PKey::RSA.new File.read(key_file)
+    end
+    unless options.include? :SSLCertificate and options.include? :SSLPrivateKey
+      options.delete( :SSLCertificate )
+      options.delete( :SSLPrivateKey )
+      options[:SSLCertName] = [ %w{ CN localhost } ]
+    end
 
-    @@server.mount '/static', WEBrick::HTTPServlet::FileHandler, "#{CCCB.instance.basedir}/web/static/"
-		@@server.mount_proc '/' do |req, res|
-			CCCB::ContentServer.request( req, res )
-		end
+    10.times do
+      begin 
+        @@server = WEBrick::HTTPServer.new options
+        if @@server
+          unless options.include? :SSLCertificate and options.include? :SSLPrivateKey
+            Dir.mkdir("conf/ssl") unless Dir.exists?("conf/ssl")
+            File.write("conf/ssl/auto_generated.cert", @@server.ssl_context.cert.to_s)
+            File.write("conf/ssl/auto_generated.key", @@server.ssl_context.key.to_s)
+            CCCB.instance.set_setting("conf/ssl/auto_generated.cert","http_server","cert_file")
+            CCCB.instance.set_setting("conf/ssl/auto_generated.key","http_server","cert_key")
+          end
 
-		@@thread = Thread.new do
-			@@server.start
-		end
+          @@server.mount '/static', WEBrick::HTTPServlet::FileHandler, "#{CCCB.instance.basedir}/web/static/"
+          @@server.mount_proc '/' do |req, res|
+            CCCB::ContentServer.request( req, res )
+          end
+
+          @@thread = Thread.new do
+            @@server.start
+          end
+          break
+
+        end
+      rescue Exception => e
+        error "HTTP server did not start - sleeping a few seconds before retrying (Error: #{e})"
+        sleep delay
+        delay *= 2
+      end
+    end
 	end
 
 	def self.request(req,res)
@@ -177,6 +188,10 @@ module CCCB::Core::HTTPServer
   extend Module::Requirements
 
   needs :logging
+
+  def module_unload
+    
+  end
 
   def module_load
     add_setting :core, "http_server"
