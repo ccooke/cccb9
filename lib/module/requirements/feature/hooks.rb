@@ -18,14 +18,18 @@ module Module::Requirements::Feature::Hooks
       hooks.features[feature] = true
       method = top ? :unshift : :push
       raise "Attempted to redefine a unique hook" if unique and hooks.db[hook].count > 0
-      hooks.db[ hook ].send(method,
-        :feature => feature,
-        :filter => filter,
-        :source_file => call.path,
-        :source_line => call.lineno,
-        :container => call.base_label,
-        :code => block
-      )
+      hooks.lock.synchronize do 
+        id = hooks.db[hook].count
+        hooks.db[ hook ].send(method,
+          :id => id,
+          :feature => feature,
+          :filter => filter,
+          :source_file => call.path,
+          :source_line => call.lineno,
+          :container => call.base_label,
+          :code => block
+        )
+      end
     end
   end
 
