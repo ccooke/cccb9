@@ -7,6 +7,11 @@ module CCCB::Core::InfoBot
     add_setting :network, "info"
     add_setting :channel, "info"
 
+    #@doc
+    # Provides a simple information lookup system. 
+    # 'info topic' will look up any information on the topic.
+    # 'info topic = Some text' will set that topic for future lookups.
+    # 'info' will return the list of things the bot knows (or a link to the web version of this list, if on IRC).
     add_command :info, "info" do |message, args|
       text = if args[1] == '='
         target = message.to_channel? ? :channel : :network

@@ -78,6 +78,8 @@ module CCCB::Core::Ops
       end
     end
 
+    #@doc
+    # If the user is registered, sets the user to +o in the current channel
     add_command :ops, "op me" do |message|
       next unless message.to_channel?
       user_id = message.user.setting_storage_object.id
@@ -89,21 +91,12 @@ module CCCB::Core::Ops
       end
     end
 
-    add_help(
-      :ops,
-      "ops",
-      "Request #{@nick} ops you",
-      [
-        "There are two ways to get the bot to op you:",
-        "First, you can send a CTCP OP command to the",
-        "bot with your password. This will cause the",
-        "bot to op you in every channel it can see you.",
-        "The second method is to first send a CTCP ",
-        "REGISTER command with your password. Following",
-        "that, you can receive ops in any one channel",
-        "by requesting the bot to 'op me'."
-      ],
-      :ops
+    add_help_topic( 'ops',
+      "# Ops (mode +o in a channel)",
+      "(This applies only to people listed in a channel's 'ops' setting)",
+      "There are two ways to get the bot to op you:",
+      "First, you can send a CTCP OP command to the bot with your password. This will cause the bot to op you in every channel it can see you.",
+      "The second method is to first send a CTCP REGISTER command with your password. Following that, you can receive ops in any one channel by requesting the bot to 'op me'."
     )
 
 

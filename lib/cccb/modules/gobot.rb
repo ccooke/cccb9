@@ -24,6 +24,10 @@ module CCCB::Core::GoBot
   end
 
   def module_load
+    #@doc
+    # Begins a new Conversation, in which a game of Go is played
+    # Commands recognised are "showboard", "resign", "pass", and a move location
+    # Very much a work in progress.
     add_command :gobot, %w{ play go } do |message, args|
       conversation = api('conversation.new', 
         __message: message,

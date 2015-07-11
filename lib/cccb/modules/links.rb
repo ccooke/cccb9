@@ -65,23 +65,16 @@ module CCCB::Core::Links
     options["log_links"] = true unless options.include? "log_links"
     options["videotitle"] = true unless options.include? "videotitle"
 
+    #@doc
+    # The bot collects links, images and videos onto webpages.
+    # They can be found at http://midnight.blue-infinity.net/f5.php
+    # Users can disable and enable link collection for URLs they put on channel by sending a 'CTCP LOGLINKS <off/on>' command to the bot. 
+    # This module is maintained by snow.
     add_hook :links, :uri_found do |message, uri_data|
       next unless message.to_channel?
       next unless message.user.get_setting( "options", "log_links" )
       links_process_line message, uri_data
     end
 
-    add_help(
-      :links,
-      "links",
-      "Links, images and videos are collected on a webpage",
-      [
-        "The bot collects links, images and videos onto webpages.",
-        "They can be found at http://midnight.blue-infinity.net/f5.php",
-        "Users can disable and enable link collection for URLs they put on",
-        "channel by sending a 'CTCP LOGLINKS <off/on>' command to the bot.",
-        "This module is maintained by snow."
-      ]
-    )
   end
 end
