@@ -342,7 +342,7 @@ class CCCB::Message
   def reply(data = nil)
     @response ||= CCCB::Reply.new(self)
     unless data.nil?
-      @response.summary = data 
+      @response.summary = Array(data).join("\n")
       send_reply
     else
       @response
