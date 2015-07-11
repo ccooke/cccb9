@@ -6,6 +6,8 @@ module CCCB::Core::AutoCut
     default_setting 20, "options", "auto_cut_context"
     default_setting false, "options", "auto_cut_verbose"
 
+    #@doc
+    # If the auto_cut_length setting is set on the current channel, checks for messages that long (default: 512) and warns the user their message may have cut off.
     add_hook :autocut, :message do |message|
       next unless message.to_channel?
       max_length = message.channel.get_setting("options", "auto_cut_length").to_i

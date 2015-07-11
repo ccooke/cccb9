@@ -49,15 +49,23 @@ module CCCB::Core::Conversations
     conversations.lock = Mutex.new
     conversations.store ||= {}
 
+    #@doc 
+    # Begins a test conversation with the bot.
     add_command :conversation, %w{ conversation test } do |message, args|
       conversation = api('conversation.new', __message: message)
       message.reply conversation
     end
 
+    #@doc
+    # An example conversation responder
     add_hook :conversation, :conversation_generic do |conversation, text|
       conversation.reply "<in conversation #{conversation}>: #{text}"
     end
 
+    #@doc
+    # Feeds conversation messages to the bot
+    # A conversation in this case is a two-way session with the bot that
+    # has its own state and history.
     add_request :conversation, /^(.*)$/ do |match, message|
       next if message.actioned?
       conv = get_conversation(message)
@@ -66,6 +74,8 @@ module CCCB::Core::Conversations
       nil
     end
 
+    #@doc
+    # Creates a new conversation with the user who created the calling request
     register_api_method :conversation, :new do |**args|
       message = args[:__message]
       cursor = (conversations.store[message.network] ||= {})
@@ -73,6 +83,8 @@ module CCCB::Core::Conversations
       cursor[message.replyto] ||= CCCB::Conversation.new( message: message )
     end
 
+    #@doc
+    # Ends a conversation
     register_api_method :conversation, :end do |**args|
       conversation = get_conversation(args[:__message])
       next unless conversation
@@ -85,6 +97,8 @@ module CCCB::Core::Conversations
       recurrs: true,
       start_time: Time.now + 10
 
+    #@doc
+    # Times out conversations when they have not been updated in a set time
     add_hook :conversation, :conversation_cleanup  do
       conversations.lock.synchronize do 
 

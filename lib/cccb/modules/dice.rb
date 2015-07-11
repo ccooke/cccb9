@@ -404,6 +404,40 @@ module CCCB::Core::Dice
     default_setting( "_.=m#@", "options", "probability_graph_chars" )
     default_setting( 2048, "options", "dice_memory_limit" )
 
+    add_help_topic( 'dice_expressions',
+      "# Dice Expressions",
+      "## Simple expressions",
+      "The simplest expressions are of the form 'XdY + Z', where X, Y and Z are numbers. In fact, the XdY part can be left off if the die is the default for the channel - usually 1d20",
+      "## Compound expressions",
+      "Multiple rolls can be joined together, either by using (for instance) '4d6dl * 6' to make six seperate rolls of '4d6dl' or by joining rolls with a semicolon. '4d6dl; 4d6dl; 4d6dl; 4d6dl; 4d6dl; 4d6dl' is equivalent to '4d6dl * 6'.",
+      "## Modifying the default (Advantage and Disadvantage)",
+      "When using the simplest '+Z' form, taking the default die (usually a d20), the command can be modified to use either advantage (roll twice and take the highest) or disadvantage (roll twice and take the lowest). This is done by appending 'w/a' or 'w/d' to the command - e.g.: '!roll +3 w/a' '!roll +10 w/d'.",
+      "The modifier changes the default die for that roll, so it will apply even to more complex rolls, so long as they do not specify the die type, so a roll such as '!roll +3;1d10+2 w/a' will apply advantage to the +3 part, but leave the '1d10+2' alone.",
+      "## Storing presets",
+      "Any user can store presets on their own user account with the !preset command. Presets can be stored at the channel or network level, but only by users who have the rights to do so. An example preset might be '!preset attack +5; 1d10+3' to store an attack roll (+3) and the subsequent damage roll (which can be ignored if the attack fails). After this, the user who created this setting can roll their attack with '!roll attack' (and even '!roll attack w/a' or '!roll attack w/d'). Presets can be displayed by using the '!preset' command and unset with '!preset attack' (to unset a preset called 'attack').",
+      "## Modifiers",
+      "The dicebot supports many modifiers. Here are most of them:",
+      "---",
+      "| Modifier | Example | Result |",
+      "| ----- | ----- | ----- |",
+      "| f | 4df | Fudge dice |",
+      "| dlN | 4d6dl | Drops the lowest N (or 1, if it is omitted) results. |",
+      "| dhN | 4d6dl | Drops the highest N (or 1, if it is omitted) results. |",
+      "| khN | 3d10kh | Keeps only the highest N (or 1, if it is omitted) results. |",
+      "| klN | 2d4kl | Keeps only the lowest N (or 1, if it is omitted) results. |",
+      "| sN | 3d10s8 | Counts successes greater then or equal to N. |",
+      "| fN | 3d10s8f1 | Usually used with the 's' modifier. Counts values of N as -1. |",
+      "| w  | 3d10w | White Wolf. Shorthand for s10f1. |",
+      "| rN | 1d10r1 | Reroll any values of N. |",
+      "| roN | 2d6ro2 | Reroll values of N once (Currently breaks probability code). |",
+      "| ! | 4d10! | Exploding: When a die rolls the maximum, add another die (as a distinct roll). |",
+      "| !! | 4d10!! | Compounding: When a die rolls the maximum, add the roll of another die. |",
+      "| !p | 4d10!p | Penetrating: When a die rolls the maximum, subtrace 1 and add the roll of another die. |",
+      "---",
+    )
+
+    @doc
+    # Returns past rolls that the user has saved.
     add_command :dice, "dice memory show" do |message, (user)|
       message.reply( if message.user.persist[:dice_memory_saved]
         memories = message.user.persist[:dice_memory_saved].sort { |(n1,r1),(n2,r2)| 
@@ -416,6 +450,9 @@ module CCCB::Core::Dice
       end )
     end
 
+    #@doc
+    # Returns the average of a dice expression
+    # See %(help:dice_expressions) for more information
     add_command :dice, "average" do |message, (expression)|
       raise "Of what?" if expression.nil?
       default = if message.to_channel?
@@ -428,7 +465,16 @@ module CCCB::Core::Dice
       message.reply "The average of #{expression} is #{average}"
     end
       
-
+    #@doc
+    # Probability expressions
+    # Usage: 
+    # * prob [dice_expression]
+    #    - Displays a graph of the probability of the dice expression
+    # 
+    # * prob [dice_expression] [comparator] [dice_expression]
+    #    - Compares too dice expressions. Comparators can be >, >=, < or <=.
+    #    - e.g.: !prob 4d6dl > 3d6 (62.22%)
+    # See %(help:dice_expressions) for more information
     add_command :dice, "prob" do |message, (exp1, symbol, exp2)|
       raise "Of what?" if exp1.nil?
         
@@ -576,6 +622,10 @@ module CCCB::Core::Dice
       end )
     end
 
+    #@doc
+    #@param q String A dice expression
+    # Returns the result of a dice expression
+    # See %(help:dice_expressions) for more information
     register_api_method :dice, :roll do |**args|
       roller = CCCB::DieRoller.new(args[:__message], callbacks: false )
       #roller.roll(args[:q],"1d20","roll")
@@ -583,6 +633,9 @@ module CCCB::Core::Dice
     end
   
     roll_stack = {}
+    #@doc
+    # Returns the result of a dice expression
+    # See %(help:dice_expressions) for more information
     add_command :dice, [%w{toss qroll roll dmroll}] do |message, args, words|
       begin
         roll_stack[message.replyto] ||= 0
@@ -637,7 +690,19 @@ module CCCB::Core::Dice
       end
     end
 
-    add_command :dice, "history show" do |message, args|
+    #@doc
+    # Shows the stored history of dice rolls.
+    # examples: 
+    # * dice history show my last
+    #   - Show your last roll, abbreviated
+    # * dice history show my 3rd in detail
+    #   - Show your third-from last roll, in full detail
+    # * dice history show ccooke's last
+    #   - Show the last roll by user 'ccooke', abbreviated
+    # * dice history show stored foo
+    #   - Show a stored roll on my user named 'foo', abbreviated
+    # Sets the 'current' roll for this channel or query, which can be used to save the roll to a named history slot on your user object.
+    add_command :dice, "dice history show" do |message, args|
       match = /^\s*
         (?:
           (?:
@@ -750,6 +815,9 @@ module CCCB::Core::Dice
       end
     end
 
+    #@doc
+    # Displays, sets and unsets roll presets for a user
+    # See %(help:dice_expressions) for more information
     add_command :dice, "preset" do |message,args|
       target = case args[0]
       when "my"
@@ -781,7 +849,9 @@ module CCCB::Core::Dice
       message.reply user_setting( message, setting, preset )
     end
 
-    add_command :dice, "history forget" do |message, (name)|
+    #@doc
+    # Remove a named roll from your user history
+    add_command :dice, "dice history forget" do |message, (name)|
       message.reply( if message.user.persist[:dice_memory_saved]
         if message.user.persist[:dice_memory_saved][name]
           message.user.persist[:dice_memory_saved].delete name
@@ -794,7 +864,10 @@ module CCCB::Core::Dice
       end )
     end
 
-    add_command :dice, "history store" do |message, (name)|
+    #@doc
+    #@param name String A name
+    # Stores the 'current' roll (either the last result of the roll command or something recalled with the 'dice history show' command) in your user. Users have space to store ten named rolls; storing the eleventh will cause the least accessed one to fall off the list
+    add_command :dice, "dice history store" do |message, (name)|
       preset = name
       message.reply( if message.user.persist[:dice_memory_saved]
         if message.user.persist[:dice_memory_saved]["current"]

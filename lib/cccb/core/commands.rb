@@ -137,6 +137,8 @@ module CCCB::Core::Commands
       :end_hook_run
     end
 
+    #@detail
+    # Detects command requests and processes them
     add_request :core, /^(.*)$/ do |match, message|
       process_command(message, match[1])
       nil
@@ -153,14 +155,22 @@ module CCCB::Core::Commands
       #message.reply "Ambiguous command '#{pre.join " "}'. Possible commands from this base: #{enabled}"
     end
 
+    #@doc
+    # List the active commands. Note: This can be a long list!
     add_command :commands, "show commands" do |message, args|
       message.reply commands.registry.inspect
     end
 
+    #@doc
+    # Lists the currently loaded features. 
+    # Every command and api call is associated with a feature, and features can be enabled or disabled at the channel, network or global level.
     add_command :commands, "show features" do |message, args|
       message.reply hooks.features.keys.map(&:to_s).inspect
     end
 
+    #@doc
+    # Lists all hooks the bot currently knows
+    # This contains all commands, api calls and internal features - it is a *long* list.
     add_command :commands, "show hook" do |message, args|
       if args.count == 0
         message.reply hooks.db.keys.map(&:to_s).sort.join(", ")
@@ -178,6 +188,9 @@ module CCCB::Core::Commands
       end
     end
 
+    #@doc
+    # Tells the bot it is good. What, you expected more?
+    # ... The bot will say "Thank you". Does that help?
     add_command :commands, "good bot" do |message, args|
       message.reply("Thank you")
     end

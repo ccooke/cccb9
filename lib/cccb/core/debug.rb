@@ -4,11 +4,18 @@ module CCCB::Core::Debugging
   needs :bot, :commands, :logging, :persist
 
   def module_load
+    #@doc
+    # Prints its parameters back to you
     add_command :debug, "echo" do |message,args|
       message.reply.summary = args.join(" ").split("\\n").join("\n")
     end
       
+    #@doc
+    # (superuser) Adds a debug trace to a hook in the current query or channel
+    # This will cause a message to be printed by the bot every time the named hook is triggered
+    # Useful examples include 'exception' and 'request'
     add_command :debug, "admin trace add" do |message, hooks|
+      raise "Denied" unless message.user.superuser?
       default_setting true, "allowed_features", "debug_hook_trace"
       target = if message.to_channel? 
         message.channel
@@ -25,7 +32,10 @@ module CCCB::Core::Debugging
       end
     end
 
+    #@doc
+    # (superuser) Removes a debug trace from a hook
     add_command :debug, "admin trace remove" do |message, hooks|
+      raise "Denied" unless message.user.superuser?
       hooks.map(&:to_sym).each do |h|
         trace_hooks = get_hooks( :debug_hook_trace, h )
         trace_hooks.each do |tr_h|
@@ -35,6 +45,8 @@ module CCCB::Core::Debugging
       end
     end
 
+    #@doc
+    # (superuser) Tells the bot to join a named channel
     add_command :debug, "admin channel join" do |message,channels|
       raise "Denied" unless message.user.superuser?
       channels.each do |channel|
@@ -42,6 +54,8 @@ module CCCB::Core::Debugging
       end
     end
 
+    #@doc
+    # (superuser) Tells the bot to join a named channel
     add_command :debug, "admin channel leave" do |message,channels|
       raise "Denied" unless message.user.superuser?
       channels.each do |channel|
@@ -49,6 +63,8 @@ module CCCB::Core::Debugging
       end
     end
 
+    #@doc
+    # Returns the current loglevel or (superuser) sets it
     add_command :debug, "admin loglevel" do |message, (level)|
       message.reply( if level.nil?
         "System loglevel is currently #{logging.number_to_const[logging.loglevel]}"
@@ -64,6 +80,10 @@ module CCCB::Core::Debugging
       end )
     end
 
+    #@doc
+    # Returns whether a named hook is runnable
+    # A hook is runnable if it has a code block attached to it that is not disabled
+    # Every hook is associated with a feature name; enabled features are stored in the 'allowed_features' setting object on core, networks and channels
     add_command :debug, "admin hook runnable" do |message, (hook)|
       if hook_runnable? hook.to_sym, message
         message.reply "true"
@@ -72,6 +92,9 @@ module CCCB::Core::Debugging
       end
     end
 
+    #@doc
+    # (superuser) changes the debug settings for log messages that pass through named functions
+    # (Using this will slow the bot down slightly as logging becomes more expensive)
     add_command :debug, "admin log label add" do |message, (label,level)|
       auth_command :superuser, message
       raise "What label?" if label.nil?
@@ -86,6 +109,8 @@ module CCCB::Core::Debugging
       message.reply "Logging for #{label} is set to #{level.inspect}"
     end
 
+    #@doc
+    # (superuser) Remove a log level override
     add_command :debug, "admin log label remove" do |message, (label)|
       auth_command :superuser, message
       raise "What label?" if label.nil?
@@ -96,6 +121,8 @@ module CCCB::Core::Debugging
       message.reply "Logging for #{label} is set to #{level.inspect}"
     end
 
+    #@doc
+    # (superuser) Shuts down the bot immediately
     add_command :debug, "die die die" do |message|
       auth_command :superuser, message
       persist.store.save

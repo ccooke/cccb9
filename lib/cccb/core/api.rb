@@ -50,6 +50,9 @@ module CCCB::Core::APICore
   end
 
   def module_load
+    #@doc
+    #@param string string A string to be echoed back
+    # A simple echo function
     register_api_method :debug, :echo do |**args|
       detail "debug.echo called with args: #{args}"
       args[:string]

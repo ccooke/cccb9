@@ -135,6 +135,12 @@ module CCCB::Core::Session
       end
     end
 
+    #@doc
+    #@param session String The session identifier
+    #@param user String The user to log in
+    #@param password String The user's password
+    # Logs the user in (or creates a new user for them if they are new)
+    # The session is a per-network resource
     register_api_method :session, :login do |**args|
       raise "No network provided" unless args[:session].respond_to? :network
       raise "No username provided" unless args[:user]
@@ -161,6 +167,9 @@ module CCCB::Core::Session
       end
     end
 
+    #@doc
+    #@param password String The user's password
+    # Logs the user in (or creates a new user for them if they are new)
     add_command :session, "register" do |message, args|
       message.reply( if message.to_channel?
         if message.user.registered? and message.user.verify_password(args[0].join(" "))

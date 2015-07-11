@@ -23,7 +23,9 @@ module CCCB::Core::URIDetection
       verbose e
       verbose e.backtrace
     end
-
+  
+    #@doc
+    # Detects URIs and calls the 'uri_found' hook on each one
     add_hook :uri_detection, :message do |message|
       text = message.text
       next unless message.user.get_setting( "options", "uri_events" )

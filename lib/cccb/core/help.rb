@@ -7,6 +7,7 @@ module CCCB::Core::Help
   end
  
   def get_help(file,start)
+    info "Help for #{file}, #{start}"
     if $load_file_cache.include? file
       lines = $load_file_cache[file].lines
     else
@@ -21,6 +22,7 @@ module CCCB::Core::Help
 
     mode = :none
     base_info = { 
+      raw: [],
       doc: [], 
       params: {},
       detail: [],
