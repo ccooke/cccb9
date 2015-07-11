@@ -200,6 +200,21 @@ module CCCB::Core::Help
       "* [help hooks](%(help_url)/hooks) (for help on hooks)",
       "* [help api](%(help_url)/api) (for help on api functions)",
     )
+    add_help_topic( 'commands', 
+      "# Commands #",
+      "The following commands are known to the bot: ",
+      "%(list:command)"
+    )
+    add_help_topic( 'hooks', 
+      "# Hooks #",
+      "Hooks are named events that code can trigger upon. Everything in the bot is done with these events - from timers to server messages to bot commands. The list of hooks in the bot is very long, since there are hooks for every bot command, for every API call and for every internal event that the bot generates. You can get a list of the hooks with the [show hooks](/command/show hooks) command, but the list will only be generated in full on the web."
+    )
+    add_help_topic( 'api',
+      "# API #",
+      "The api consists of some calls in the bot that have been packaged up for internal and external calls. The interface is solid, but there aren't a huge number of these as yet.",
+      "The list of current API calls is:",
+      "%(list:api)"
+    )
 
     help.types = [
       'command',

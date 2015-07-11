@@ -23,20 +23,6 @@ module CCCB::Core::Choice
       message.reply( choices[ SecureRandom.random_number( choices.length ) ] )
     end
 
-    add_help(
-      :choice,
-      "choice",
-      "Randomly choose one item from a set",
-      [ 
-        "Send the bot a request of the form:",
-        "choose [ item1, [ item2, [...] ] ]?",
-        "You can break the string of items up",
-        "with 'or' or commas as you like, and",
-        "there can be any number of items to ",
-        "choose from."
-      ]
-    )
-
   end
 
 end
