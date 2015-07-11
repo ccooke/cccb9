@@ -61,7 +61,7 @@ module CCCB::Core::Help
 
   def unindent(string)
     indent = string.each_line.inject(string.length) do |i,line|
-      indent_length = string.length - string.lstrip.length
+      indent_length = line.length - line.lstrip.length
       i = if indent_length < i then indent_length else i end
     end
     string.each_line.map { |l| l[indent,-1] }.join
