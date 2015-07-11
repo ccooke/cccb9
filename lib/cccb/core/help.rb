@@ -161,21 +161,39 @@ module CCCB::Core::Help
     text
   end
 
+  def get_hooks_by_prefix(thing)
+    hooks.db.keys.select { |k| 
+      k.to_s.start_with? "#{thing}" 
+    }
+  end
+
   def help_expand(string, message = nil)
     string.keyreplace do |key|
       key = key.to_s
       case key 
+      when /^listbyfeature:(?<thing>\w*)/
+        thing = $~[:thing]
+        set = get_hooks_by_prefix(thing).map.with_object({}) do |c,h|
+          hooks.db[c.to_sym].each do |hook|
+            h[hook[:feature]] ||= []
+            h[hook[:feature]] << hook
+          end
+        end
+        set.keys.sort.map { |k|
+          "## Feature: `#{k}`\n" + set[k].sort_by { |h| h[:hook] }.map { |h|
+            name = h[:hook].to_s.gsub(/^#{thing}\//,"")
+            "1. [help](/command/help/#{h[:hook]}) [code](/command/show hook/#{h[:hook]} #{h[:id]}) `#{name}`"
+          }.join("\n")
+        }.join("\n\n")
       when /^list:(?<thing>\w+)/
         thing = $~[:thing]
-        hooks.db.keys.select { |k| 
-          k.to_s.start_with? "#{thing}/" 
-        }.map { |c| 
+        get_hooks_by_prefix(thing) .map { |c| 
           c.to_s.gsub(/^#{thing}\//,'').split('/').join(' ') 
-        }.map { |c| 
-        "[#{c}](/command/help/#{c})"
-        }.each_slice(6).map { |l| l.join(" , ") }.join("\n")
+        }.map { |c|
+        "[`#{c}`](/command/help/#{c})"
+        }.each_slice(6).map { |l| l.join(", ") }.join("\n")
       when /^help:(?<topic>.*)/
-        "[help #{$~[:topic]}](/command/help/#{$~[:topic]})"
+        "[`help #{$~[:topic]}`](/command/help/#{$~[:topic]})"
       when /^url:(?<command>[^:]+)(?::(?<args>.*))?$/
         args = $~[:args] || ""
         CCCB.instance.get_setting("http_server","url") + "/command/#{$~[:command]}/#{args}"
@@ -203,17 +221,18 @@ module CCCB::Core::Help
     add_help_topic( 'commands', 
       "# Commands #",
       "The following commands are known to the bot: ",
-      "%(list:command)"
+      "%(listbyfeature:command)"
     )
     add_help_topic( 'hooks', 
       "# Hooks #",
-      "Hooks are named events that code can trigger upon. Everything in the bot is done with these events - from timers to server messages to bot commands. The list of hooks in the bot is very long, since there are hooks for every bot command, for every API call and for every internal event that the bot generates. You can get a list of the hooks with the [show hooks](/command/show hooks) command, but the list will only be generated in full on the web."
+      "Hooks are named events that code can trigger upon. Everything in the bot is done with these events - from timers to server messages to bot commands. The list of hooks in the bot is very long, since there are hooks for every bot command, for every API call and for every internal event that the bot generates. You can get a list of the hooks with the [show hook](/command/show hook) command, but the list will only be generated in full on the web.",
+      "%(listbyfeature:)"
     )
     add_help_topic( 'api',
       "# API #",
       "The api consists of some calls in the bot that have been packaged up for internal and external calls. The interface is solid, but there aren't a huge number of these as yet.",
       "The list of current API calls is:",
-      "%(list:api)"
+      "%(listbyfeature:api)"
     )
 
     help.types = [

@@ -47,7 +47,7 @@ class CCCB::Reply
       block.join("\n") + "\n"
     end
     def codespan(code)
-      block_code(code,nil)
+      code
     end
     def bold(text)
       "\x02#{text.gsub(/x02/,"")}\x02"

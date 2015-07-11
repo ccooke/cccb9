@@ -173,16 +173,21 @@ module CCCB::Core::Commands
     add_command :commands, "show hook" do |message, args|
       if args.count == 0
         list = hooks.db.keys.map(&:to_s).sort.map { |h|
-          "1. [#{h}](/command/show hook/#{h})"
+          "1. [`#{h}`](/command/show hook/#{h})"
         }.join("\n")
         message.reply.fulltext = "# Currently loaded hooks: \n#{list}"
         message.reply.summary = "This is too long a list for IRC. Try looking at #{CCCB.instance.get_setting("http_server","url") + "/command/show hook"}"
       elsif args.count == 1
         list = hooks.db[args[0].to_sym].map.with_index do |h,i| 
-          "1. [show hook #{args[0]} #{i}](/command/show hook/#{args[0]} #{i})  \n" +
-          "Feature: #{h[:feature]} From: #{h[:source_file]}:#{h[:container]}:#{h[:source_line]}"
+          "1. [`show hook #{args[0]} #{i}`](/command/show hook/#{args[0]} #{i})  \n" +
+          "Feature: `#{h[:feature]}` From: `#{h[:source_file]}:#{h[:container]}:#{h[:source_line]}`"
         end
-        message.reply *list
+        if list.empty?
+          message.reply.summary = "There are no hooks attached to the `#{args[0]}` event at present"
+        else
+          message.reply.summary = "# hooks attached to the `#{args[0]}` event.\n" + list.join("\n")
+        end
+        message.reply.fulltext = message.reply.summary + "\n\n- - -\n[Hook list](/command/show hook)"
       else args.count == 2
         hook = hooks.db[args[0].to_sym].find do |h| 
           h[:id] == args[1].to_i
@@ -193,7 +198,7 @@ module CCCB::Core::Commands
         ].map { |l| l.gsub(/^/, '    ') }
 
         full = [
-          "# Source for hook #{args[0]} (from #{hook[:source_file]}:#{hook[:source_line]})", 
+          "# Source for hook `#{args[0]}` (from `#{hook[:source_file]}:#{hook[:source_line]}`)", 
           *source
         ]
         message.reply.fulltext = full.join("\n")
@@ -204,6 +209,7 @@ module CCCB::Core::Commands
       end
     end
 
+    info "Minimal form for #{self.inspect}"
     #@doc
     # Tells the bot it is good. What, you expected more?
     # ... The bot will say "Thank you". Does that help?

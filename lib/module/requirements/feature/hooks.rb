@@ -22,6 +22,7 @@ module Module::Requirements::Feature::Hooks
         id = hooks.db[hook].count
         hooks.db[ hook ].send(method,
           :id => id,
+          :hook => hook,
           :feature => feature,
           :filter => filter,
           :source_file => call.path,

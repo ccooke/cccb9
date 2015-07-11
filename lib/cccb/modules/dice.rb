@@ -420,7 +420,7 @@ module CCCB::Core::Dice
       "---",
       "| Modifier | Example | Result |",
       "| ----- | ----- | ----- |",
-      "| f | 4df | Fudge dice |",
+      "| f | 4df | Fudge/FATE dice |",
       "| dlN | 4d6dl | Drops the lowest N (or 1, if it is omitted) results. |",
       "| dhN | 4d6dl | Drops the highest N (or 1, if it is omitted) results. |",
       "| khN | 3d10kh | Keeps only the highest N (or 1, if it is omitted) results. |",
