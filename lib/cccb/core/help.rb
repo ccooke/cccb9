@@ -71,26 +71,132 @@ module CCCB::Core::Help
     true
   end
 
-  def hook_description(hook)
-    unindent case hook
-    when /^api\//
-    when /^command\//
-    else
-      str = <<-EOF
-        # Hook '#{hook}'
-        Active hooks with this name:
-      EOF
+  def get_hook_by_type(type, topic)
+    case type
+    when 'command'
+      "command/#{topic.join("/")}".to_sym
+    when 'hook'
+      topic.first.to_sym
+    when 'api'
+      "api/#{topic.first}".to_sym
+    else 
+      nil
     end
+  end
+
+  def get_help_by_type(type, topic)
+    return "No help exists for that topic. Try the %(help:index)" unless help_for_type?( type, topic )
+    args = {
+      hook: get_hook_by_type(type, topic)
+    }
+    if topic.first =~ /^\d+$/
+      args[:id] = topic.first.to_i
+    end
+
+    api :"core.help", **args
+  end
+
+  def help_for_type?(type, topic)
+    hook_name = get_hook_by_type(type, topic)
+    debug("Looking up help for #{hook_name.inspect}")
+    hooks.db.include? hook_name
+  end
+
+  def hook_description(hook, index = nil)
+    hook_str = hook.to_s
+    text = case hook_str
+    when /^api\//
+      hook_str = hook_str.gsub(/^api\//, "")
+      [
+        "# API call '#{hook_str}'"
+      ]
+    when /^command\//
+      hook_str = hook_str.gsub(/^command\//,"").split("/").join(" ")
+      [
+        "# Command '#{hook_str}'"
+      ]
+    else
+      [
+        "# Hook '#{hook}'",
+      ]
+    end 
+
+    count = hooks.db[hook].count
+    if count > 1 and index.nil?
+      text << "*This hook has #{count} implementations*"
+      text << "Each will run in turn"
+    end
+    hooks.db[hook].map.with_index do |h,i|
+      next if index and index != i
+      help = get_help(h[:source_file], h[:source_line])
+      if count > 1 and index.nil?
+        text << "### Summary for %(help:#{hook} #{i}) (from #{h[:source_file]}:#{h[:source_line]})"
+        mode = :doc
+      elsif index
+        text << "### Synopsis for %(help:#{hook} #{i}) (from #{h[:source_file]}:#{h[:source_line]})"
+        mode = :detail
+      else
+        text << "## Synopsis"
+        mode = :detail
+      end
+      if help[mode].empty?
+        text << "There is no documentation here yet"
+      else
+        text << help[mode]
+      end
+      if help[:params].count > 0 and (index or count == 1)
+        text << "- - -"
+        text << "| Argument | Type | Usage |"
+        text << "| ----- | ----- | ----- |"
+        help[:params].each do |pn,pm|
+          text << "| #{pn} | #{pm[:type]} | #{pm[:text]} |"
+        end
+        text << "- - -"
+      end
+    end
+
+    text
+  end
+
+  def help_expand(string, message = nil)
+    string.keyreplace do |key|
+      key = key.to_s
+      case key 
+      when /^help:(?<topic>.*)/
+        "[help #{$~[:topic]}](/command/help/#{$~[:topic]})"
+      when :help_url
+        '/command/help'  
+      else
+        '<<Unknown expansion>>'
+      end
+    end
+  end
+
+  def add_help_topic(topic,*text)
+    help.topics[topic.to_s] = text
   end
 
   def module_load
     help.topics = {}
+    add_help_topic( 'index',
+      "# Help Index #",
+      "You can get help on several topics. Try:",
+      "* [help commands](%(help_url)/commands) (for help on commands)",
+      "* [help hooks](%(help_url)/hooks) (for help on hooks)",
+      "* [help api](%(help_url)/api) (for help on api functions)",
+    )
+
+    help.types = [
+      'command',
+      'hook',
+      'api'
+    ]
     
     #@doc
-    #@param hook The name of a hook in the bot
-    #@param id (default: nil) 
+    #@param hook string The name of a hook in the bot
+    #@param id integer (default: nil) An index into the hook list
     # Returns the help
-    register_api_method :help, :doc do |**args|
+    register_api_method :core, :help do |**args|
       raise "Missing hook" unless args.include? :hook
       hook = args[:hook].to_sym
       if args.include? :id
@@ -99,95 +205,44 @@ module CCCB::Core::Help
         help = get_help(hook[:source_file], hook[:source_line])
         hook_description_detail hook, help
       else
-        hook_description hook 
+        hook_description hook, id
       end
     end
 
-    add_command :help, "help" do |message, (type, topic, number)|
-      if topic 
-        
+    #@doc
+    #@param type string A category to look for the topic in. Choices include 'command', 'hook' and 'api'
+    #@param topic string A topic to look for help on.
+    # Usage: help [topic] | [type [topic]]
+    # Displays help on various topics 
+    add_command :help, "help" do |message, args|
+      server = CCCB.instance.get_setting("http_server", "url")
+      help_url="/command/help"
+      full_url = help_url + "/" + args.join("/")
+      if args.count == 0
+        topic = ['index']
+      elsif args.count == 1
+        topic = args
+      elsif args.count == 2 and help.types.include? args.first
+        type, *topic = args
       else
-        #message.reply "See #{CCCB.instance.get_setting("http_server","url")}/network/#{message.network}/help/#{topic}"
-        message.reply [ 
-        ]
+        topic = args
       end
-    end
+      string_topic = topic.join(" ")
 
-    add_help(
-      :help,
-      "cccb8",
-      "What is cccb8?",
-      [ 
-        "cccb8 is an IRC bot written in Ruby by ccooke.",
-        "It is currently at version #{CCCB::VERSION}"
-      ],
-      :info
-    )
-
-    add_help(
-      :help,
-      "requests",
-      "Making requests of the bot",
-      [
-        "When making a request in a channel, always prefix",
-        "the name of the bot - for instance: ",
-        "<user> #{nick}: one or two?",
-        "If you are in a query with the bot, you need no prefix."
-      ],
-      :info
-    )
-
-    add_help(
-      :help,
-      "reload",
-      "Reloading the bot",
-      [
-        "Sending the bot a CTCP RELOAD command causes it",
-        "to halt all action, unload all files and plugins",
-        "and reload itself entirely."
-      ],
-      :superuser
-    )
-
-    CCCB::ContentServer.add_keyword_path('help') do |session,match|
-      features = session.network.get_setting("allowed_features").dup
-      core_features = CCCB.instance.get_setting("allowed_features")
-      core_features.each do |f,enabled|
-        features[f] = enabled if enabled and not features.include? f
-      end
-
-      url = if session.network.name == "__httpserver__" then "/help/" else "/network/#{session.network.name}/help/" end
-      local_topics = help.topics.each_with_object({}) do |(name,topic),hash| 
-        detail2 "Topic: #{name} => #{topic}. My features: #{features}"
-        hash[name] = topic if features.include? topic[:feature].to_s and features[topic[:feature].to_s]
-      end
-
-      if match[:call] and local_topics.include? match[:call]
-        {
-          title: "Help topic: #{match[:call]}",
-          blocks: [
-            [ :content, 
-              local_topics[match[:call].to_s][:text].map { |line|
-                line = CGI::escapeHTML(line)
-                line.split(/\s+/).map { |word|
-                  if local_topics.include? word
-                    "<a href=\"#{url}#{word}\">#{word}</a>"
-                  else
-                    word
-                  end
-                }.join(" ")
-              }.join("<br/>")
-            ],
-            [ :nav, "Return to <a href=\"#{url}\">index</a>" ],
-          ]
-        }
+      reply = if type
+        get_help_by_type(type, topic)
+      elsif help.topics.include? string_topic
+        help.topics[string_topic]
       else
-        {
-          title: "Index of help pages",
-          template: :help_index,
-          topics: local_topics
-        }
+        if type = ['command', 'hook', 'api' ].find { |t| help_for_type? t, topic }
+          get_help_by_type(type, topic)
+        else
+          get_help_by_type(nil, topic)
+        end
       end
+      
+      message.reply help_expand( Array(reply).join("\n"), message )
     end
+
   end
 end
