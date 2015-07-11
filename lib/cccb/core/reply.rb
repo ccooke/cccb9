@@ -1,8 +1,34 @@
-gem 'redcarpet', '<=3.2.0'
+gem 'redcarpet' #, '<=3.2.0'
 require 'redcarpet'
 
 class CCCB::Reply
   class IRCRender < Redcarpet::Render::Base
+    COLOURS = {
+      white:        '00',
+      black:        '01',
+      blue:         '02',
+      green:        '03',
+      red:          '04',
+      brown:        '05',
+      purple:       '06',
+      orange:       '07',
+      yellow:       '08',
+      light_green:  '09',
+      teal:         '10',
+      cyan:         '11',
+      light_blue:   '12',
+      pink:         '13',
+      grey:         '14',
+      light_grey:   '15',
+      default:      '99'
+    }
+
+    COLOURS.each do |k,v|
+      define_method(k) do |text|
+        "\x03#{v}#{text}\x03"
+      end
+    end
+
     def normal_text(text)
       text
     end
@@ -63,7 +89,7 @@ class CCCB::Reply
       "\u0000L#{type}#{content}\n"
     end
     def link(link,title,content)
-      content
+      light_blue(underline(content))
     end
     def postprocess(data)
       lists = []
@@ -86,7 +112,10 @@ class CCCB::Reply
       end
       parsed + data
     end
-    def table(*rows)
+    def table(header, rowdata)
+      header.gsub!(/\u0000t$/,"")
+      rows = [ header, *rowdata.split("\u0000t") ]
+      #info "TABLE: #{rows.inspect}"
       table = []
       max_width = []
       rows.each do |r|
@@ -114,9 +143,11 @@ class CCCB::Reply
       output
     end
     def table_row(*args)
-      args[0]
+      #info("TR: #{args.inspect}")
+      args[0] + "\u0000t"
     end
     def table_cell(*args)
+      #info("TC: #{args.inspect}")
       "#{args[0]}\u0000T"
     end
     
