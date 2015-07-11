@@ -18,18 +18,21 @@ require 'cccb/irc'
 
 $load_time = Time.now
 $load_errors = []
+$load_file_cache ||= {}
 print_loading = $VERBOSE || $DEBUG;
 
 [ "lib/module/requirements/feature", "lib/cccb/core", "lib/cccb/modules" ].each do |dir|
   Dir.new(dir).select { |f| f.end_with? '.rb' }.each do |file|
+    filepath = "#{dir}/#{file}"
     begin
-      Kernel.load("#{dir}/#{file}")
+      Kernel.load filepath
+      $load_file_cache[filepath] = File.read(filepath)
     rescue Exception => e
-      puts "Failed to load #{dir}/#{file}: #{e.message}"
-      $load_errors << "#{dir}/#{file}: #{e.message}"
+      puts "Failed to load #{filepath}: #{e.message}"
+      $load_errors << "#{filepath}: #{e.message}"
       next
     end
-    puts "Loaded #{dir}/#{file}..." if print_loading
+    puts "Loaded #{filepath}..." if print_loading
   end
 end
 

@@ -7,12 +7,14 @@ module CCCB::Core::Help
   end
  
   def get_help(file,start)
-    lines = File.read(file).lines
+    if $load_file_cache.include? file
+      lines = $load_file_cache[file].lines
+    else
+      lines = File.read(file).lines
+    end
     help_markup = []
     seek = start - 2
-    info "AT: #{lines[seek]}"
     while seek >= 0 and lines[seek].match(/^\s+#/)
-      info "Add #{lines[seek]}"
       help_markup.unshift lines[seek].chomp
       seek -= 1
     end
