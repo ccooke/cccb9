@@ -22,6 +22,7 @@ module CCCB::Core::Help
     mode = :none
     base_info = { 
       doc: [], 
+      params: {},
       detail: [],
       file: file,
       line: start,
@@ -29,15 +30,13 @@ module CCCB::Core::Help
     }
     help_markup[0..-1].each_with_object(base_info) do |line,h|
       line.gsub! /^\s*# ?/, ''
-      info "HT: #{line}"
-      if line.match /^\s*@(doc|detail|param)\z/
+      if line.match /^\s*@(doc|detail|param)(?:\s.*|)$/
         if line.match /^\s*@doc/
           mode = :doc
         elsif match = line.match(/^\s*@detail(?:\s+(?<text>.*))?$/)
           mode = :detail
           h[:doc] << match[:text] if match[:text]
         elsif match = line.match(/^\s*@param\s+(?<param>\w+)\s+(?<type>\w+)\s+(?<help>.*?)\s*$/)
-          h[:params] ||= {}
           h[:params][match[:param]] = {
             type: match[:type],
             text: match[:help]
@@ -47,6 +46,8 @@ module CCCB::Core::Help
         end
         next
       end
+
+      line = line + "  " unless line =~ /^\s*$/
 
       case mode
       when :doc
