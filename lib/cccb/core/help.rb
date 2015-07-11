@@ -31,7 +31,8 @@ module CCCB::Core::Help
       code: get_code(file,start)
     }
     help_markup[0..-1].each_with_object(base_info) do |line,h|
-      line.gsub! /^\s*# ?/, ''
+      h[:raw] << line
+      line = line.gsub /^\s*# ?/, ''
       if line.match /^\s*@(doc|detail|param)(?:\s.*|)$/
         if line.match /^\s*@doc/
           mode = :doc
@@ -164,12 +165,24 @@ module CCCB::Core::Help
     string.keyreplace do |key|
       key = key.to_s
       case key 
+      when /^list:(?<thing>\w+)/
+        thing = $~[:thing]
+        hooks.db.keys.select { |k| 
+          k.to_s.start_with? "#{thing}/" 
+        }.map { |c| 
+          c.to_s.gsub(/^#{thing}\//,'').split('/').join(' ') 
+        }.map { |c| 
+        "[#{c}](/command/help/#{c})"
+        }.each_slice(6).map { |l| l.join(" , ") }.join("\n")
       when /^help:(?<topic>.*)/
         "[help #{$~[:topic]}](/command/help/#{$~[:topic]})"
-      when :help_url
+      when /^url:(?<command>[^:]+)(?::(?<args>.*))?$/
+        args = $~[:args] || ""
+        CCCB.instance.get_setting("http_server","url") + "/command/#{$~[:command]}/#{args}"
+      when "help_url"
         '/command/help'  
       else
-        '<<Unknown expansion>>'
+        "<<Unknown expansion: #{key.inspect}>>"
       end
     end
   end
