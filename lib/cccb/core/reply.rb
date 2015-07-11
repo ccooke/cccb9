@@ -33,13 +33,16 @@ class CCCB::Reply
       text
     end
     def block_code(code,language = nil)
+      info "CODE: #{code.inspect}"
       block = if language 
-        [ "|== #{italic code} ==", ] 
+        title = code
+        code = language
+        [ "|== #{italic title} ==", ] 
       else
         []
       end
       block += normal_text(code).each_line.map do |l|
-        l.strip.gsub /^/, '| '
+        l.gsub /^    /, '| '
       end
       block.join("\n") + "\n"
     end
@@ -47,22 +50,22 @@ class CCCB::Reply
       block_code(code,nil)
     end
     def bold(text)
-      "\x02#{text}\x02"
+      "\x02#{text.gsub(/x02/,"")}\x02"
     end
     def reverse(text)
-      "\x16#{text}\x16"
+      "\x16#{text.gsub(/x16/,"")}\x16"
     end
     def italic(text)
-      "\x06#{text}\x06"
+      "\x06#{text.gsub(/x06/,"")}\x06"
     end
     def underline(text)
-      "\x1f#{text}\x1f"
+      "\x1f#{text.gsub(/x1f/,"")}\x1f"
     end
     def header(title,level)
       case level
       when 1 then text = underline(bold(title))
-      when 2 then text = underline(italic(title))
-      when 3 then text = underline(title)
+      when 2 then text = underline(title)
+      when 3 then text = reverse(title)
       when 4 then text = italic(title)
       else
         text = title
@@ -76,7 +79,7 @@ class CCCB::Reply
       italic text
     end
     def linebreak
-      "\n"
+      " \n"
     end
     def paragraph(text)
       text + "\n"
