@@ -21,14 +21,13 @@ module CCCB::Core::Commands
     )
   /x
 
-  def get_code(file,line,banner = nil)
+  def get_code(file,line)
     lines = File.read(file).lines
     indent = lines[line - 1].index /[^[:space:]]/
     length = lines[line,lines.length].find_index { |l| l.index(/[^[:space:]]/) == indent }
-    t = [ '## ' + (banner || "#{file}:#{line}") ] + lines[line-1,length+2].map(&:rstrip).map { |l| "    #{l}" }
-    debug t
-    t
+    lines[line-1,length+2].map(&:rstrip)
   end
+
   def expand_words(list)
     list = Array(list)
     arrays,non_arrays = list.partition { |i| i.respond_to? :each }
@@ -173,18 +172,35 @@ module CCCB::Core::Commands
     # This contains all commands, api calls and internal features - it is a *long* list.
     add_command :commands, "show hook" do |message, args|
       if args.count == 0
-        message.reply hooks.db.keys.map(&:to_s).sort.join(", ")
+        list = hooks.db.keys.map(&:to_s).sort.map { |h|
+          "1. [#{h}](/command/show hook/#{h})"
+        }.join("\n")
+        message.reply.fulltext = "# Currently loaded hooks: \n#{list}"
+        message.reply.summary = "This is too long a list for IRC. Try looking at #{CCCB.instance.get_setting("http_server","url") + "/command/show hook"}"
       elsif args.count == 1
-        id = 0
-        message.reply hooks.db[args[0].to_sym].map { |h| "<Hook: #{args[0]} id: #{h[:id] = id += 1} Feature: #{h[:feature]} From: #{h[:source_file]}:#{h[:container]}:#{h[:source_line]}>" }
+        list = hooks.db[args[0].to_sym].map.with_index do |h,i| 
+          "1. [show hook #{args[0]} #{i}](/command/show hook/#{args[0]} #{i})  \n" +
+          "Feature: #{h[:feature]} From: #{h[:source_file]}:#{h[:container]}:#{h[:source_line]}"
+        end
+        message.reply *list
       else args.count == 2
-        id = 0
         hook = hooks.db[args[0].to_sym].find do |h| 
-          h[:id] ||= id += 1; 
           h[:id] == args[1].to_i
         end
-        message.reply get_help(hook[:source_file],hook[:source_line])
-        message.reply get_code(hook[:source_file],hook[:source_line])
+        source = [
+          *get_help(hook[:source_file],hook[:source_line])[:raw],
+          *get_code(hook[:source_file],hook[:source_line])
+        ].map { |l| l.gsub(/^/, '    ') }
+
+        full = [
+          "# Source for hook #{args[0]} (from #{hook[:source_file]}:#{hook[:source_line]})", 
+          *source
+        ]
+        message.reply.fulltext = full.join("\n")
+
+        if source.count > 6
+          message.reply.summary = "This is too long for IRC. Try looking at #{CCCB.instance.get_setting("http_server","url") + "/command/show hook/#{args.join(" ")}"}"
+        end
       end
     end
 
@@ -196,7 +212,8 @@ module CCCB::Core::Commands
     end
 
     servlet = Proc.new do |session, match|
-      command = match[:call].split('/').join(' ')
+      split = match[:call].partition('/')
+      command = split[0] + " " + split[2]
       output_queue = Queue.new
       message = session.message
       message.instance_variable_set(:@content_server_strings, output_queue)
