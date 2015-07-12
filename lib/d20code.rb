@@ -609,10 +609,10 @@ module Dice
 
     def resolve_subexpressions(options)
       while match = @string.match( SUBEXPRESSION )
-        info "Subexpression: #{match[:expression]}"
+        spam "Subexpression: #{match[:expression]}"
         roller = self.class.new(match[:expression], options)
         roller.roll
-        info "Result: #{roller.value}. STR: #{@string.inspect} OFFSET: #{match.offset(0)}"
+        debug "Subexpression result: #{roller.value}. STR: #{@string.inspect} OFFSET: #{match.offset(0)}"
         @string = match.pre_match + (roller.value || 0).to_s + match.post_match
       end
     end
@@ -622,7 +622,7 @@ module Dice
       items = []
       while match = string.match( regex, index )
         term = match.names.each_with_object({}) { |n,h| h[n.to_sym] = match[n] unless match[n].nil? }
-        info "Match: #{term.inspect}"
+        detail "Match: #{term.inspect}"
 
         items << term
         index = match.end(0)
@@ -691,8 +691,8 @@ module Dice
                 t
               end
             end
-            info "MODS: #{modifiers}"
-            info options.inspect
+            detail "MODS: #{modifiers}"
+            detail2 options.inspect
             tokenize( MODIFIER_TERMS, modifiers ).map { |m| Die::Modifier.gen( m, options[:size], options[:modifiers] ) }
             Die.new options
           end
@@ -705,7 +705,7 @@ module Dice
     end
 
     def value
-      info @terms
+      detail @terms
       @terms.inject(0) do |i,t|
         i.send(t.math_symbol, t.value)
       end
