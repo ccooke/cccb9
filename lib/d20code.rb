@@ -469,7 +469,7 @@ module Dice
       end
 
       def value
-        @value.inject(:+)
+        @value.inject(:+) || 0
       end
 
       def output( callbacks, callback_to_use = :die )
@@ -517,11 +517,13 @@ module Dice
 
     EXPRESSION_BASE = %r{
       (?<conditional>     > | < | = |                                                     ){0}
-      (?<paren_expression> \( (?: (?> [^()]+ ) | \g<paren_expression> )* \)               ){0}
+      (?<paren_inner>     [^()]* | \g<paren_expression>                                   ){0}
+      (?<paren_expression> \( \g<paren_inner>*  \)                                        ){0}
       (?<mod_nonzero>     [0-9]\d* | (?<mod_subexpression> \g<paren_expression> )         ){0}
       (?<die_nonzero>     [0-9]\d* | (?<die_subexpression> \g<paren_expression> )         ){0}
       (?<dc_nonzero>      [0-9]\d* | (?<dc_subexpression> \g<paren_expression> )          ){0}
-      (?<con_nonzero>      [0-9]\d* | (?<con_subexpression> \g<paren_expression> )          ){0}
+      (?<con_nonzero>     [0-9]\d* | (?<con_subexpression> \g<paren_expression> )         ){0}
+      (?<cnt_nonzero>     [0-9]\d* | (?<cnt_subexpression> \g<paren_expression> )         ){0}
       (?<condition>       \g<conditional> \s* (?<condition_number> \g<mod_nonzero> )      ){0}
       (?<keep_highest>    kh | k                                                          ){0}
       (?<keep_lowest>     kl                                                              ){0}
@@ -549,7 +551,7 @@ module Dice
 
       (?<mathlink>        \+ | -                                                          ){0}
 
-      (?<die>    (?<count> \g<die_nonzero> )? \s* d \s* \g<die_size> \s* \g<decoration>? \s* \g<die_modifiers>?){0}
+      (?<die>    (?<count> \g<cnt_nonzero> )? \s* d \s* \g<die_size> \s* \g<decoration>? \s* \g<die_modifiers>?){0}
 
       (?<constant>        (?<constant_number> \g<con_nonzero> )                           ){0}
 
@@ -579,6 +581,14 @@ module Dice
       \s* \g<die_modifier> \s*
     }ix
 
+    SUBEXPRESSION = %r{
+      (?<paren> 
+        \(
+          (?<expression> [^()]* )
+        \)
+      )
+    }ix
+
     def initialize(string, options = {})
       @default = options[:default] || "+ 1d20"
       @default = @default.gsub(/\s+/, '')
@@ -591,19 +601,30 @@ module Dice
       unless expression.start_with? '+' or expression.start_with? '-'
         expression = '+' + expression
       end
-      #p expression
-      if PAREN_EXPRESSION.match( expression )
-        expression.gsub!( /^\s*([-+])\s*\(\s*(.*?)\s*\)\s*$/, "\\1\\2" )
-      end
+      verbose "New Expression: #{expression}"
       @string = expression
+      self.resolve_subexpressions(options)
       @terms = parse
+    end
+
+    def resolve_subexpressions(options)
+      while match = @string.match( SUBEXPRESSION )
+        info "Subexpression: #{match[:expression]}"
+        roller = self.class.new(match[:expression], options)
+        roller.roll
+        info "Result: #{roller.value}. STR: #{@string.inspect} OFFSET: #{match.offset(0)}"
+        @string = match.pre_match + (roller.value || 0).to_s + match.post_match
+      end
     end
 
     def tokenize(regex, string)
       index = 0
       items = []
       while match = string.match( regex, index )
-        items << match
+        term = match.names.each_with_object({}) { |n,h| h[n.to_sym] = match[n] unless match[n].nil? }
+        info "Match: #{term.inspect}"
+
+        items << term
         index = match.end(0)
       end
       unless index == string.length
@@ -643,13 +664,6 @@ module Dice
             sub.roll
             sub.value
           end
-          count_subexpression = if term[:con_subexpression]
-            sub = Dice::Parser.new(term[:con_subexpression])
-            @subexpressions << sub
-            sub.roll
-            #p "Found a constant subexpression: ", sub
-            sub.value
-          end
           options = {
             penetrating: !!term[:penetrating],
             compounding: !!term[:compounding],
@@ -659,7 +673,7 @@ module Dice
             math_symbol: term[:mathlink].to_sym,
             string: term[:dice_string],
             
-            count: (count_subexpression || term[:count] || 1).to_i,
+            count: (term[:count] || 1).to_i,
           }
           if term[:fudge]
             FudgeDie.new options
@@ -668,21 +682,17 @@ module Dice
             options[:modifiers] = []
             modifiers = term[:die_modifiers].gsub(/[wx](?:\d*)/) do |t|
               case t
-              when 'x'
-                "s#{die_size}"
-              when /^x(\d+)/ 
-                "s=#{die_size}s#{$1}"
-              when 'w' 
+              when /^x(\d+)?/
+                "s#{die_size}" + if $1 then "s#{$1}" else "" end
+              when /^w(\d+)?/ 
                 options[:exploding] = true
-                'f=1s8'
-              when /^w(\d+)/ 
-                options[:exploding] = true
-                "f=1s#{$1}"
+                "f=1" + if $1 then "s#{$1}" else "s8" end
               else
                 t
               end
             end
             info "MODS: #{modifiers}"
+            info options.inspect
             tokenize( MODIFIER_TERMS, modifiers ).map { |m| Die::Modifier.gen( m, options[:size], options[:modifiers] ) }
             Die.new options
           end
@@ -695,6 +705,7 @@ module Dice
     end
 
     def value
+      info @terms
       @terms.inject(0) do |i,t|
         i.send(t.math_symbol, t.value)
       end
