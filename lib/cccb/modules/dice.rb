@@ -186,7 +186,7 @@ class CCCB::DieRoller
   end
 
   def dice_string(expression, default)
-    verbose "Roll #{expression.inspect}, default #{default.inspect}"
+    detail "Roll #{expression.inspect}, default #{default.inspect}"
     parser = if @expression_cache.include? expression
       @expression_cache[expression]
     else
@@ -229,7 +229,6 @@ class CCCB::DieRoller
       catch :reroll do
         expression_count = 0
         while expression_count < 30 and expr = expressions.shift
-          puts expr
           catch :next_expression do
             if ( expression_count += 1 ) == 30
               rolls << { type: :note, text: "Expressions after the 30th will not be evaluated" }
