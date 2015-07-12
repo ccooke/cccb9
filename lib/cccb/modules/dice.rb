@@ -427,12 +427,13 @@ module CCCB::Core::Dice
       "| klN | 2d4kl | Keeps only the lowest N (or 1, if it is omitted) results. |",
       "| sN | 3d10s8 | Counts successes greater then or equal to N. |",
       "| fN | 3d10s8f1 | Usually used with the 's' modifier. Counts values of N as -1. |",
-      "| w  | 3d10w | White Wolf. Shorthand for s10f1. |",
       "| rN | 1d10r1 | Reroll any values of N. |",
       "| roN | 2d6ro2 | Reroll values of N once (Currently breaks probability code). |",
       "| ! | 4d10! | Exploding: When a die rolls the maximum, add another die (as a distinct roll). |",
       "| !! | 4d10!! | Compounding: When a die rolls the maximum, add the roll of another die. |",
       "| !p | 4d10!p | Penetrating: When a die rolls the maximum, subtrace 1 and add the roll of another die. |",
+      "| w  | 3d10w | White Wolf. Shorthand for !f1s8. (Exploding, fail on 1 (-1), success on 8 or more (+1)). |",
+      "! wN | 7d10s6 | White Wolf style roll, but with success on N rather than the default 8. |",
       "---",
     )
 

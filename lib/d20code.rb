@@ -531,10 +531,11 @@ module Dice
       (?<drop>            (\g<drop_highest> | \g<drop_lowest>) (?<drop_num> \g<mod_nonzero> )?){0}
       (?<failure>         f \s* \g<condition>?                                            ){0}
       (?<success>         s \s* \g<condition>?                                            ){0}
-      (?<wolf>            w \s* \g<condition>                                             ){0}
+      (?<wolf>            ww | w \s* \g<condition>?                                       ){0}
+      (?<xxx>             x \s* \g<condition>?                                            ){0}
       (?<reroll>          (?: (?<reroll_once> ro ) | r(?!o) ) \s* \g<condition>?               ){0}
 
-      (?<die_modifier> \g<drop> | \g<keep> | \g<reroll> | \g<success> | \g<failure> | \g<wolf> ){0}
+      (?<die_modifier> \g<drop> | \g<keep> | \g<reroll> | \g<success> | \g<failure> | \g<wolf> | \g<xxx> ){0}
       (?<die_modifiers>   \g<die_modifier>*                                               ){0}
       (?<penetrating>     !p                                                              ){0}
       (?<compounding>     !!                                                              ){0}
@@ -665,7 +666,23 @@ module Dice
           else
             options[:size] = die_size
             options[:modifiers] = []
-            modifiers = term[:die_modifiers].gsub(/w/, 'f=1s=10s')
+            modifiers = term[:die_modifiers].gsub(/[wx](?:\d*)/) do |t|
+              case t
+              when 'x'
+                "s#{die_size}"
+              when /^x(\d+)/ 
+                "s=#{die_size}s#{$1}"
+              when 'w' 
+                options[:exploding] = true
+                'f=1s8'
+              when /^w(\d+)/ 
+                options[:exploding] = true
+                "f=1s#{$1}"
+              else
+                t
+              end
+            end
+            info "MODS: #{modifiers}"
             tokenize( MODIFIER_TERMS, modifiers ).map { |m| Die::Modifier.gen( m, options[:size], options[:modifiers] ) }
             Die.new options
           end
