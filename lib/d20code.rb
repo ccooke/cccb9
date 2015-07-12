@@ -200,15 +200,25 @@ module Dice
         class Reroll < Conditional
           attr_reader :max_rerolls
 
+          def reset
+            @rerolls = 0
+            super
+          end
+
           def initialize(match,size, max_rerolls: 1000 )
             @max_rerolls = max_rerolls
+            @rerolls = 0
             number = match[:condition_number].to_i
             #p match
             init_condition( match[:conditional], number || 1 )
           end
 
+          def add_reroll
+            @rerolls += 1
+          end
+
           def applies?(number)
-            if @matches > @max_rerolls
+            if @rerolls >= @max_rerolls
               false
             else
               super
@@ -330,7 +340,7 @@ module Dice
         @rolls = Hash.new(0)
         @reroll_modifiers = @modifiers.select { |m| m.is_a? Modifier::Reroll }
         @fun_modifiers = @modifiers.select { |m| not (m.is_a? Modifier::Reroll) }
-        safe = (1..@size).select { |r| @reroll_modifiers.none? { |m| m.reroll_with? r } }
+        safe = (1..@size).select { |r| @reroll_modifiers.none? { |m| m.reroll_with? r and m.max_rerolls > 1 } }
         if safe.empty?
           raise Dice::Parser::Error.new( "Invalid reroll rules: No die roll is possible" )
         end
@@ -338,6 +348,10 @@ module Dice
           #p self
           raise Dice::Parser::Error.new( "Pathological expression: Reroll and Explode rules overlap" )
         end
+      end
+
+      def has_reroll_once?
+        @reroll_modifiers.any? { |m| m.max_rerolls == 1 }
       end
 
       def explode?(number)
@@ -416,6 +430,7 @@ module Dice
             #puts "Roll #{rolls} of #{count}" if $DEBUG
             this_roll = roll_die
             number += this_roll
+            #info "ROLL: #{this_roll} (SUM: #{number})"
             #puts "Rolled a #{this_roll}. Total is now #{number}" if $DEBUG
 
             if explode? this_roll
@@ -432,7 +447,7 @@ module Dice
               end
             end
             
-            if @modifiers.select { |m| m.is_a? Modifier::Reroll }.any? { |m| m.applies? number }
+            if @modifiers.select { |m| m.is_a? Modifier::Reroll }.any? { |m| m.applies? number and m.add_reroll }
               number = 0
               throw :reroll
             end
@@ -571,9 +586,9 @@ module Dice
     }ix
 
     def initialize(string, options = {})
+      @options = options
       @default = options[:default] || "+ 1d20"
       @default = @default.gsub(/\s+/, '')
-      @subexpressions = []
       unless @default.start_with? '-' or @default.start_with? '+'
         @default = "+#{@default}"
       end
@@ -583,17 +598,37 @@ module Dice
         expression = '+' + expression
       end
       verbose "New Expression: #{expression}"
-      @string = expression
-      self.resolve_subexpressions(options)
+      @raw_string = expression
+      @cache = {}
+      @string = expression.dup
+      @subexpressions = false
+      self.resolve_subexpressions
       @terms = parse
     end
 
-    def resolve_subexpressions(options)
+    def reset
+      @string = @raw_string.dup
+      @subexpressions = false
+      self.resolve_subexpressions
+      @terms = parse
+    end
+
+    def force_monte_carlo?
+      @subexpressions or @terms.any? { |t| t.respond_to? :has_reroll_once? and t.has_reroll_once? }
+    end
+
+    def resolve_subexpressions
       while match = @string.match( SUBEXPRESSION )
-        spam "Subexpression: #{match[:expression]}"
-        roller = self.class.new(match[:expression], options)
+        @subexpressions = true
+        #spam "Subexpression: #{match[:expression]}"
+        if @cache.include? match[:expression]
+          roller = @cache[match[:expression]]
+        else
+          roller = self.class.new(match[:expression], @options)
+        end
         roller.roll
-        debug "Subexpression result: #{roller.value}. STR: #{@string.inspect} OFFSET: #{match.offset(0)}"
+        #debug "Subexpression result: #{roller.value}. STR: #{@string.inspect} OFFSET: #{match.offset(0)}"
+        @construction 
         @string = match.pre_match + (roller.value || 0).to_s + match.post_match
       end
     end
@@ -679,7 +714,20 @@ module Dice
     end
 
     def density
-      @density||=@terms.inject(Density.new) { |i,t| i.send(t.math_symbol,t.density) }      
+      if self.force_monte_carlo?
+        d = Density.new
+        d.delete(0)
+        rolls = 100000
+        rolls.times do 
+          self.reset
+          self.roll
+          v = self.value
+          d[v] += Rational(1,rolls)
+        end
+        d
+      else
+        @density||=@terms.inject(Density.new) { |i,t| i.send(t.math_symbol,t.density) }      
+      end
     end
     
     def expect
