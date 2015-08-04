@@ -133,10 +133,12 @@ module CCCB::Core::CoreCommands
     #@doc
     # (superuser only)
     # Shuts down the bot.
-    add_command :core, "admin shutdown" do |message,args|
+    add_command :core, "admin shutdown" do |message,(reason)|
       auth_command :superuser, message
+      reason ||= "Shutting down for maintenance"
       CCCB.instance.networking.networks.each do |name,network|
-        network.puts "QUIT :Shutting down for maintenance"
+        next unless network.type == :irc
+        network.puts "QUIT :#{reason}"
       end
     end
   end

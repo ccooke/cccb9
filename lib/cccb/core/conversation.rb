@@ -102,7 +102,7 @@ module CCCB::Core::Conversations
     add_hook :conversation, :conversation_cleanup  do
       conversations.lock.synchronize do 
 
-        info conversations.store.inspect
+        detail2 conversations.store
         conversations.store.each do |network, users|
           timeout = network.get_setting('options', 'conversation_timeout').to_i
           users.each do |user, contexts|

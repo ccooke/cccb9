@@ -123,7 +123,7 @@ module CCCB::Core::Debugging
 
     #@doc
     # (superuser) Shuts down the bot immediately
-    add_command :debug, "die die die" do |message|
+    add_command :debug, "admin kill" do |message|
       auth_command :superuser, message
       persist.store.save
       Thread.list.each do |t|

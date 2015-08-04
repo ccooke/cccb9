@@ -27,7 +27,7 @@ module CCCB::Core::Networking
     self.servers.each do |name,conf|
       conf[:name] = name.dup
       info "Starting network #{name}"
-      networking.networks[name] ||= CCCB::Network.new(conf)
+      networking.networks[name] ||= CCCB::Network.new(conf, :irc)
 
       ManagedThread.new :"networking_recv_#{name}" do
         net_thread :receiver, name

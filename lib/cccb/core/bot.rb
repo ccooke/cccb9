@@ -8,7 +8,7 @@ module CCCB::Core::Bot
   class PrivateException < Exception; end
 
   extend Module::Requirements
-  needs :hooks, :reload, :call_module_methods, :managed_threading, :events, :persist, :settings, :networking
+  needs :hooks, :reload, :call_module_methods, :managed_threading, :events, :persist, :settings, :networking, :reply
   
   SETTING             = /
     (?<type> core | network | channel | user | [nuc]\([^\)]+\) ){0}

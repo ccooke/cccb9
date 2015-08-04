@@ -71,7 +71,7 @@ module CCCB::Core::GiantMultiplayerRobot
                 if next_player_map[game_id].nil? or next_player_map[game_id] != game.next_player or 
                   (Time.now - giant_multiplayer_robot.channel_updated[channel]) > channel.get_setting("options","gmr_nag_frequency").to_i
                 then
-                  waiting = elapsed_time( Time.now - game.last_turn )
+                  waiting = elapsed_time( Time.now - (game.last_turn || 0 ) )
                   channel.msg "GMR Game #{game_name} (##{game_id}): Next player is #{game.next_player}. Waiting #{waiting}"
                   schedule_hook :event, event: :gmr_game_nag, game: game_name, id: game_id, next_player: game.next_player, updated: true
                   giant_multiplayer_robot.channel_updated[channel] = Time.now

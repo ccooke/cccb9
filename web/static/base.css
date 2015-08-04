@@ -1,0 +1,53 @@
+table {
+  border-collapse: collapse;
+  border: 1px solid black;
+}
+table td, table th {
+  border: 1px solid black;
+}
+
+#command\.roll strong {
+  font-size: large;
+  font-style: normal;
+  font-weight: bold;
+  color: red
+}
+#command\.roll em {
+  font-size: large;
+  font-style: normal;
+  font-weight: bold;
+  color: #0080ff;
+}
+#command\.roll td {
+  width: 10em;
+  text-align: center;
+}
+#command\.roll td:nth-of-type(3) {
+  text-align: center;
+}
+#command\.roll tbody td:nth-of-type(3) {
+  width: 3em;
+  text-align: center;
+  font-size: xx-large;
+  font-style: underline;
+  font-weight: bold;
+  color green;
+}
+#command\.roll tbody td:nth-of-type(4) {
+  width: 20em;
+  font-size: large;
+}
+#command\.roll tbody td:nth-of-type(4) mark {
+  float: left;
+  font-size: xx-large;
+}
+#command\.roll tbody td:nth-of-type(4) strong {
+  float: right
+  text-align: left;
+  color: #993333;
+}
+#command\.roll td, #command\.help td{
+  border: 1px;
+  border-color: black;
+  border-style: solid;
+}

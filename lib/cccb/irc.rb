@@ -32,6 +32,7 @@ class CCCB::Message
   end
   module ChannelCommands
     attr_reader :channel, :channeluser
+    attr_accessor :replyto
 
     def process
       if arguments.empty?
@@ -46,18 +47,16 @@ class CCCB::Message
       else 
         @channel = nil
       end
+
+      if to_channel?
+        @replyto = @channel
+      else
+        @replyto = @user
+      end
     end
 
     def to_channel?
       !!@channel
-    end
-
-    def replyto
-      if @channel
-        @channel
-      else
-        @user
-      end
     end
   end
 
@@ -93,31 +92,25 @@ class CCCB::Message
       if @channel_name
         self.user.channel_history[@channel_name] = self
       end
+
+      self.write_func = Proc.new do |string,message|
+        if ctcp? and ctcp[:command] != 'ACTION'
+          network.puts "NOTICE #{@user.nick} :\001#{ctcp[:command]} #{string}\001"
+        else
+          if string =~ /^\s*\/me\s+(.*)$/im
+            string = "\001ACTION #{$~[1].chomp}\001\n"
+          end
+          #replyto.msg caller_locations.inspect
+          message.replyto.msg string
+        end
+      end
+
     end
 
     def ctcp?
       !!@ctcp
     end
 
-    def replyto
-      if to_channel? 
-        super
-      else
-        @user
-      end
-    end
-
-    def write(string)
-      if ctcp? and ctcp != :ACTION
-        network.puts "NOTICE #{@user.nick} :\001#{ctcp} #{string}\001"
-      else
-        if string =~ /^\s*\/me\s+(.*)$/i
-          string = "\001ACTION #{$~[1]}\001"
-        end
-        #replyto.msg caller_locations.inspect
-        replyto.msg string
-      end
-    end
   end
 
   module NickPlusChannel
@@ -300,7 +293,8 @@ class CCCB::Message
 
   attr_accessor :network, :raw, :from, :command, :arguments, 
                 :text, :hide, :user, :log_format, :command_downcase, 
-                :time, :params
+                :time, :params, :renderer, :output_form, :write_func, 
+                :write_final_func, :return_markdown
 
   def initialize(network, string, restore_from_archive = false, time: nil)
     init(network, string, restore_from_archive, time: time)
@@ -314,6 +308,13 @@ class CCCB::Message
     @hide = false
     @time = time || Time.now
     @actioned = false
+
+    # Render and Sender
+    @renderer = CCCB.instance.reply.irc_parser
+    @output_form = :minimal_form
+    @write_func = ->{ raise "Writing on a message with no write function" }
+    @write_final_func = ->{ }
+    @return_markdown
     
     match = set_user_data(string)
 
@@ -352,11 +353,24 @@ class CCCB::Message
   def send_reply(final: false)
     @actioned = true
     unless @response.nil?
-      data = @response.minimal_form
-      #p data
-      CCCB.instance.reply.irc_parser.render(data).split(/\n/).each do |l|
-        self.write l
+      raw = @response.send( @output_form )
+      begin
+        data = CCCB.instance.keyword_expand(raw, self)
+      rescue Exception => e
+        error "Exception in keyword_expand: #{e}"
+        error e.backtrace
+        data = raw
       end
+      if @return_markdown
+        lines = data.lines 
+      else
+        lines = @renderer.render( data ).lines
+        if block_given? 
+          lines = yield lines, renderer, @output_form
+        end
+      end
+      lines.each { |l| self.write_func.call l, self }
+      self.write_final_func.call if final
       self.clear_reply
     end
   end
@@ -771,7 +785,12 @@ class CCCB::Network
     300 => 300
   }
 
-  attr_reader :queue, :users, :channels, :network
+  attr_reader :queue, :users, :channels, :network, :type
+
+  def initialize(name, type)
+    @type = type
+    super(name)
+  end
 
   def configure(conf)
     @network = self
@@ -1011,4 +1030,3 @@ class CCCB::Network
     CCCB.instance.networking.networks[name] || nil
   end
 end
-

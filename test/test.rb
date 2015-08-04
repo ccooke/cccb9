@@ -1,7 +1,18 @@
 #!/usr/bin/ruby -Ilib -I../
 
-require  'd20code'
 
+SYMS = %i{ critical error warning info verbose debug spam detail detail2 }
+module Kernel
+  SYMS.each do |sym|
+    define_method sym do |*m|
+      puts "[#{sym}] #{m}"
+    end
+  end
+end
+
+SYMS.each { |s| self.send(s, "test") }
+
+require  'd20code'
 if (ARGV.length>0)
   parser=(Dice::Parser.new ARGV[0].dup)
   density=parser.density

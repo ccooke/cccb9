@@ -32,6 +32,21 @@ class CCCB::DieRoller
     end
   end
 
+  def self.irc_to_markdown(string)
+    string.gsub(/\x03(?<colour>\d\d)(?<text>[^\x03\x0f]*)[\x03\x0f]/) do |m|
+      case $~[:colour]
+      when '04' # red (low roll)
+        "**#{$~[:text]}**"
+      when '11' # cyan (high roll)
+        "*#{$~[:text]}*"
+      when '03' # blue (over maximum roll)
+        "**_#{$~[:text]}_**"
+      else
+        $~[:text]
+      end
+    end
+  end
+
   def self.is_expression?(expression)
     begin
       info "Is_expression? #{expression}"
@@ -43,53 +58,85 @@ class CCCB::DieRoller
     end
   end
 
-  def message_die_roll(nick, rolls, mode )
+  def message_die_roll(nick, rolls, mode, prefix = "" )
     compact = ( (mode != 'roll') || (@roll_style == :compact) )
     batch = []
+    
+    @message.reply.append ""
+
     if rolls.is_a? Exception
-      @message.reply "Error: #{rolls.message}"
+      @message.reply.append "#{prefix}Error: #{rolls.message}"
       return
+    end
+
+    if not compact
+      @message.reply.fulltext = "\n| Expression | Rolls | Result | Notes |\n|---|---|---|---|\n"
+    end
+
+    annotation = nil
+    max_expression = 0
+    rolls.each do |e|
+      if e[:type] == :roll 
+        expr = CCCB::Reply::IRCRender.strip_formatting(e[:detail])
+        max_expression = expr.length if expr.length > max_expression
+      end
     end
 
     rolls.each do |entry|
       #p "EN:", entry, mode, compact
       if compact and entry[:type] != :roll and not batch.empty?
-        @message.reply "==> #{batch.inspect}"
+        @message.reply.summary += "#{prefix} => #{batch.inspect}\n"
+        @message.reply.fulltext += "Results: #{batch.map { |r| "* #{r}" }}\n"
         batch = []
       end
 
       case entry[:type]
       when :roll 
+        if not entry[:annotation].nil?
+          annotation = "==#{entry[:annotation]}== "
+        end
         if mode == 'dmroll'
           if nick.downcase == @message.user.id
-            @message.network.msg @message.user.nick, "#{entry[:detail].join} ==> #{entry[:roll]}"
+            @message.network.msg @message.user.nick, "#{entry[:detail].join} => #{entry[:roll]}"
           end
           
           dm = @message.channel.get_setting("options", "dm")
 
           if @message.to_channel? and dm and dm.downcase == @message.user.id
-            @message.network.msg dm, "#{m.nick} rolled: #{entry[:detail].join} ==> #{entry[:roll]}"
+            @message.network.msg dm, "#{m.nick} rolled: #{entry[:detail].join} => #{entry[:roll]}"
           end
         end
         if compact
           batch << entry[:roll]
           next
         end
-        replytext = if mode == 'roll'
-          "#{entry[:detail]} ==> #{entry[:roll]}"
+        if mode == 'roll'
+          @message.reply.summary += "* #{prefix}#{ "#{annotation} " if annotation }#{Kernel.sprintf( "%-#{max_expression}s ", entry[:detail])} => #{entry[:roll]}\n"
+          if match = self.class.irc_to_markdown(entry[:detail]).match( /^(?<expr>.*?)\\\[(?<rolls>.*)\]\s*(?:(?<const>\s*[-+]\s*\d+)\s*)?(?<notes>.*)$/ )
+            if match[:notes] != ""
+              notes = "#{match[:notes]}"
+            end
+            @message.reply.fulltext += "|`#{match[:expr]}#{match[:const]}`|#{match[:rolls]}|#{entry[:roll]}|#{annotation}#{notes}|\n"
+          else
+            @message.reply.fulltext += "|`#{entry[:detail]}`||#{entry[:roll].inspect}|#{annotation}|\n"
+          end
         end
-        @message.reply replytext
       when :pointbuy
-        @message.reply "Point-buy equivalent: D&D 3e-4e #{entry[:dnd]}, D&D 5e #{entry[:dnd5e]}, Pathfinder #{entry[:pf]}"
+        @message.reply.append "#{prefix}Point-buy equivalent: D&D 3e-4e #{entry[:dnd]}, D&D 5e #{entry[:dnd5e]}, Pathfinder #{entry[:pf]}\n"
       when :reroll
-        @message.reply "Roll ##{entry[:rerolls]}:"
+        @message.reply.append "#{prefix}Roll ##{entry[:rerolls]}:\n"
       when :note
-        @message.reply "Note: #{entry[:text]}"
+        @message.reply.append "#{prefix}Note: #{entry[:text]}\n"
       when :literal
-        @message.reply "#{entry[:text]}"
+        @message.reply.append "#{prefix}#{entry[:text]}\n"
       end
+      annotation = nil
     end
-    @message.reply "==> #{batch.inspect}" if batch.count > 0
+
+    @message.reply.append "#{prefix}=> #{batch.inspect}" if batch.count > 0
+
+    @message.send_reply
+
   end
 
   def point_buy_total(rolls)
@@ -223,10 +270,15 @@ class CCCB::DieRoller
     success = false
     expression ||= ""
     rolls = []
-    expressions = processed_expression(expression)
+    expression_list = processed_expression(expression)
+    annotation = nil
     until success 
       success = true
       catch :reroll do
+        expressions = expression_list.dup
+        #info "--- ROLLER --- "
+        #info "EXPR: #{expressions}"
+        #info "Rolls: " + rolls.inspect
         expression_count = 0
         while expression_count < 30 and expr = expressions.shift
           catch :next_expression do
@@ -236,6 +288,11 @@ class CCCB::DieRoller
             spam [ expr, [ expressions ] ].inspect
 
             gathered = []
+
+            if expr =~ /#\s*(?<comment>.*?)\s*$/
+              expr = $~.pre_match
+              annotation = $~[:comment]
+            end
 
             if expr =~ /^(.*?)\s*\*\s*(\d+)\s*$/
               expr = $1
@@ -262,8 +319,9 @@ class CCCB::DieRoller
 
             if expr =~ /^\s*=(\d+)((?:\s*,\d+)*)\s*$/
               ( $1 + $2 ).split(/,/).each { |n|
-                rolls << { type: :roll, roll: n.to_i, detail: [ "user" ] }
+                rolls << { type: :roll, roll: n.to_i, detail: [ "user" ], annotation: annotation }
               }
+              annotation = nil
               next
             end
 
@@ -327,6 +385,7 @@ class CCCB::DieRoller
                   true
                 end
                 #p "REROLL: #{do_reroll} ( #{$2}, #{ rolls.last[system] < limit }, #{ rolls.last[system] > limit }"
+                #info rolls
 
                 if do_reroll
                   best = rolls
@@ -338,12 +397,15 @@ class CCCB::DieRoller
                   else
                     1
                   end
-                  spam "Reroll #{rerolls}" 
+                  #info "Reroll #{rerolls}" 
                   if rerolls > 1000
                     rolls = best
+                    #info rolls
                     rolls.unshift type: :note, text: "Returning the closest result after #{rerolls} attempts. Giving up."
                   else
+                    #info "REROLL NOW!"
                     rolls = [ { type: :reroll, rerolls: rerolls, best: best } ]
+                    #info rolls
                     success = false
                     throw :reroll
                   end
@@ -351,7 +413,7 @@ class CCCB::DieRoller
               end
             else
               result = dice_string(expr || "d20", default)
-              rolls << { type: :roll, roll: result[0], detail: result[1] }
+              rolls << { type: :roll, roll: result[0], detail: result[1], annotation: annotation }
             end
           end
         end
@@ -403,37 +465,55 @@ module CCCB::Core::Dice
     default_setting( "_.=m#@", "options", "probability_graph_chars" )
     default_setting( 2048, "options", "dice_memory_limit" )
 
-    add_help_topic( 'dice_expressions',
-      "# Dice Expressions",
-      "## Simple expressions",
-      "The simplest expressions are of the form 'XdY + Z', where X, Y and Z are numbers. In fact, the XdY part can be left off if the die is the default for the channel - usually 1d20",
-      "## Compound expressions",
-      "Multiple rolls can be joined together, either by using (for instance) '4d6dl * 6' to make six seperate rolls of '4d6dl' or by joining rolls with a semicolon. '4d6dl; 4d6dl; 4d6dl; 4d6dl; 4d6dl; 4d6dl' is equivalent to '4d6dl * 6'.",
-      "## Modifying the default (Advantage and Disadvantage)",
-      "When using the simplest '+Z' form, taking the default die (usually a d20), the command can be modified to use either advantage (roll twice and take the highest) or disadvantage (roll twice and take the lowest). This is done by appending 'w/a' or 'w/d' to the command - e.g.: '!roll +3 w/a' '!roll +10 w/d'.",
-      "The modifier changes the default die for that roll, so it will apply even to more complex rolls, so long as they do not specify the die type, so a roll such as '!roll +3;1d10+2 w/a' will apply advantage to the +3 part, but leave the '1d10+2' alone.",
-      "## Storing presets",
-      "Any user can store presets on their own user account with the !preset command. Presets can be stored at the channel or network level, but only by users who have the rights to do so. An example preset might be '!preset attack +5; 1d10+3' to store an attack roll (+3) and the subsequent damage roll (which can be ignored if the attack fails). After this, the user who created this setting can roll their attack with '!roll attack' (and even '!roll attack w/a' or '!roll attack w/d'). Presets can be displayed by using the '!preset' command and unset with '!preset attack' (to unset a preset called 'attack').",
-      "## Modifiers",
-      "The dicebot supports many modifiers. Here are most of them:",
-      "---",
-      "| Modifier | Example | Result |",
-      "| ----- | ----- | ----- |",
-      "| f | 4df | Fudge/FATE dice |",
-      "| dlN | 4d6dl | Drops the lowest N (or 1, if it is omitted) results. |",
-      "| dhN | 4d6dl | Drops the highest N (or 1, if it is omitted) results. |",
-      "| khN | 3d10kh | Keeps only the highest N (or 1, if it is omitted) results. |",
-      "| klN | 2d4kl | Keeps only the lowest N (or 1, if it is omitted) results. |",
-      "| sN | 3d10s8 | Counts successes greater then or equal to N. |",
-      "| fN | 3d10s8f1 | Usually used with the 's' modifier. Counts values of N as -1. |",
-      "| rN | 1d10r1 | Reroll any values of N. |",
-      "| roN | 2d6ro2 | Reroll values of N once (Currently breaks probability code). |",
-      "| ! | 4d10! | Exploding: When a die rolls the maximum, add another die (as a distinct roll). |",
-      "| !! | 4d10!! | Compounding: When a die rolls the maximum, add the roll of another die. |",
-      "| !p | 4d10!p | Penetrating: When a die rolls the maximum, subtrace 1 and add the roll of another die. |",
-      "| w  | 3d10w | White Wolf. Shorthand for !f1s8. (Exploding, fail on 1 (-1), success on 8 or more (+1)). |",
-      "! wN | 7d10s6 | White Wolf style roll, but with success on N rather than the default 8. |",
-      "---",
+    add_help_topic( 'dice_expressions', <<-EOH
+      @description Syntax for the dice roller
+      # Dice Expressions
+      ## Simple expressions
+      The simplest expressions are of the form 'XdY + Z', where X, Y and Z are numbers. In fact, the XdY part can be left off if the die is the default for the channel - usually 1d20. You can add a comment to a roll - anything after a '#' up to the end of the expression is treated as a comment.
+      @detail 
+      ### Examples
+      * %(inline_command_link:roll:3d6) 
+      * %(inline_command_link:roll:+1)
+      @detail
+      ## Compound expressions
+      Multiple rolls can be joined together, either by using (for instance) '%(command:roll:4d6dl * 6)' to make six seperate rolls of '4d6dl' or by joining rolls with a semicolon. '4d6dl; 4d6dl; 4d6dl; 4d6dl; 4d6dl; 4d6dl' is equivalent to '4d6dl * 6'.
+      @doc
+      ## Modifying the default (Advantage and Disadvantage)
+      When using the simplest '+Z' form, taking the default die (usually a d20), the command can be modified to use either advantage (roll twice and take the highest) or disadvantage (roll twice and take the lowest). This is done by appending 'w/a' or 'w/d' to the command - e.g.: '\\!%(help:roll) +3 w/a' '\\!%(help:roll) +10 w/d'.
+      @detail
+      The modifier changes the default die for that roll, so it will apply even to more complex rolls, so long as they do not specify the die type, so a roll such as '\\!%(help:roll) +3;1d10+2 w/a' will apply advantage to the +3 part, but leave the '1d10+2' alone.
+      ## Examples
+      * %(inline_command_link:roll:chargen)
+      * %(inline_command_link:roll:+5 #Attack;2d6+3 #Damage)
+      * %(inline_command_link:roll:+5 #Attack;2d6+3 #Damage w/a)
+      @doc
+      ## Storing presets
+      Any user can store presets on their own user account with the %(help:preset) command. Presets can be stored at the channel or network level, but only by users who have the rights to do so. An example preset might be '\\!%(help:preset) attack +5; 1d10+3' to store an attack roll (+3) and the subsequent damage roll (which can be ignored if the attack fails). After this, the user who created this setting can roll their attack with '\\!%(help:roll) attack' (and even '\\!%(help:roll) attack w/a' or '\\!%(help:roll) attack w/d'). Presets can be displayed by using the '\\!%(help:preset)' command and unset with '\\!%(help:preset) attack' (to unset a preset called 'attack').
+      There are a number of standard presets, including 'chargen', to generate a D&D character.
+      @detail
+      ## Modifiers
+      The dicebot supports many modifiers. Here are most of them:
+      ---
+      | Modifier | Example | Result |
+      | ----- | ----- | ----- |
+      | f | 4df | Fudge/FATE dice |
+      | dlN | 4d6dl | Drops the lowest N (or 1, if it is omitted) results. |
+      | dhN | 4d6dl | Drops the highest N (or 1, if it is omitted) results. |
+      | khN | 3d10kh | Keeps only the highest N (or 1, if it is omitted) results. |
+      | klN | 2d4kl | Keeps only the lowest N (or 1, if it is omitted) results. |
+      | sN | 3d10s8 | Counts successes greater then or equal to N. |
+      | fN | 3d10s8f1 | Usually used with the 's' modifier. Counts values of N as -1. |
+      | rN | 1d10r1 | Reroll any values of N. |
+      | roN | 2d6ro2 | Reroll values of N once (Currently breaks probability code). |
+      | ! | 4d10! | Exploding: When a die rolls the maximum, add another die (as a distinct roll). |
+      | !! | 4d10!! | Compounding: When a die rolls the maximum, add the roll of another die. |
+      | !p | 4d10!p | Penetrating: When a die rolls the maximum, subtrace 1 and add the roll of another die. |
+      | w  | 3d10w | White Wolf. Shorthand for !f1s8. (Exploding, fail on 1 (-1), success on 8 or more (+1)). |
+      | wN | 7d10s6 | White Wolf style roll, but with success on N rather than the default 8. |
+      | x  | 4d6x | Count successes, where a maximum roll counts as 1 and anything else 0. |
+      | xN | 4d6x4 | Count successes, where anything of N or more counts as 1 and a maximum roll counts as 2. |
+      ---
+      EOH
     )
 
     @doc
@@ -668,14 +748,12 @@ module CCCB::Core::Dice
         roller = CCCB::DieRoller.new(message)
         rolls = roller.roll( expression, default, mode)
         debug "Got rolls: #{rolls}"
-        reply = roller.message_die_roll(message.nick, rolls, mode)
         if roll_stack[message.replyto] > 1 
-          message.reply reply.map do |l|
-            "#{message.replyto}: (#{this_roll}): #{l}"
-          end
+          prefix = "#{message.user.nick}: "
         else
-          message.reply reply
+          ""
         end
+        roller.message_die_roll(message.nick, rolls, mode, prefix)
 
         memory = {
           rolls: rolls,

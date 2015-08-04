@@ -22,7 +22,11 @@ module CCCB::Core::Commands
   /x
 
   def get_code(file,line)
-    lines = File.read(file).lines
+    if $load_file_cache.include? file
+      lines = $load_file_cache[file].lines
+    else
+      lines = File.read(file).lines
+    end
     indent = lines[line - 1].index /[^[:space:]]/
     length = lines[line,lines.length].find_index { |l| l.index(/[^[:space:]]/) == indent }
     lines[line-1,length+2].map(&:rstrip)
@@ -219,26 +223,24 @@ module CCCB::Core::Commands
 
     servlet = Proc.new do |session, match|
       split = match[:call].partition('/')
-      command = split[0] + " " + split[2]
-      output_queue = Queue.new
-      message = session.message
-      message.instance_variable_set(:@content_server_strings, output_queue)
-      message.instance_variable_set(:@http_match_object,match)
+      info split
+      command = URI.unescape(split[0] + " " + split[2])
 
+      message = session.message
       verbose session.message.instance_variables
-      def message.send_reply(final: false)
-        unless @response.nil?
-          data = @response.long_form
-          @response = nil
-          if @http_match_object[:keyword] == 'raw'
-            @content_server_strings << "<pre>#{data}</pre>"
-          else
-            @content_server_strings << CCCB.instance.reply.web_parser.render(data)
-          end
-        end
-        @content_server_strings << :EOM if final
+      message.renderer = CCCB.instance.reply.web_parser
+      message.output_form = :long_form
+      if match[:keyword] == 'raw'
+        message.return_markdown = true 
+        template = :raw
+      else
+        template = :default
       end
-      
+
+      output_queue = Queue.new
+      message.write_func = ->(l,m){ output_queue << l }
+      message.write_final_func = ->{ output_queue << :EOM }
+
       process_command(message, command)
       text = output_queue.pop
       until (data = output_queue.pop) == :EOM
@@ -246,8 +248,13 @@ module CCCB::Core::Commands
       end
 
       {
-        template: :html,
-        text: text
+        template: template,
+        title: "Command '#{command}'",
+        blocks: [
+          [ "command.#{split[0].split(" ").join(".")}",
+            text
+          ]
+        ]
       }
     end
 

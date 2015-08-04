@@ -26,7 +26,7 @@ class CCCB::ContentServer
 	end
 
   def self.shutdown
-    @@server.shutdown
+    @@server.shutdown unless @@server.nil?
 
 		ObjectSpace.each_object do |o|
       next unless o.is_a? WEBrick::HTTPServer
@@ -183,7 +183,6 @@ class CCCB::ContentServer
   end
 end
 
-
 module CCCB::Core::HTTPServer
   extend Module::Requirements
 
@@ -253,7 +252,7 @@ module CCCB::Core::HTTPServer
     conf = {
       name: "__httpserver__"
     }
-    networking.networks[conf[:name]] = CCCB::Network.new(conf)
+    networking.networks[conf[:name]] = CCCB::Network.new(conf, :http)
 
   end
 end
