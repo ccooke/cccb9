@@ -21,7 +21,7 @@ module CCCB::Core::APICore
     end
   end
 
-  def api(method, timeout: 30, **args)
+  def api(method, timeout: 30, do_not_thread: false, **args)
     unless args.include? :__message
       network = networking.networks.values.first
       message = CCCB::Message.new( network, ":API PRIVMSG d20 :#{method} #{args.inspect}" )
@@ -33,12 +33,12 @@ module CCCB::Core::APICore
     return_queue = Queue.new
     detail "API Request: #{hook_name}(#{args}), timeout #{timeout}, return #{return_queue}"
     start = Time.now
-    if hooks.runners == 0
+    if hooks.runners == 0 or do_not_thread
       detail2 "Running #{hook_name} locally since there are no hook_runners"
-      run_hooks hook_name, return_queue, **args
+      run_hooks hook_name, return_queue, throw_exceptions: true, **args
     else
       detail2 "Scheduling #{hook_name} (There are #{hooks.runners} hook runners)"
-      schedule_hook hook_name, return_queue, **args
+      schedule_hook hook_name, return_queue, throw_exceptions: true, **args
     end
     detail "Returned from hook"
     loop do
@@ -72,7 +72,7 @@ module CCCB::Core::APICore
       begin
         text = {
           method: method,
-          result: api(method, **params)
+          result: api(method, do_not_thread: true, **params)
         }
       rescue Exception => e
         text = {
