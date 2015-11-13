@@ -221,14 +221,12 @@ module CCCB::Core::Commands
       message.reply("Thank you")
     end
 
-    servlet = Proc.new do |session, match|
+    servlet = Proc.new do |session, match, req, res|
       split = match[:call].partition('/')
-      info split
       command = URI.unescape(split[0] + " " + split[2])
 
       message = session.message
-      verbose session.message.instance_variables
-      message.renderer = CCCB.instance.reply.web_parser
+      message.renderer = CCCB.instance.web_parser
       message.output_form = :long_form
       if match[:keyword] == 'raw'
         message.return_markdown = true 
@@ -248,8 +246,10 @@ module CCCB::Core::Commands
       end
 
       {
+        header_items: [],
+        session: session,
         template: template,
-        title: "Command '#{command}'",
+        title: message.reply.title,
         blocks: [
           [ "command.#{split[0].split(" ").join(".")}",
             text
