@@ -77,7 +77,6 @@ class CCCB::ContentServer
             CCCB.instance.set_setting("conf/ssl/auto_generated.key","http_server","cert_key")
           end
 
-          @@server.mount '/static', WEBrick::HTTPServlet::FileHandler, "#{CCCB.instance.basedir}/web/static/"
           @@server.mount_proc '/' do |req, res|
             CCCB::ContentServer.request( req, res )
           end
@@ -85,6 +84,8 @@ class CCCB::ContentServer
           @@thread = Thread.new do
             @@server.start
           end
+
+          @@filehandler = WEBrick::HTTPServlet::FileHandler.new(@@server, CCCB.instance.basedir + "/web/root")
           break
 
         end
@@ -157,7 +158,8 @@ class CCCB::ContentServer
         return
 			end
 		end
-		raise WEBrick::HTTPStatus::NotFound
+
+    return @@filehandler.do_GET(req,res)
 	end
 
 	def self.add_path( regex, send = :path, &block )
