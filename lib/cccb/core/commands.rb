@@ -156,6 +156,7 @@ module CCCB::Core::Commands
         } 
       }.map(&:first).join(", ")
       #message.reply "Ambiguous command '#{pre.join " "}'. Possible commands from this base: #{enabled}"
+      message.reply nil
     end
 
     #@doc
