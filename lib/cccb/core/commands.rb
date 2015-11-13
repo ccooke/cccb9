@@ -112,7 +112,7 @@ module CCCB::Core::Commands
     end
     rate_limit_by_feature( message, commands.feature_lookup[hook], hook )
     if hook_runnable? hook, message, *args
-      verbose "Scheduling hook for command: #{hook}->(#{args.inspect}) #{hook_runnable?(hook,*args).inspect}"
+      spam "Scheduling hook for command: #{hook}->(#{args.inspect}) #{hook_runnable?(hook,*args).inspect}"
       schedule_hook hook, message, args, pre, cursor, hook, run_hook_in_thread: true do
        # message.reply "In post block"
        # message.reply "Response: #{message.instance_variable_get(:@response)}"
@@ -213,7 +213,6 @@ module CCCB::Core::Commands
       end
     end
 
-    info "Minimal form for #{self.inspect}"
     #@doc
     # Tells the bot it is good. What, you expected more?
     # ... The bot will say "Thank you". Does that help?

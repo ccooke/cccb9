@@ -216,7 +216,7 @@ module CCCB::Core::HTTPServer
         sessions = CCCB.instance.get_setting("web_sessions")
         sessions.each do |sid, session|
           if session.time + expiry < run 
-            info "Expire session #{sid}"
+            debug "Expire session #{sid}"
             sessions.delete(sid)
           end
         end

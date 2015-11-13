@@ -237,6 +237,7 @@ module CCCB::Core::Bot
         when "false"
           false
         when /^\s*[\[\{]/
+          verbose "Parsing #{value_string.inspect}"
           JSON.parse( "[ #{value_string} ]", create_additions: false ).first
         else
           value_string

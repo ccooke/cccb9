@@ -597,7 +597,7 @@ module Dice
       unless expression.start_with? '+' or expression.start_with? '-'
         expression = '+' + expression
       end
-      verbose "New Expression: #{expression}"
+      spam "New Expression: #{expression}"
       @raw_string = expression
       @cache = {}
       @string = expression.dup
