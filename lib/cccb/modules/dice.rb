@@ -1,6 +1,7 @@
 require 'securerandom'
 require 'densities'
 require 'd20code'
+require 'json'
 
 class CCCB::DieRoller
 
@@ -319,7 +320,7 @@ class CCCB::DieRoller
 
             if expr =~ /^\s*=(\d+)((?:\s*,\d+)*)\s*$/
               ( $1 + $2 ).split(/,/).each { |n|
-                rolls << { type: :roll, roll: n.to_i, detail: [ "user" ], annotation: annotation }
+                rolls << { type: :roll, roll: n.to_i, detail: "user", annotation: annotation }
               }
               annotation = nil
               next
@@ -452,6 +453,66 @@ module CCCB::Core::Dice
     (message.user.persist[:dice_memory_saved] ||= {})["current"] = message.network.persist[:dice_memory].first
   end
 
+  def draw_irc_graph(message, density1, max_prob, graph_scale, graph_height, graph_width)
+    graph_chars = message.replyto.get_setting( "options", "probability_graph_chars" )
+
+    graph_distinctions = graph_chars.each_char.map.with_index { |c,i| [ c, Rational(i+1,graph_chars.length) ] }.reverse
+
+    output = (1..graph_height).map {|i|
+      sprintf("%7.3f%%|",(max_prob * 100 * i/graph_height.to_f)) + density1.map { |n,p|
+        x = p * (1/max_prob) * graph_height
+        if char = graph_distinctions.find { |(c,fraction)| x >= i - (1-fraction) }
+          if p == max_prob
+            "\x02" + char[0] * graph_scale + "\x02"
+          else
+            char[0] * graph_scale
+          end
+        elsif n == 0
+          " " * ((graph_scale-1)/2) + "|" * (graph_scale.odd? ? 1 : 2 ) + " " * ((graph_scale-1)/2) 
+        else
+          ' ' * graph_scale
+        end 
+      }.join
+    }
+    nums = density1.map(&:first).map(&:to_s)
+    last_row = "        |" + " " * (nums.count * graph_scale)
+    legend = [ "", last_row ]
+    line_piece = "-" * ((graph_scale-1)/2)
+    legend[0] = ([ "        |" ] + density1.map.with_index { |(num,p),i|
+      colour_start = ""
+      colour_end = ""
+      if p == max_prob
+        colour_start = "\x02"
+        colour_end = "\x02"
+      end
+      n = num.to_s
+      i = (i + 1) * graph_scale
+      line_piece + colour_start + if n == '0'
+        last_row[ 8 + i - graph_scale, graph_scale ] = " " * ((graph_scale-1)/2) + "|" * (graph_scale.odd? ? 1 : 2 ) + " " * ((graph_scale-1)/2) 
+        "|" * (graph_scale.odd? ? 1 : 2 )
+      elsif n.end_with? '0'
+        if n.start_with? '-'
+          last_row[ 8 + i - (n.length - 1) - graph_scale/2, n.length - 1 ] = n[1..-1].reverse
+        else
+          last_row[ 8 + i - (graph_scale+1)/2, n.length - 1 ] = n
+        end
+        if n.start_with? '-'
+          '!' + (graph_scale.even? ? '-' : '')
+        else
+          (graph_scale.even? ? '-' : '') + '!'
+        end
+      else
+        if n.start_with? '-'
+          n[-1] + (graph_scale.even? ? '-' : '')
+        else
+          (graph_scale.even? ? '-' : '') + n[-1]
+        end
+      end + colour_end + line_piece
+    }).join
+
+    return output, legend
+  end
+
   def module_load
     add_setting :user, "roll_presets"
     add_setting :channel, "roll_presets"
@@ -460,9 +521,10 @@ module CCCB::Core::Dice
 
     set_setting( "d20", "options", "default_die")
     default_setting( 4, "options", "probability_graph_height" )
+    default_setting( false, "options", "probability_graph_absolute" )
     default_setting( 20, "options", "probability_graph_width" )
     default_setting( "0.00", "options", "probability_graph_cutoff" )
-    default_setting( "_.=m#@", "options", "probability_graph_chars" )
+    default_setting( ".o8", "options", "probability_graph_chars" )
     default_setting( 2048, "options", "dice_memory_limit" )
 
     add_help_topic( 'dice_expressions', <<-EOH
@@ -568,16 +630,15 @@ module CCCB::Core::Dice
 
       if symbol.nil?
 
+        graph_absolute = message.replyto.get_setting( "options", "probability_graph_absolute" )
         graph_height = message.replyto.get_setting( "options", "probability_graph_height" ).to_i 
         graph_width = message.replyto.get_setting( "options", "probability_graph_width" ).to_i
-        graph_chars = message.replyto.get_setting( "options", "probability_graph_chars" )
         graph_cutoff = message.replyto.get_setting( "options", "probability_graph_cutoff" )
         raise "Invalid graph cutoff '#{graph_cutoff}': Must be a number (with optional decimal)" unless graph_cutoff.match /^\d+(?:\.\d+)?/
 
         # '▁▂▃▄▅▆▇█'
         # '▁▂▃▄▅▆▇█'
         # "_.-=#8"
-        graph_distinctions = graph_chars.each_char.map.with_index { |c,i| [ c, Rational(i+1,graph_chars.length) ] }.reverse
 
         lowest = density1.map(&:first).min
         highest = density1.map(&:first).max
@@ -591,7 +652,7 @@ module CCCB::Core::Dice
         decimals = graph_cutoff.reverse.index('.')
         temp = []
         density1 = density1.each_with_object([]) do |(i,p),a|
-          probability = "%.#{decimals}f" % (p.to_f * 100)
+          probability = "%0.#{decimals}f" % (p.to_f * 100)
           #p "PR: #{i} :: #{state.inspect} :: #{p} :: #{probability} > #{graph_cutoff}"
           if probability > graph_cutoff
             case state
@@ -616,60 +677,47 @@ module CCCB::Core::Dice
 
         graph_scale = 1
         graph_scale += 1 while ((graph_scale + 1) * density1.count) <= graph_width
-        max_prob = density1.map(&:last).max
-        output = (1..graph_height).map {|i|
-          sprintf("% 6.2f%%|",(max_prob * 100 * i/graph_height.to_f)) + density1.map { |n,p|
-            x = p * (1/max_prob) * graph_height
-            if char = graph_distinctions.find { |(c,fraction)| x >= i - (1-fraction) }
-              if p == max_prob
-                "\x02" + char[0] * graph_scale + "\x02"
-              else
-                char[0] * graph_scale
-              end
-            elsif n == 0
-              " " * ((graph_scale-1)/2) + "|" * (graph_scale.odd? ? 1 : 2 ) + " " * ((graph_scale-1)/2) 
-            else
-              ' ' * graph_scale
-            end 
-          }.join
-        }
-        nums = density1.map(&:first).map(&:to_s)
-        last_row = "       |" + " " * (nums.count * graph_scale)
-        legend = [ "", last_row ]
-        line_piece = "-" * ((graph_scale-1)/2)
-        legend[0] = ([ "       |" ] + density1.map.with_index { |(num,p),i|
-          colour_start = ""
-          colour_end = ""
-          if p == max_prob
-            colour_start = "\x02"
-            colour_end = "\x02"
-          end
-          n = num.to_s
-          i = (i + 1) * graph_scale
-          line_piece + colour_start + if n == '0'
-            last_row[ 8 + i - graph_scale, graph_scale ] = " " * ((graph_scale-1)/2) + "|" * (graph_scale.odd? ? 1 : 2 ) + " " * ((graph_scale-1)/2) 
-            "|" * (graph_scale.odd? ? 1 : 2 )
-          elsif n.end_with? '0'
-            if n.start_with? '-'
-              last_row[ 8 + i - (n.length - 1) - graph_scale/2, n.length - 1 ] = n[1..-1].reverse
-            else
-              last_row[ 8 + i - (graph_scale+1)/2, n.length - 1 ] = n
-            end
-            if n.start_with? '-'
-              '!' + (graph_scale.even? ? '-' : '')
-            else
-              (graph_scale.even? ? '-' : '') + '!'
-            end
-          else
-            if n.start_with? '-'
-              n[-1] + (graph_scale.even? ? '-' : '')
-            else
-              (graph_scale.even? ? '-' : '') + n[-1]
-            end
-          end + colour_end + line_piece
-        }).join
-        
-        message.reply output.reverse.reject { |r| r.match /^\s+$/ } + legend
+        if graph_absolute
+          max_prob = 1.0
+        else
+          max_prob = density1.map(&:last).max
+        end
+
+
+        if message.renderer.type == :web
+          data = {
+            'labels' => density1.map(&:first),
+            'datasets' => [
+              {
+                'label' => parser1.to_s,
+                'fillColor' => 'rgba(0,50,220,0.2)',
+                'strokeColor' => 'rgba(0,50,220,1)',
+                'pointColor' => 'rgba(0,50,220,1)',
+                'pointStrokeColor' => '#fff',
+                'pointHighlightFill' => '#fff',
+                'pointHighlightStroke' => 'rgba(0,50,220,1)',
+                'data' => density1.map { |(i,p)| 100 * p.to_f }
+              }
+            ]
+          }
+
+          message.reply.fulltext = "# Graph of #{parser1.to_s}\n"
+
+          message.reply.footer = '<script src="/static/js/charts/Chart.js"></script>' +
+                                 '<canvas id="DiceProbChart" width="800" height="400"></canvas>' +
+                                 "<script type=\"text/javascript\">" + 
+                                 "Chart.defaults.global.scaleLabel = \"<%=value%>%\";" +
+                                 "Chart.defaults.global.tooltipTemplate = \"<%=value%>%\";" +
+                                 "var ctx = document.getElementById(\"DiceProbChart\").getContext(\"2d\");" +
+                                 "var data = " + JSON.generate(data) + ";" + 
+                                 "var options = { \"pointHitDetectionRadius\": 2 };" +
+                                 "var lineChart = new Chart(ctx).Line(data, options);" + 
+                                 "</script>\n"
+        else
+          output, legend = draw_irc_graph(message, density1, max_prob, graph_scale, graph_height, graph_width)
+          message.reply output.reverse.reject { |r| r.match /^\s+$/ } + legend
+        end
+
         next
       end
       
@@ -700,6 +748,7 @@ module CCCB::Core::Dice
       else
         "Probability: ~%.2f%% (exact results unavailable)" % [ rational.to_f * 100 ]
       end )
+
     end
 
     #@doc
