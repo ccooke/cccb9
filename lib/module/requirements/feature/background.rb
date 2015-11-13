@@ -108,11 +108,15 @@ class Backgrounder
   def self.killall
     @@lock.synchronize do
       @@processes.each do |pid,meta|
-        if Process.wait(p,Process::WNOHANG)
-          meta[:output].close
-          meta[:input].close
-          Process.kill("INT",pid)
-          Process.wait(pid)
+        begin
+          if Process.wait(pid,Process::WNOHANG)
+            meta[:output].close
+            meta[:input].close
+            Process.kill("INT",pid)
+            Process.wait(pid)
+          end
+        rescue Exception => e
+          info "Exception: #{e}"
         end
       end
       @@processes = {}

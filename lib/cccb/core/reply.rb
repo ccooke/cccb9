@@ -2,7 +2,60 @@ gem 'redcarpet' #, '<=3.2.0'
 require 'redcarpet'
 
 class CCCB::Reply
+  class Markdown < Redcarpet::Markdown
+    def set_context(context)
+      renderer.set_context(context)      
+    end
+
+    def type
+      renderer.type
+    end
+  end
+
+  class WebRender < Redcarpet::Render::HTML
+    attr_reader :request, :response, :context
+    
+    def type
+      :web
+    end
+
+    def set_context(context)
+      @context = context
+    end
+
+    def set_request(req, res)
+      @request = req
+      @response = res
+    end
+
+    def doc_header
+      return nil if @header_sent
+      @header_sent = true
+      if @context.user.authenticated? @context.network
+        info = "Logged in as <em>#{@context.user.nick}</em>"
+        login = "<a href=\"/command/logout\">Sign out</a>"
+      else
+        info = "Anonymous" 
+        info += "<!-- #{@context.inspect} on #{@context.network.inspect} - auth: #{@context.user.authenticated?(@context.network).inspect} #{@context.user.get_setting("session").inspect} -->"
+        login = "<a href=\"/command/login\">Sign in</a>"
+      end
+
+      "<div id='header'>" +
+        "<ul>" +
+          "<li>" + info + "</li>" +
+          "<li><a href=\"/\">Index</a>" +
+          "<li>" + login + "</li>" +
+        "</ul>" +
+      "</div>"
+    end
+
+    def doc_footer
+    end
+  end
+
   class IRCRender < Redcarpet::Render::Base
+    attr_reader :context
+
     COLOURS = {
       white:        '00',
       black:        '01',
@@ -27,6 +80,14 @@ class CCCB::Reply
       define_method(k) do |text|
         "\x03#{v}#{text}\x03"
       end
+    end
+
+    def type
+      :irc
+    end
+
+    def set_context(context)
+      @context = context
     end
 
     def normal_text(text)
@@ -98,6 +159,19 @@ class CCCB::Reply
       "------------------------------------\n"
     end
 
+    def superscript_number(number)
+      superscripts = "⁰¹²³⁴⁵⁶⁷⁸⁹"
+      out = ""
+      number.to_s.each_char do |c|
+        if index = c.to_i
+          out += superscripts[index]
+        else
+          return "[Bad footnote reference]"
+        end
+      end
+      out
+    end
+
     def superscript(text)
       text
     end
@@ -136,7 +210,21 @@ class CCCB::Reply
     end
     
     def link(link,title,content)
-      light_blue(underline(content))
+      CCCB.instance.get_setting('http_server_rewrites').each do |name,r|
+        k,_,v = r.partition(/\s*=>\s*/)
+        if match = link.match( %r{#{k}} )
+          link.replace( v.gsub(/{(?<key>\w+)}/) { |key| match[$~[:key].to_s] } )
+        end
+      end
+
+      if link.start_with? '/command'
+        _, path, command, *args = link.split('/')
+        content = "!#{command}"
+        content += " #{args.join(" ")}" if args.count > 0
+        light_blue(underline(content))
+      else
+        content + " (" + light_blue(underline(link)) + ")"
+      end
     end
     alias_method :autolink, :link
 
@@ -169,7 +257,7 @@ class CCCB::Reply
         when "Lo"
           lo = "#{lists.last[:index]}. "
           prefix = lo
-          indent.last += lo.length - 2
+          indent[-1] += lo.length - 2
           lists.last[:index] += 1
         when "L}"
         end
@@ -205,6 +293,10 @@ class CCCB::Reply
       output
     end
 
+    def respond_to?(sym)
+      true
+    end
+
     def table_row(*args)
       #info("TR: #{args.inspect}")
       args[0] + "\u0000t"
@@ -215,30 +307,35 @@ class CCCB::Reply
       "#{args[0]}\u0000T"
     end
     
-    def footnotes(*args)
-      info "Ignored: :footnotes #{args}"
+    def footnote_ref(number)
+      superscript_number(number)
     end
 
-    def footnotes_def(*args)
-      info "Ignored: :footnotes_def #{args}"
+    def footnote_def(text, number)
+      "#{superscript_number(number)}: #{text}"
     end
 
-    def footnotes_ref(*args)
-      info "Ignored: :footnotes_ref #{args}"
+    def footnotes(footnotes)
+      footnotes
     end
 
-    def respond_to?(sym)
-      #info "#{self}.respond_to?(#{sym.inspect})"
-      true # super
+    def preprocess(content)
+      content
+    end
+
+    def doc_header
+    end
+
+    def doc_footer
     end
 
     def method_missing(sym,*args,**kwargs,&block)
-      info "#{self}.#{sym}(*#{args.inspect},**#{kwargs.inspect},&#{block})"
-      args[0]
+      puts "#{self}.#{sym}(*#{args.inspect},**#{kwargs.inspect},&#{block})"
+      args[0] || ""
     end
   end
 
-  @categories = %i{ title summary fulltext }
+  @categories = %i{ header title summary fulltext footer }
 
   def initialize(message)
     @message = message
@@ -330,10 +427,8 @@ module CCCB::Core::Reply
     reply.keywords[name.to_s] = block
   end
 
-  def module_load
-    reply.keywords = {}
-
-    reply.irc_parser = Redcarpet::Markdown.new( 
+  def irc_parser
+    CCCB::Reply::Markdown.new( 
       CCCB::Reply::IRCRender,
       no_intra_emphasis: true,
       lax_spacing: true,
@@ -345,8 +440,11 @@ module CCCB::Core::Reply
       strikethrough: true,
       underline: true
     )
-    reply.web_parser = Redcarpet::Markdown.new( 
-      Redcarpet::Render::HTML, 
+  end
+
+  def web_parser
+    CCCB::Reply::Markdown.new( 
+      CCCB::Reply::WebRender,
       no_intra_emphasis: true,
       lax_spacing: true,
       quote: true,
@@ -358,6 +456,10 @@ module CCCB::Core::Reply
       autolink: true,
       underline: true
     )
+  end
+
+  def module_load
+    reply.keywords = {}
   end
 
 end

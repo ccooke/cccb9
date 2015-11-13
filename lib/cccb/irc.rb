@@ -11,7 +11,11 @@ end
 module CCCB::Formattable
   def format(format_string, uri_escape: false)
     format_string.keyreplace { |key|
-      str = self.send(key).to_s || ""
+      if self.respond_to? key
+        str = self.send(key).to_s || ""
+      else
+        str = ""
+      end
       if uri_escape
         URI.escape(str, "&?/=#")
       else
@@ -310,7 +314,7 @@ class CCCB::Message
     @actioned = false
 
     # Render and Sender
-    @renderer = CCCB.instance.reply.irc_parser
+    @renderer = CCCB.instance.irc_parser
     @output_form = :minimal_form
     @write_func = ->{ raise "Writing on a message with no write function" }
     @write_final_func = ->{ }
@@ -353,6 +357,7 @@ class CCCB::Message
   def send_reply(final: false)
     @actioned = true
     unless @response.nil?
+      @renderer.set_context(self)
       raw = @response.send( @output_form )
       begin
         data = CCCB.instance.keyword_expand(raw, self)
@@ -369,6 +374,7 @@ class CCCB::Message
           lines = yield lines, renderer, @output_form
         end
       end
+      lines = (@response.header||"").lines + lines + (@response.footer||"").lines
       lines.each { |l| self.write_func.call l, self }
       self.write_final_func.call if final
       self.clear_reply
@@ -1030,3 +1036,4 @@ class CCCB::Network
     CCCB.instance.networking.networks[name] || nil
   end
 end
+

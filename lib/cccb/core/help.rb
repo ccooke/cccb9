@@ -163,7 +163,7 @@ module CCCB::Core::Help
           help[:params].each do |pn,pm|
             tmp << "| #{pn} | #{pm[:type]} | #{pm[:text]} |"
           end
-          tnp << ""
+          tmp << ""
         end
         help_text[mode] << tmp
       end
@@ -187,7 +187,7 @@ module CCCB::Core::Help
         else
           hook[:hook]
         end
-        h[hook[:feature]] << { name: name, id: hook[:id] }
+        h[hook[:feature]] << { name: name, id: hook[:id], hook: hook[:hook] }
       end
     end
     if sort
@@ -314,13 +314,13 @@ module CCCB::Core::Help
       get_hooks_by_feature(prefix, cut_prefix: true, sort: true).map { |(k,hs)|
         str = "## Feature: `#{k}`\n"
         str + hs.sort_by { |h| h[:hook] }.map { |h|
-          "1. [help](/command/help/#{h[:name]}) [code](/command/show hook/#{h[:name]} #{h[:id]}) `#{h[:name]}`"
+          "1. [help](/command/help/#{h[:name]}) [code](/command/show hook/#{h[:hook]} #{h[:id]}) `#{h[:name]}`"
         }.join("\n")
       }.join("\n\n")
     end
 
     add_keyword_expansion :help do |topic|
-      "[`#{topic}`](/command/help/#{topic})"
+      "[`#{topic || 'Help'}`](/command/help/#{topic})"
     end
 
     add_keyword_expansion :command do |args|

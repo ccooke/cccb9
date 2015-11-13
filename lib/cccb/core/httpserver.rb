@@ -49,7 +49,7 @@ class CCCB::ContentServer
       AccessLog: [
         [ 
           CCCB::Logger,
-          "WWW %a GET %U -> %s %b bytes"
+          "WWW %{X-Forwarded-For}i GET %U -> %s %b bytes"
         ]
       ]
     }
@@ -115,7 +115,7 @@ class CCCB::ContentServer
       end
       raise "No such network" if network.nil?
 
-      session_cookie = req.cookies.find { |c| c.name == network.name }
+      session_cookie = req.cookies.find { |c| c.path == '/' }
       if session_cookie.nil?
         session = nil
       else
@@ -126,27 +126,50 @@ class CCCB::ContentServer
       if session.nil?
         sid = SecureRandom.uuid
         key = req.remote_ip + ':' + sid
-        info "New (or expired) session #{key}"
+        debug "New (or expired) session #{key}"
         session = OpenStruct.new
+        session.key = key
         CCCB.instance.set_setting( session, "web_sessions", key )
-        res.cookies << WEBrick::Cookie.new( network.name, sid )
+        cookie = WEBrick::Cookie.new( network.name, sid )
+        cookie.path = "/"
+        res.cookies << cookie
         session.network = network
+        session.message = CCCB::Message.new( 
+          network,
+          ":#{key} PRIVMSG d20 :#{req.request_line}"
+        )
+        session.user = session.message.user
+        session.web_user = session.user
+      else
+        session.key = key
+        session.message = CCCB::Message.new( 
+          network,
+          ":#{session.user.nick} PRIVMSG d20 :#{req.request_line}"
+        )
+        session.message.user = session.user
+        spam "Loaded old session #{session}"
+        detail "Session user is #{session.user}"
       end
 
-      session.message = CCCB::Message.new( 
-        network,
-        ":#{key} PRIVMSG d20 :#{req.request_line}"
-      )
-      session.user = session.message.user
     else
       debug "No match: #{req.path}"
       session = OpenStruct.new
     end
 
+    CCCB.instance.get_setting("http_server_rewrites").each do |n,(r)|
+      k,v = r.split(/\s*=>\s*/)
+      detail "Rewrite: #{n} => #{k}, #{v}"
+      if match = req.path.match( %r{#{k}} )
+        req.path.replace( v.gsub(/{(?<key>\w+)}/) { |key| match[$~[:key].to_s] } )
+      end
+    end
+
     session.addr = req.remote_ip
     session.time = Time.now
 
-		@@blocks.each do |(send,matcher,block)|
+    i = @@blocks.count - 1
+    i.downto(0) do |index|
+      (send,matcher,block) = @@blocks[index]
 			match_object = if send == nil
 				req
 			else
@@ -155,6 +178,9 @@ class CCCB::ContentServer
 			if match = matcher.match( match_object )
         
 				block.call( session, match, req, res )
+        if session.user != session.web_user and not session.user.authenticated?(session.network)
+          session.user = session.web_user
+        end
         return
 			end
 		end
@@ -178,6 +204,7 @@ class CCCB::ContentServer
         res['Content-type'] = "text/html"
         res.body = hash[:text].to_s
       else
+        res['Content-type'] = "text/html"
         erb_file = "#{CCCB.instance.basedir}/web/template/#{template}.rhtml"
         res.body = ErbalT::render_from_hash(File.read(erb_file),hash)
       end
@@ -196,6 +223,7 @@ module CCCB::Core::HTTPServer
 
   def module_load
     add_setting :core, "http_server"
+    add_setting :core, "http_server_rewrites"
     add_setting :core, "web"
     add_setting :network, "web"
     add_setting :core, "web_sessions", persist: false
@@ -242,6 +270,7 @@ module CCCB::Core::HTTPServer
 
     CCCB::ContentServer.add_keyword_path('status') do |session,match,req,res|
       {
+        template: :default,
         title: "Status for #{session.network.name}",
         blocks: [
           [ :content,
