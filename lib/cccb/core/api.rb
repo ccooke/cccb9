@@ -50,6 +50,8 @@ module CCCB::Core::APICore
   end
 
   def module_load
+    api_core.apiweb = {}
+
     #@doc
     #@param string string A string to be echoed back
     # A simple echo function
@@ -58,11 +60,35 @@ module CCCB::Core::APICore
       args[:string]
     end
 
-    servlet = Proc.new do |session, match, request|
+    api_core.apiweb['debug.echo'] = Proc.new do |output, params, request|
+      { 
+        template: :default,
+        blocks: [
+          [ 'echo', "`#{output[:result]}`" ]
+        ]
+      }
+    end
+
+    servlet = Proc.new do |session, match, request, response|
       debug "Got call: #{request}"
 
-      params = CGI::parse(request.query_string).each_with_object({}) do |(k,v),h| 
-        h[k.to_sym] = v.last
+      params = {}
+      if request.query_string and request.query_string.length > 0
+        CGI::parse(request.query_string).each do |k,v| 
+          params[k.to_sym] = v.last
+        end
+      end
+      if request.body and request.body.length > 0
+        case request.content_type
+        when 'application/json'
+          JSON.parse(request.body).each do |k,v|
+            params[k.to_sym] = v
+          end
+        when 'application/x-www-form-urlencoded'
+          CGI::parse(request.body).each do |k,v|
+            params[k.to_sym] = v.last
+          end
+        end
       end
       method = match[:call].split('/').first
       params[:__message] = session.message
@@ -81,14 +107,30 @@ module CCCB::Core::APICore
           exception: e.class,
         }
       end
-      debug "Returned: #{text.inspect}"
+
+      next text, params
+    end
+
+    CCCB::ContentServer.add_keyword_path('api') do |*args|
+      result, params = servlet.call(*args)
       {
         template: :plain_text,
-        text: text.to_json
+        text: result.to_json
       }
     end
 
-    CCCB::ContentServer.add_keyword_path('api',&servlet)
+    CCCB::ContentServer.add_keyword_path('apiweb') do |session, match, request, response|
+      result, params = servlet.call(session, match, request, response)
+      if CCCB.instance.api_core.apiweb.include? result[:method]
+        CCCB.instance.api_core.apiweb[result[:method]].call(result, params, response)
+      else
+        {
+          template: :plain_text,
+          text: result.to_json
+        }
+      end
+    end
+
   end
 
   def module_test
