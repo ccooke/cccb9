@@ -519,7 +519,7 @@ module CCCB::Core::Dice
     add_setting :network, "roll_presets"
     add_setting :core, "roll_presets"
 
-    set_setting( "d20", "options", "default_die")
+    default_setting( "d20", "options", "default_die")
     default_setting( 4, "options", "probability_graph_height" )
     default_setting( false, "options", "probability_graph_absolute" )
     default_setting( 20, "options", "probability_graph_width" )
@@ -772,7 +772,9 @@ module CCCB::Core::Dice
         mode = words.last == 'toss' ? 'qroll' : words.last
         expression = args.join(" ")
 
-        default_die = message.user.get_setting("options", "default_die")
+        default_die = message.replyto.get_setting("options", "default_die")
+        default = "1#{default_die}"
+        debug "Initial default_die is #{default_die}"
         while match = ADVANTAGE_REGEX.match(expression)
           default = if match
             from,to = match.offset(0)
@@ -935,8 +937,8 @@ module CCCB::Core::Dice
       next unless setting == "options"
       next unless hash.include? "default_die"
 
-      if hash["default_die"] =~ /^\s*1?\s*d\s*(\d+)\s*$/
-        hash["default_die"] = "d#{$1}"
+      if hash["default_die"] =~ /^\s*1?\s*d\s*(\d+)(!|!!|!p)?\s*$/
+        hash["default_die"] = "d#{$1}#{$2}"
       elsif not hash["default_die"].nil?
         raise "Invalid default die: #{hash["default_die"]}"
       end
