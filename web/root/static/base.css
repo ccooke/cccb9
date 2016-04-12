@@ -87,18 +87,57 @@ table td, table th {
   text-align: left;
 }
 
+@media (min-width: 600px) {
+  #command\/npcindex #content  {
+    -webkit-column-count: 2;
+       -moz-column-count: 2;
+            column-count: 2;
+  }
+}
+
+@media (min-width: 900px) {
+  #command\/npcindex #content  {
+    -webkit-column-count: 3;
+       -moz-column-count: 3;
+            column-count: 3;
+  }
+}
+
+@media (min-width: 1200px) {
+  #command\/npcindex #content  {
+    -webkit-column-count: 4;
+       -moz-column-count: 4;
+            column-count: 4;
+  }
+}
+
+@media (min-width: 1500px) {
+  #command\/npcindex #content  {
+    -webkit-column-count: 5;
+       -moz-column-count: 5;
+            column-count: 5;
+  }
+}
+
 #command\/npcindex #content ul  {
   width: 40em;
   list-style-type: none;
-  font-size: xx-large;
+  font-size: large;
 }
 
 #command\/npcindex #content ul li ul {
-  /* padding-bottom: 2em;
+   padding-bottom: 2em;
+   padding-right: 1em;
   font-size: small; 
-  columns: 3;
-  -webkit-columns: 3;
-  -moz-columns: 3; */
+  border-color: black;
+  border-top: dashed 1px;
+}
+
+#command\/npcindex #content ul li {
+-webkit-column-break-inside: avoid;
+          page-break-inside: avoid;
+               break-inside: avoid;
+
 }
 
 #command\/npcindex #content ul li ul li {
