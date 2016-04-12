@@ -39,13 +39,16 @@ class CCCB::ContentServer
 
 	def self.restart
     self.shutdown
+    self.startup
+  end
 
+  def self.startup
     delay = 1
     options = { 
       Port: CCCB.instance.get_setting( "http_server", "port" ),
       DoNotReverseLookup: true,
       SSLEnable: true,
-      Logger: WEBrick::Log.new(nil,WEBrick::Log::WARN),
+      Logger: WEBrick::Log.new("logs/#{CCCB.instance.config(:nick)}-error.log",WEBrick::Log::WARN),
       AccessLog: [
         [ 
           CCCB::Logger,
@@ -215,14 +218,14 @@ end
 module CCCB::Core::HTTPServer
   extend Module::Requirements
 
-  needs :logging
+  needs :logging, :persist
 
   def module_unload
-    
+    CCCB::ContentServer.shutdown  
   end
 
   def module_load
-    add_setting :core, "http_server"
+    add_setting :core, "http_server", persist: true
     add_setting :core, "http_server_rewrites"
     add_setting :core, "web"
     add_setting :network, "web"
@@ -232,7 +235,7 @@ module CCCB::Core::HTTPServer
     default_setting 15, "web", "session_expire"
 
     begin
-      CCCB::ContentServer.restart
+      CCCB::ContentServer.startup
     rescue Exception => e
       error "Error starting content server: #{e} #{e.backtrace}"
     end
