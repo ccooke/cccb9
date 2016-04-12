@@ -26,6 +26,8 @@ fi
 profile="${1:-default}"
 if [ "$RUBY" ]; then
   RUBY_BIN="$RUBY"
+elif which ruby2.3 >/dev/null 2>&1; then
+  RUBY_BIN="ruby2.3"
 elif which ruby2.2 >/dev/null 2>&1; then
   RUBY_BIN="ruby2.2"
 elif which ruby2.1 >/dev/null 2>&1; then
