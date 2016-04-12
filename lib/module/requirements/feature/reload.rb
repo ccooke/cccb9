@@ -8,72 +8,64 @@ module Module::Requirements::Feature::Reload
   @@first_startup << true if @@first_startup.empty?
 
   def shutdown
-    verbose "Hook reload_pre"
     run_hooks :reload_pre
-    verbose "c_sm module_unload"
     call_submodules :module_unload
-    verbose "c_sm module_unload done"
-
-    #save
-
-    #unload_all_hooks
   end
 
   def redefine
-    Thread.exclusive do
-      reload.errors = []
-      saved = $-v
-      $-v = nil
-      
-      self.class.module_requirements_loader.submodules.map { |m| 
-        m.name.split('::').last
-      }.select { |m|
-        m.start_with? 'AutoDependency'
-      }.map(&:to_sym).select { |m| 
-        self.class.module_requirements_loader.constants.include? m
-      }.each do |m|
-        debug "Destroying #{m} before reload"
-        self.class.module_requirements_loader.class_exec do
-          remove_const m
-        end
+    raise "Reload lock is not taken" unless reload.lock.locked?
+    reload.errors = []
+    saved = $-v
+    $-v = nil
+    
+    self.class.module_requirements_loader.submodules.map { |m| 
+      m.name.split('::').last
+    }.select { |m|
+      m.start_with? 'AutoDependency'
+    }.map(&:to_sym).select { |m| 
+      self.class.module_requirements_loader.constants.include? m
+    }.each do |m|
+      debug "Destroying #{m} before reload"
+      self.class.module_requirements_loader.class_exec do
+        remove_const m
       end
+    end
 
-      Gem.clear_paths
+    Gem.clear_paths
 
-      $".select { |f| 
-        f.start_with? config(:basedir) 
-      }.map { |f| 
-        f.split('/') 
-      }.sort { |a,b|
-        b.count <=> a.count
-      }.map { |f| f.join('/') }.each do |code_file|
-        begin 
-          #if (errors = %x{#{ENV['RUBY_BIN'] || "ruby2.0" } -c #{code_file} 2>&1 }) =~ /Syntax OK/
-            debug "Marking #{code_file} for reload"
-            $".delete( code_file )
-            #require code_file
-          #else
-          #  err = "Syntax errors in #{code_file} prevent reloading it: #{errors}"
-          #  critical err
-          #  reload.errors << err
-          #end
-        rescue Exception => e
-          puts "MARK RELOAD EXCEPTION"
-          puts e
-          pp e.backtrace
-        end
-      end
-
-      begin
-        require 'cccb'
+    $".select { |f| 
+      f.start_with? config(:basedir) 
+    }.map { |f| 
+      f.split('/') 
+    }.sort { |a,b|
+      b.count <=> a.count
+    }.map { |f| f.join('/') }.each do |code_file|
+      begin 
+        #if (errors = %x{#{ENV['RUBY_BIN'] || "ruby2.0" } -c #{code_file} 2>&1 }) =~ /Syntax OK/
+          debug "Marking #{code_file} for reload"
+          $".delete( code_file )
+          #require code_file
+        #else
+        #  err = "Syntax errors in #{code_file} prevent reloading it: #{errors}"
+        #  critical err
+        #  reload.errors << err
+        #end
       rescue Exception => e
-        puts "RELOAD EXCEPTION"
+        puts "MARK RELOAD EXCEPTION"
         puts e
         pp e.backtrace
       end
-
-      $-v = saved
     end
+
+    begin
+      require 'cccb'
+    rescue Exception => e
+      puts "RELOAD EXCEPTION"
+      puts e
+      pp e.backtrace
+    end
+
+    $-v = saved
   end
 
   def startup
@@ -132,14 +124,18 @@ module Module::Requirements::Feature::Reload
       reply = Queue.new
       reload.queue << reply
       reply.pop
-      block.call(*args)
+      begin
+        block.call(*args)
+      rescue Exception => e
+        error "Error in reload_then block: #{e}"
+        error "BT: #{e.backtrace}"
+      end
     end
   end
 
   def reload_body
     loop do 
       reply = reload.queue.pop
-      puts "Start a reload"
       begin
         clean_reload
       rescue Exception => e
@@ -157,14 +153,14 @@ module Module::Requirements::Feature::Reload
 
   def clean_reload
     Thread.pass
-    verbose "Obtaining reload lock"
+    detail2 "Obtaining reload lock"
     reload.lock.synchronize do
-      verbose "Reload locked"
+      detail "Reload locked"
       debug "Reloading client"
       shutdown
-      verbose "Shutdown done"
+      debug "Shutdown done"
       redefine
-      verbose "redefine done"
+      debug "redefine done"
       startup
       critical "Client reloaded"
     end

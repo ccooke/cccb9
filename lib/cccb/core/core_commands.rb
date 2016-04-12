@@ -66,14 +66,19 @@ module CCCB::Core::CoreCommands
       auth_command :superuser, message
       message.clear_reply
       reload_then(message) do |m|
-        if $load_errors.count == 0
-          m.reply.title = "Reload successful"
-        else
-          m.reply.force_title = "Reload failed: #{$load_errors.count} error(s)"
-          m.reply.summary = $load_errors.dup
+        begin
+          if $load_errors.count == 0
+            m.reply.title = "Reload successful"
+          else
+            m.reply.force_title = "Reload failed: #{$load_errors.count} error(s)"
+            m.reply.summary = $load_errors.dup
+          end
+          # This needs to be here because this code executes after the reload
+          r = m.send_reply
+        rescue Exception => e
+          error "Error in reload_then block: #{e}"
+          error "#{e.backtrace}"
         end
-        # This needs to be here because this code executes after the reload
-        m.send_reply
       end
     end
 
