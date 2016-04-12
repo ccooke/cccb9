@@ -342,7 +342,7 @@ class CCCB::DieRoller
               next
             end
 
-            if expr =~ /^\s*=PB(?:\s*(dnd|next|5e|d&d5e|d&dnext|d&d|pf|pathfinder)?\s*(>|=|<)\s*(-?\d+))?\s*$/i
+            if expr =~ /^\s*=PB(?:\s*(dnd|next|3e|3.5e|4e|5e|d&d5e|d&dnext|d&d|pf|pathfinder)?\s*(>|=|<)\s*(-?\d+))?\s*$/i
               unless rolls.last[:type] == :pointbuy
                 point_buy_total(rolls)
               end
@@ -352,7 +352,7 @@ class CCCB::DieRoller
                 system_min = -30
                 system = :dnd
                 
-                if $1 == 'pf' or $1 == 'pathfinder'
+                if $1 =~ /pf|pathfinder/i 
                   system = :pf
                   system_max = 102
                   system_min = -7 * 6

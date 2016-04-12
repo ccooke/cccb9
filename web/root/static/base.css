@@ -6,26 +6,37 @@ table td, table th {
   border: 1px solid black;
 }
 
-#command\.roll strong {
+#header ul {
+  list-style-type: none;
+  margin: 1em;
+  font-size: small;
+}
+
+#header li {
+  display: inline;
+  margin-left: 1em;
+}
+
+#command\/roll strong {
   font-size: large;
   font-style: normal;
   font-weight: bold;
   color: red
 }
-#command\.roll em {
+#command\/roll em {
   font-size: large;
   font-style: normal;
   font-weight: bold;
   color: #0080ff;
 }
-#command\.roll td {
+#command\/roll td {
   width: 10em;
   text-align: center;
 }
-#command\.roll td:nth-of-type(3) {
+#command\/roll td:nth-of-type(3) {
   text-align: center;
 }
-#command\.roll tbody td:nth-of-type(3) {
+#command\/roll tbody td:nth-of-type(3) {
   width: 3em;
   text-align: center;
   font-size: xx-large;

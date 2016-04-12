@@ -52,6 +52,10 @@ module Dice
             obj = Reroll.new(match,size, max_rerolls: 1 )
           elsif match[:reroll]
             obj = Reroll.new(match,size, max_rerolls: 1000 )
+          elsif match[:sum]
+            obj = Sum.new(size)
+          elsif match[:exclude]
+            obj = Exclude.new(match)
           elsif match[:keep]
             obj = Keep.new(match,size)
           elsif match[:drop]
@@ -249,6 +253,70 @@ module Dice
             ""
           end
         end
+
+        class Sum < Modifier
+          def initialize(size)
+            @size = size
+          end
+
+          def process(input)
+            new = 0
+            input.each do |i|
+              new *= @size
+              new += i
+              info "#{new}"
+            end
+            [new]
+          end
+
+          def to_s
+            "Σ"
+          end
+        end
+
+        class Exclude < Modifier
+          attr_reader :dropped
+
+          def initialize(match)
+            @exclude = match[:exclude_num].split(/\s*,\s*/).map &:to_i
+            @dropped = []
+          end
+
+          def process(input)
+            @dropped = []
+            @original = input.dup
+            numbers = input.dup
+            numbers.select do |i|
+              if @exclude.include? i
+                @dropped << i
+                false
+              else
+                true
+              end
+            end
+          end
+
+          def output(callbacks, parser)
+            if @dropped.count > 0
+              output = @original.map do |die|
+                out = callbacks[:die].(parser, die)
+                unless @exclude.include? die
+                  "<#{out}>"
+                else
+                  out
+                end
+              end
+              "(selected: #{output.join(", ")})"
+            else
+              ""
+            end
+          end
+
+          def to_s
+            "e#{@exclude.join(",")}"
+          end
+        end
+
 
         class Keep < Modifier
           attr_reader :dropped
@@ -536,9 +604,11 @@ module Dice
       (?<success>         s \s* \g<condition>?                                            ){0}
       (?<wolf>            ww | w \s* \g<condition>?                                       ){0}
       (?<xxx>             x \s* \g<condition>?                                            ){0}
-      (?<reroll>          (?: (?<reroll_once> ro ) | r(?!o) ) \s* \g<condition>?               ){0}
+      (?<exclude>         e \s* (?<exclude_num> \g<nonzero> (?: , \s* \g<exclude_num> )?) ){0}
+      (?<sum>             Σ                                                               ){0}
+      (?<reroll>          (?: (?<reroll_once> ro ) | r(?!o) ) \s* \g<condition>?          ){0}
 
-      (?<die_modifier> \g<drop> | \g<keep> | \g<reroll> | \g<success> | \g<failure> | \g<wolf> | \g<xxx> ){0}
+      (?<die_modifier> \g<drop> | \g<keep> | \g<reroll> | \g<success> | \g<failure> | \g<wolf> | \g<xxx> | \g<exclude> | \g<sum> ){0}
       (?<die_modifiers>   \g<die_modifier>*                                               ){0}
       (?<penetrating>     !p                                                              ){0}
       (?<compounding>     !!                                                              ){0}
