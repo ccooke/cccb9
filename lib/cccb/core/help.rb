@@ -323,18 +323,26 @@ module CCCB::Core::Help
       "[`#{topic || 'Help'}`](/command/help/#{topic})"
     end
 
+    add_keyword_expansion :command_arg do |args|
+      if match = args.match(/(?<command>[^:]+)(?::(?<args>.*))?$/)
+        args = $~[:args] || ""
+        cmd = [ $~[:args] ].join(" ")
+        "[`#{cmd}`](/command/#{$~[:command]}/#{URI.escape(args,"#? =")})"
+      end
+    end
+
     add_keyword_expansion :command do |args|
       if match = args.match(/(?<command>[^:]+)(?::(?<args>.*))?$/)
         args = $~[:args] || ""
         cmd = [ $~[:command], $~[:args] ].join(" ")
-        "[`#{cmd}`](/command/#{$~[:command]}/#{URI.escape(args,"#?=")})"
+        "[`#{cmd}`](/command/#{$~[:command]}/#{URI.escape(args,"#? =")})"
       end
     end
 
     add_keyword_expansion :url do |args|
       if match = args.match(/(?<command>[^:]+)(?::(?<args>.*))?$/)
-        args = $~[:args] || ""
-        CCCB.instance.get_setting("http_server","url") + "/#{$~[:command]}/#{args}"
+        args = $~[:args] || nil
+        CCCB.instance.get_setting("http_server","url") + "/#{URI.escape($~[:command]," ")}#{if args; "/#{URI.escape(args,"#? /=")}"; end }"
       end
     end
 
