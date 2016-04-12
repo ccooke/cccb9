@@ -28,28 +28,40 @@ class CCCB::Reply
       @response = res
     end
 
-    def doc_header
-      return nil if @header_sent
-      @header_sent = true
+    if self.instance_methods.include? :doc_header
+      remove_method :doc_header
+    end
+
+    def preprocess(data)
       if @context.user.authenticated? @context.network
         info = "Logged in as <em>#{@context.user.nick}</em>"
         login = "<a href=\"/command/logout\">Sign out</a>"
       else
         info = "Anonymous" 
-        info += "<!-- #{@context.inspect} on #{@context.network.inspect} - auth: #{@context.user.authenticated?(@context.network).inspect} #{@context.user.get_setting("session").inspect} -->"
+        # info += "<!-- #{@context.inspect} on #{@context.network.inspect} - auth: #{@context.user.authenticated?(@context.network).inspect} #{@context.user.get_setting("session").inspect} -->"
         login = "<a href=\"/command/login\">Sign in</a>"
       end
-
-      "<div id='header'>" +
-        "<ul>" +
-          "<li>" + info + "</li>" +
-          "<li><a href=\"/\">Index</a>" +
-          "<li>" + login + "</li>" +
-        "</ul>" +
-      "</div>"
+      
+      "<!-- div meta -->\n\n* #{ info }\n* #{ login }\n\n<!-- end -->\n" +
+      "<!-- div header -->\n\n#{ 
+        CCCB.instance.keyword_expand(@context.reply.header || "", @context)  
+      }\n\n<!-- end -->\n" +
+      "<!-- div content -->\n\n#{data}\n\n<!-- end -->\n" +
+      "<!-- div footer -->\n\n#{ 
+        CCCB.instance.keyword_expand(@context.reply.footer || "", @context) 
+      }\n\n<!-- end -->\n"
     end
 
-    def doc_footer
+    def postprocess(data)
+      div_id = 0
+      data.gsub /\<!-- (\w+)(?: (\w+))? --\>/ do
+        case Regexp.last_match[1]
+        when 'div'
+          "<div id=\"#{Regexp.last_match[2] || div_id += 1 }\">"
+        when 'end'
+          '</div>'
+        end
+      end
     end
   end
 
@@ -74,6 +86,10 @@ class CCCB::Reply
       grey:         '14',
       light_grey:   '15',
       default:      '99'
+    }
+
+    LIST_SYMS = %w{ 
+      * o = + ~ -
     }
 
     COLOURS.each do |k,v|
@@ -155,7 +171,6 @@ class CCCB::Reply
     end
 
     def hrule(*args)
-      info "Hrule: #{args}"
       "------------------------------------\n"
     end
 
@@ -233,6 +248,7 @@ class CCCB::Reply
       indent = [ 0 ]
       parsed = ""
       prefix = nil
+      list_sym = -1
       until ( index = data.index("\u0000") ).nil?
         indent_str = " " * indent.last
         data[0,index].each_line do |l|
@@ -249,11 +265,13 @@ class CCCB::Reply
         when "L["
           lists << { index: 1 }
           indent << indent.last + 2
+          list_sym = list_sym + 1 == LIST_SYMS.count ? 0 : list_sym + 1
         when "L]"
           lists.pop
           indent.pop
+          list_sym = list_sym == 0 ? LIST_SYMS.count - 1 : list_sym - 1
         when "Lu"
-          prefix = "* "
+          prefix = "#{"\u{0009}" * ((indent[-1]/2) - 1)}#{italic LIST_SYMS[list_sym]} "
         when "Lo"
           lo = "#{lists.last[:index]}. "
           prefix = lo

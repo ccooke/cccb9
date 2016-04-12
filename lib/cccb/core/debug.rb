@@ -11,6 +11,13 @@ module CCCB::Core::Debugging
     end
       
     #@doc
+    # Prints its parameters back to you
+    add_command :debug, "echo_md" do |message,args|
+      message.return_markdown = true
+      message.reply.summary = args.join(" ").split("\\n").join("\n")
+    end
+
+    #@doc
     # (superuser) Adds a debug trace to a hook in the current query or channel
     # This will cause a message to be printed by the bot every time the named hook is triggered
     # Useful examples include 'exception' and 'request'

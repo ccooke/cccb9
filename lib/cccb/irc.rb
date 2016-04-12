@@ -365,28 +365,32 @@ class CCCB::Message
 
   def send_reply(final: false)
     @actioned = true
-    unless @response.nil?
-      @renderer.set_context(self)
-      raw = @response.send( @output_form )
-      begin
-        data = CCCB.instance.keyword_expand(raw, self)
-      rescue Exception => e
-        error "Exception in keyword_expand: #{e}"
-        error e.backtrace
-        data = raw
-      end
-      if @return_markdown
-        lines = data.lines 
-      else
-        lines = @renderer.render( data ).lines
-        if block_given? 
-          lines = yield lines, renderer, @output_form
+    begin
+      unless @response.nil?
+        @renderer.set_context(self)
+        raw = @response.send( @output_form )
+        begin
+          data = CCCB.instance.keyword_expand(raw, self)
+        rescue Exception => e
+          error "Exception in keyword_expand: #{e}"
+          error e.backtrace
+          data = raw
         end
+        if @return_markdown
+          lines = data.lines 
+        else
+          lines = @renderer.render( data ).lines
+          if block_given? 
+            lines = yield lines, renderer, @output_form
+          end
+        end
+        lines.each { |l| self.write_func.call l, self }
+        self.write_final_func.call if final
+        self.clear_reply
       end
-      lines = (@response.header||"").lines + lines + (@response.footer||"").lines
-      lines.each { |l| self.write_func.call l, self }
-      self.write_final_func.call if final
-      self.clear_reply
+    rescue Exception => e
+      error "Exception in send_reply: #{e}"
+      error e.backtrace
     end
   end
 
