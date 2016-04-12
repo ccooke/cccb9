@@ -113,6 +113,7 @@ module CCCB::Core::Commands
     rate_limit_by_feature( message, commands.feature_lookup[hook], hook )
     if hook_runnable? hook, message, *args
       spam "Scheduling hook for command: #{hook}->(#{args.inspect}) #{hook_runnable?(hook,*args).inspect}"
+      message.hint :id, hook
       schedule_hook hook, message, args, pre, cursor, hook, run_hook_in_thread: true do
        # message.reply "In post block"
        # message.reply "Response: #{message.instance_variable_get(:@response)}"
@@ -239,6 +240,8 @@ module CCCB::Core::Commands
       message.write_func = ->(l,m){ output_queue << l }
       message.write_final_func = ->{ output_queue << :EOM }
 
+      message.hint :id, 'default'
+
       process_command(message, command)
       text = output_queue.pop
       until (data = output_queue.pop) == :EOM
@@ -251,7 +254,7 @@ module CCCB::Core::Commands
         template: template,
         title: message.reply.title,
         blocks: [
-          [ "command.#{split[0].split(" ").join(".")}",
+          [ "#{message.hint(:id)}",
             text
           ]
         ]

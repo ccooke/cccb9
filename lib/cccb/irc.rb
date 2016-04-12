@@ -319,6 +319,7 @@ class CCCB::Message
     @write_func = ->{ raise "Writing on a message with no write function" }
     @write_final_func = ->{ }
     @return_markdown
+    @hints = {}
     
     match = set_user_data(string)
 
@@ -338,6 +339,14 @@ class CCCB::Message
       process
     end
 
+  end
+
+  def hint(key,value = nil)
+    if value
+      @hints[key] = value
+    else
+      @hints[key]
+    end
   end
 
   def actioned?
