@@ -44,21 +44,64 @@ table td, table th {
   font-weight: bold;
   color green;
 }
-#command\.roll tbody td:nth-of-type(4) {
+#command\/roll tbody td:nth-of-type(4) {
   width: 20em;
   font-size: large;
 }
-#command\.roll tbody td:nth-of-type(4) mark {
+#command\/roll tbody td:nth-of-type(4) mark {
   float: left;
   font-size: xx-large;
 }
-#command\.roll tbody td:nth-of-type(4) strong {
+#command\/roll tbody td:nth-of-type(4) strong {
   float: right
   text-align: left;
   color: #993333;
 }
-#command\.roll td, #command\.help td{
+#command\/roll td, #command\/help td{
   border: 1px;
   border-color: black;
   border-style: solid;
+}
+#command\/npc #content {
+  width: 40em;
+  border: 1px;
+  margin-left: 1em;
+  padding: 1em;
+  border-color: black;
+  border-style: solid;
+}
+#command\/npc #content table {
+  width: 100%;
+  height: 5em;
+  text-align: center;
+  font-size: large;
+}
+#command\/npc #content td {
+  text-size: +5;
+}
+
+#license-block {
+  float: bottom;
+  font-size: xx-small;
+  color: #808080;
+  text-align: left;
+}
+
+#command\/npcindex #content ul  {
+  width: 40em;
+  list-style-type: none;
+  font-size: xx-large;
+}
+
+#command\/npcindex #content ul li ul {
+  /* padding-bottom: 2em;
+  font-size: small; 
+  columns: 3;
+  -webkit-columns: 3;
+  -moz-columns: 3; */
+}
+
+#command\/npcindex #content ul li ul li {
+  list-style-type: none;
+  font-size: small;
 }
