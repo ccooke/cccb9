@@ -19,7 +19,10 @@ module Dice
     class Number < Term
       attr_accessor :number, :math_symbol
       def initialize( number, sign = :+ )
-        @number = number.to_i
+        @number = number.to_f
+        if @number.to_i == @number
+          @number = @number.to_i
+        end
         @math_symbol = sign.to_sym
       end
 
@@ -32,6 +35,7 @@ module Dice
       end
 
       def sum(other)
+        info "#{@value}.send(#{@math_symbol.inspect}, #{other.inspect})"
         @value.send(@math_symbol, other )
       end
 
@@ -593,6 +597,7 @@ module Dice
     EXPRESSION_BASE = %r{
       (?<conditional>     > | < | = |                                                     ){0}
       (?<nonzero>     [0-9]\d*                                                            ){0}
+      (?<fractional>      \d+(?: \. \d+)?                                                 ){0}
       (?<condition>       \g<conditional> \s* (?<condition_number> \g<nonzero> )          ){0}
       (?<keep_highest>    kh | k                                                          ){0}
       (?<keep_lowest>     kl                                                              ){0}
@@ -603,7 +608,7 @@ module Dice
       (?<failure>         f \s* \g<condition>?                                            ){0}
       (?<success>         s \s* \g<condition>?                                            ){0}
       (?<wolf>            ww | w \s* \g<condition>?                                       ){0}
-      (?<xxx>             x \s* \g<condition>?                                            ){0}
+      (?<xxx>             xx \s* \g<condition>?                                            ){0}
       (?<exclude>         e \s* (?<exclude_num> \g<nonzero> (?: , \s* \g<exclude_num> )?) ){0}
       (?<sum>             Σ                                                               ){0}
       (?<reroll>          (?: (?<reroll_once> ro ) | r(?!o) ) \s* \g<condition>?          ){0}
@@ -620,11 +625,11 @@ module Dice
       (?<fudge>           f                                                               ){0}
       (?<die_size>        \g<nonzero> | \g<fudge>                                         ){0}
 
-      (?<mathlink>        \+ | -                                                          ){0}
+      (?<mathlink>        \+ | - | x | \/                                                 ){0}
 
       (?<die>    (?<count> \g<nonzero> )? \s* d \s* \g<die_size> \s* \g<decoration>? \s* \g<die_modifiers>?){0}
 
-      (?<constant>        (?<constant_number> \g<nonzero> )                               ){0}
+      (?<constant>        (?<constant_number> \g<fractional> | π )                        ){0}
 
       (?<dice_string>
         \g<die>
@@ -634,6 +639,8 @@ module Dice
 
       (?<dice_expression> \g<dice_string> (?: \s* \g<mathlink> \s* \g<dice_string> \s* )* ){0}
     }ix
+
+    # /
 
     EXPRESSION = %r{
       \G
@@ -729,10 +736,15 @@ module Dice
 
     def parse
       tokenize_dice_expression.map do |term|
-        #p term 
+        p term 
+        term[:mathlink] = '*' if term[:mathlink] == 'x'
 
         if term[:constant_number]
-          constant = term[:constant_number].to_i
+          case term[:constant_number]
+          when 'π'
+            term[:constant_number] = Math::PI
+          end
+          constant = term[:constant_number].to_f
           Number.new constant, term[:mathlink]
         elsif term[:die]
           die_size = term[:die_size].to_i
@@ -778,7 +790,9 @@ module Dice
 
     def value
       detail @terms
-      @terms.inject(0) do |i,t|
+      start = ([ :+, :- ].include? @terms.first.math_symbol) ? 0 : 1
+      @terms.inject(start) do |i,t|
+        info "inject: #{i.inspect}.send(#{t.math_symbol.inspect}, #{t.value.inspect})"
         i.send(t.math_symbol, t.value)
       end
     end

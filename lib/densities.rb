@@ -19,6 +19,10 @@ class Density
     @exact=true
     @fail=false
   end
+
+  def keys
+    @d.keys
+  end
   
   def roll
     if (@probability_interval.nil?)
@@ -85,9 +89,15 @@ class Density
       if (y.to_a.size>1 and @d.to_a.size>1)
         z.uniform=false
       end
-      max=(@d.keys + y.keys).collect(:abs).max
+      info "@d: #{@d.keys}"
+      info "y:  #{y.keys}"
+      max=(@d.keys + y.keys).collect(&:abs).max
       for n in (-max..max) do 
-        ((-n..n).collect { |d| [d,n/d] if ((n/d) * d) == n}.compact).each do |d,e|
+        (
+          (-n..n).collect { |d|
+            [d,n/d] if d != 0 and ((n/d) * d) == n
+          }.compact
+        ).each do |d,e|
           z[n]+=Rational(@d[d]*y[e],abs(d))
         end
       end
