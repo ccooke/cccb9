@@ -1,75 +1,79 @@
 require 'digest/sha2'
 require 'securerandom'
 
-module CCCB::Settings::IdentifiedUser
+class CCCB
+  module Settings
+    module IdentifiedUser
 
-  NICKSERV_TIMEOUT = 5
-  NICKSERV_VALID_TIME = 3600
+      NICKSERV_TIMEOUT = 5
+      NICKSERV_VALID_TIME = 3600
 
-  def auth_setting(message, name)
-    super or if ( setting_option(name,:auth)==:user or name == 'identity' or name == 'session') and registered?
-      @___auth_reject_reason = "That user account is registered and you are not logged in"
-      get_setting("session", "authenticated::#{message.network.name}")
-    end
-  end
+      def auth_setting(message, name)
+        super or if ( setting_option(name,:auth)==:user or name == 'identity' or name == 'session') and registered?
+          @___auth_reject_reason = "That user account is registered and you are not logged in"
+          get_setting("session", "authenticated::#{message.network.name}")
+        end
+      end
 
-  def verify_password(password)
-    return false unless registered?
+      def verify_password(password)
+        return false unless registered?
 
-    info "verify password for #{self} in #{self.network}. #{self} is a #{self.class}"
-    salt = get_setting("identity", "salt")
-    hash = Digest::SHA256.hexdigest(password+salt)
+        info "verify password for #{self} in #{self.network}. #{self} is a #{self.class}"
+        salt = get_setting("identity", "salt")
+        hash = Digest::SHA256.hexdigest(password+salt)
 
-    hash == get_setting("identity", "password")
-  end
+        hash == get_setting("identity", "password")
+      end
 
-  def registered?
-    if network.get_setting("options","accept_nickserv") == true
-      session = CCCB.instance.session
-      session.nickserv_auth_expire[network] ||= {}
-      if ! session.nickserv_auth_expire[network].include? self or Time.now > session.nickserv_auth_expire[network][self]
-        verbose "Checking if #{self.nick} is logged in via Nickserv"
-        session.auth_queues[network] ||= {}
-        queue = session.auth_queues[network][self.nick] ||= Queue.new
-        network.puts "WHOIS #{self.nick}"
-        time = Time.now
-        while Time.now - time < NICKSERV_TIMEOUT
-          if queue.empty?
-            sleep 0.1
-          else
-            result = queue.pop
-            if result
-              info "Success!"
-              session.nickserv_auth_expire[network][self] = Time.now + NICKSERV_VALID_TIME
+      def registered?
+        if network.get_setting("options","accept_nickserv") == true
+          session = CCCB.instance.session
+          session.nickserv_auth_expire[network] ||= {}
+          if ! session.nickserv_auth_expire[network].include? self or Time.now > session.nickserv_auth_expire[network][self]
+            verbose "Checking if #{self.nick} is logged in via Nickserv"
+            session.auth_queues[network] ||= {}
+            queue = session.auth_queues[network][self.nick] ||= Queue.new
+            network.puts "WHOIS #{self.nick}"
+            time = Time.now
+            while Time.now - time < NICKSERV_TIMEOUT
+              if queue.empty?
+                sleep 0.1
+              else
+                result = queue.pop
+                if result
+                  info "Success!"
+                  session.nickserv_auth_expire[network][self] = Time.now + NICKSERV_VALID_TIME
+                end
+                break
+              end
             end
-            break
+            info "Returned from nickserv"
           end
         end
-        info "Returned from nickserv"
+        get_setting("identity", "registered")
+      end
+
+      def register(password, network)
+        if registered?
+          if verify_password(password)
+            set_setting true, "session", "authenticated::#{network.name}"
+            "OK"
+          else
+            "Denied"
+          end
+        else
+          set_setting true, "session", "authenticated::#{network.name}"
+          set_setting true, "identity", "registered"
+          set_setting password, "identity", "password"
+          "You are now registered"
+        end
+      end
+
+      def authenticated?(network)
+        return false unless registered?
+        get_setting("session", "authenticated::#{network.name}")
       end
     end
-    get_setting("identity", "registered")
-  end
-
-  def register(password, network)
-    if registered?
-      if verify_password(password)
-        set_setting true, "session", "authenticated::#{network.name}"
-        "OK"
-      else
-        "Denied"
-      end
-    else
-      set_setting true, "session", "authenticated::#{network.name}"
-      set_setting true, "identity", "registered"
-      set_setting password, "identity", "password"
-      "You are now registered"
-    end
-  end
-
-  def authenticated?(network)
-    return false unless registered?
-    get_setting("session", "authenticated::#{network.name}")
   end
 end
 
