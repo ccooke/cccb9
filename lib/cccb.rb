@@ -42,7 +42,7 @@ end
 
 class CCCB 
 
-  VERSION = "9.0-pre1"
+  VERSION = "9.1.1"
   
   include CCCB::Core
   include CCCB::Config

@@ -834,6 +834,7 @@ class CCCB::Network
       username: conf[:user] || @client.user,
       host: conf[:host] || 'irc',
       port: conf[:port] || 6667,
+      connect_from: conf[:connect_from] || nil,
       pass: conf[:pass] || nil,
       auto_join_channels: conf[:channels] || [],
       throttle: {
@@ -890,7 +891,7 @@ class CCCB::Network
         sleep @throttle_connections[:delay]
       end
       verbose "#{self} Connecting to #{self.host}:#{self.port}"
-      self.sock = TCPSocket.open( self.host, self.port )
+      self.sock = TCPSocket.open( self.host, self.port, self.connect_from )
       self.state = :pre_login
       schedule_hook :connecting, self
     when :pre_login
