@@ -777,6 +777,15 @@ module CCCB::Core::Dice
       #roller.roll(args[:q],"1d20","roll")
       Backgrounder.new(roller).background(:roll, args[:q], "1d20", 'roll')
     end
+
+    #@doc
+    # A shorthand for !roll
+    add_hook :dice, :message do |message|
+      next nil unless message.get_setting("options", "roll_query_shorthand")
+      if match = /^\s*\?\s*(?<roll>.*)$/.match(message.text)
+        run_hooks :request, "roll #{match[:roll]}", message
+      end
+    end
   
     roll_stack = {}
     #@doc
