@@ -348,9 +348,11 @@ module CCCB::Core::Bot
     add_setting :network, "rate_limit"
     add_setting :channel, "rate_limit"
     add_setting :channel, "rate_limit_current", auth: :superuser, persist: false
+    add_setting :network, "auto_save_channels"
     default_setting true, "options", "join_on_invite"
     default_setting true, "options", "bang_commands_enabled"
     default_setting "", "options", "rate_limit_message"
+    default_setting true, "options", "auto_save_channels"
 
     add_hook :core, :pre_setting_set do |obj, setting, hash|
       next unless setting == 'rate_limit' and hash.respond_to? :to_hash
@@ -380,6 +382,12 @@ module CCCB::Core::Bot
       info "CONNECTED #{network}"
       network.auto_join_channels.each do |channel|
         network.puts "JOIN #{Array(channel).join(" ")}"
+      end
+
+      if network.get_setting("options","auto_save_channels")
+        network.get_setting("auto_save_channels").each do |c,d|
+          network.puts "JOIN #{c}"
+        end
       end
     end
 
@@ -452,6 +460,9 @@ module CCCB::Core::Bot
       if message.network.get_setting("options", "join_on_invite")
         warning "Invited to channel #{message.text} by #{message.user}"
         message.network.puts "JOIN #{message.text}"
+        if message.network.get_setting("options","auto_save_channels")
+          message.network.set_setting(true,"auto_save_channels","#{message.text}")
+        end
       end
     end
 
