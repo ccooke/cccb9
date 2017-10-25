@@ -500,6 +500,8 @@ module CCCB::Core::Bot
         message.text
       end
 
+      message.hint(:request, request)
+
       run_hooks :request, request, message
     end
     
