@@ -342,7 +342,16 @@ class CCCB::DieRoller
               next
             end
 
-            if expr =~ /^\s*=PB(?:\s*(dnd|next|3e|3.5e|4e|5e|d&d5e|d&dnext|d&d|pf|pathfinder)?\s*(>|=|<)\s*(-?\d+))?\s*$/i
+            if expr =~ /^\s*=sum\s*$/i
+              sum = 0
+              rolls.select { |r| r[:type] == :roll }.each do |r|
+                sum += r[:roll]
+              end
+              rolls.push type: :note, text: "Sum total: #{sum}"
+              next
+            end
+
+            if expr =~ /^\s*=PB(?:\s*(dnd|next|3e|3\.5e|4e|5e|d&d5e|d&dnext|d&d|pf|pathfinder)?\s*(>|=|<)\s*(-?\d+))?\s*$/i
               unless rolls.last[:type] == :pointbuy
                 point_buy_total(rolls)
               end
@@ -352,14 +361,17 @@ class CCCB::DieRoller
                 system_min = -30
                 system = :dnd
                 
-                if $1 =~ /pf|pathfinder/i 
-                  system = :pf
-                  system_max = 102
-                  system_min = -7 * 6
-                elsif $1 == '5e' or $1 == 'd&d5e' or $1 == 'next' or $1 == 'd&dnext'
+                case $1
+                when '5e', 'd&d5e', 'd&dnext', 'd&d', 'next'
                   system = :dnd5e
                   system_max = 114
                   sysemt_min = -5 * 6
+                when 'pf', 'pathfinder'
+                  system = :pf
+                  system_max = 102
+                  system_min = -7 * 6
+                when 'dnd', '3e', '3.5e', '4e'
+                  # use the default
                 end
               
                 if limit >= system_max
@@ -376,6 +388,7 @@ class CCCB::DieRoller
 
                 #p system: system, max: system_max, min: system_min, limit: limit, action: $2, value: rolls.last[system]
                 #p rolls.last
+                sign = $2
                 do_reroll = if $2 == '<' and rolls.last[system] < limit
                   false
                 elsif $2 == '>' and rolls.last[system] > limit
@@ -390,16 +403,20 @@ class CCCB::DieRoller
 
                 if do_reroll
                   best = rolls
-                  rerolls = if rolls.first[:type] == :reroll 
+                  rerolls = if rolls.first[:type] == :reroll
                     if (limit - rolls.first[:best].last[system]).abs < (limit - rolls.last[system]).abs
                       best = rolls.first[:best]
+                      best.first.delete(:best)
                     end	
                     rolls.first[:rerolls] + 1
                   else
                     1
                   end
                   #info "Reroll #{rerolls}" 
-                  if rerolls > 1000
+                  if best.last[system] == limit
+                    rolls = best
+                    #rolls.unshift type: :note, text: "Generated a roll with a value of #{limit} after #{rerolls - 1} attempts"
+                  elsif rerolls >= 1000
                     rolls = best
                     #info rolls
                     rolls.unshift type: :note, text: "Returning the closest result after #{rerolls} attempts. Giving up."
@@ -868,8 +885,13 @@ module CCCB::Core::Dice
         elsif message.to_channel?
           list.select! { |l| l[:msg].replyto.to_s.downcase == message.replyto.id }
         end
+        count = 1
         index = if match[:index] == 'last'
-          0
+          if match[:count]
+            (0...match[:count].to_i)
+          else
+            0
+          end
         elsif match[:index] == 'first'
           list.count - 1
         elsif match[:index] == "0th"
@@ -900,22 +922,25 @@ module CCCB::Core::Dice
           'qroll'
         end
 
-        (user.persist[:dice_memory_saved] ||= {})["current"] = selected
+        Array(selected).reverse.each do |s|
+          info "S: #{s.inspect}"
+          (user.persist[:dice_memory_saved] ||= {})["current"] = s
 
-        jinx = if selected[:jinx]
-          "While jinxed, "
-        else 
-          ""
+          jinx = if s[:jinx]
+            "While jinxed, "
+          else 
+            ""
+          end
+
+          location = if s[:msg].to_channel?
+            s[:msg].replyto
+          else
+            "query"
+          end
+
+          message.reply "#{ jinx }#{s[:msg].nick} rolled #{s[:expression].join("; ")} in #{location} on #{s[:msg].time} and got: (m:#{mode})"
+          CCCB::DieRoller.new(message).message_die_roll( message.nick, s[:rolls], mode )
         end
-
-        location = if selected[:msg].to_channel?
-          selected[:msg].replyto
-        else
-          "query"
-        end
-
-        message.reply "#{ jinx }#{selected[:msg].nick} rolled #{selected[:expression].join("; ")} in #{location} on #{selected[:msg].time} and got: (m:#{mode})"
-        CCCB::DieRoller.new(message).message_die_roll( message.nick, selected[:rolls], mode )
         nil
       else
         "I can't find that."
