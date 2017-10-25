@@ -143,7 +143,7 @@ class CCCB::Reply
     end
     
     def italic(text)
-      "\x06#{text.gsub(/x06/,"")}\x06"
+      "\x1d#{text.gsub(/x06/,"")}\x1d"
     end
     
     def underline(text)
@@ -271,7 +271,7 @@ class CCCB::Reply
           indent.pop
           list_sym = list_sym == 0 ? LIST_SYMS.count - 1 : list_sym - 1
         when "Lu"
-          prefix = "#{"\u{0009}" * ((indent[-1]/2) - 1)}#{italic LIST_SYMS[list_sym]} "
+          prefix = "#{"\u{0009}" * ((indent[-1]/2) - 1)}#{LIST_SYMS[list_sym]} "
         when "Lo"
           lo = "#{lists.last[:index]}. "
           prefix = lo
