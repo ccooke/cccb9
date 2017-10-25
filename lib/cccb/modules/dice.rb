@@ -864,6 +864,10 @@ module CCCB::Core::Dice
             (?<user> my | \S+? ) (?: 's)? \s+ 
           )?
           (?<index>\d+ (?:th|st|rd|nd)|last|first)
+          (?:
+            \s+
+            (?<count>\d+)
+          )?
         |
           stored \s+ 
           (?: 
