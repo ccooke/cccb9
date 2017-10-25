@@ -15,7 +15,7 @@ class ErbalT < OpenStruct
 end
 
 class CCCB::ContentServer
-	
+
 	@@blocks = []
   @@keywords = {}
 	@@thread ||= nil

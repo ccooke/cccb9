@@ -102,6 +102,18 @@ module CCCB::Core::CoreCommands
     end
 
     #@doc
+    # This superuser-only command sends a notice to all connected
+    # channels on all connected networks
+    add_command :core, "admin announce" do |message,args|
+      auth_command :superuser, message
+      CCCB.instance.networking.networks.each do |netname,network|
+        network.channels.each do |name,channel|
+          network.puts "NOTICE #{name} :#{args.join(" ")}"
+        end
+      end
+    end
+
+    #@doc
     # This command removes the current user from the superuser list
     add_command :core, "admin superuser disable" do |message|
       message.reply.summary = if message.user.superuser?
@@ -145,6 +157,19 @@ module CCCB::Core::CoreCommands
         next unless network.type == :irc
         network.puts "QUIT :#{reason}"
       end
+    end
+
+    #@doc
+    # (superuser only)
+    # Connect to a new IRC server
+    add_command :core, "admin connect" do |message,(name, server,nick)|
+      self.servers[name] ||= {
+        nick: nick || 'd20',
+        host: server,
+        channels: []
+      }
+
+      message.reply "Server saved. Reload to connect"
     end
   end
 end

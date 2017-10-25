@@ -86,8 +86,7 @@ module CCCB::Core::Commands
     raise "Denied: #{reason}"
   end
 
-  def process_command(message,command)
-    string = command
+  def get_command_from_string(string)
     spam "In words, parsing #{string}"
     words = string.scan(COMMAND_WORD_REGEX).map do |(_, quoted_word, _, _, simple_word)|
       simple_word.nil? ? quoted_word : simple_word
@@ -110,6 +109,11 @@ module CCCB::Core::Commands
         break
       end
     end
+    return hook, args, pre, cursor
+  end
+
+  def process_command(message,command)
+    hook, args, pre, cursor = get_command_from_string(command)
     rate_limit_by_feature( message, commands.feature_lookup[hook], hook )
     if hook_runnable? hook, message, *args
       spam "Scheduling hook for command: #{hook}->(#{args.inspect}) #{hook_runnable?(hook,*args).inspect}"
