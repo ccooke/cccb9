@@ -12,10 +12,10 @@ module CCCB::Core::Tables
       table_name = match[:table]
       prefix = match[:channel] + "::"
       message.network.get_channel("##{match[:channel]}")
-    elsif message.user.setting? "tables", table_name
-      message.user
     elsif message.to_channel?
       message.channel
+    elsif message.user.setting? "tables", table_name
+      message.user
     else
       raise "I can't find a valid object for that table"
     end
@@ -163,6 +163,11 @@ module CCCB::Core::Tables
         end
         "Deleted #{count} #{type}s"
       end
+    end
+
+    add_command :tables, [ %w{genstring} ] do |message, (table,modifier)|
+      result =  gen_table_result( message, table, modifier.to_i )
+      message.reply.summary = result.flatten.join(" ")
     end
 
     add_command :tables, [ %w{gen generate} ] do |message, (table,modifier)|
